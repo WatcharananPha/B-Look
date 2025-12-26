@@ -1,25 +1,10 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
-from app.db.session import get_db
-from app.models.product import FabricType
+from sqlalchemy import Column, Integer, String, DECIMAL, Boolean
+from app.db.base import Base
 
-router = APIRouter()
+class FabricType(Base):
+    __tablename__ = "fabric_types"
 
-# --- Schemas ---
-class FabricResponse(BaseModel):
-    id: int
-    name: str
-    price_adjustment: float
-
-    class Config:
-        from_attributes = True # รองรับ SQLAlchemy Model
-
-# --- Endpoints ---
-@router.get("/fabrics", response_model=List[FabricResponse])
-def get_fabrics(db: Session = Depends(get_db)):
-    """ดึงข้อมูลชนิดผ้าทั้งหมด"""
-    # ดึงข้อมูลทั้งหมดจากตาราง FabricType (ที่เรา Seed ไว้)
-    fabrics = db.query(FabricType).all()
-    return fabrics
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    price_adjustment = Column(DECIMAL(10, 2), default=0)
+    is_active = Column(Boolean, default=True)
