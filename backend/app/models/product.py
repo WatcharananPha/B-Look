@@ -1,11 +1,25 @@
-from sqlalchemy import Column, Integer, String, Boolean, DECIMAL
-from app.db.base import Base
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from typing import List
+from pydantic import BaseModel
+from app.db.session import get_db
+from app.models.product import FabricType
 
-class FabricType(Base):
-    __tablename__ = "fabric_types"
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    price_adjustment = Column(DECIMAL(10, 2), default=0)
-    is_active = Column(Boolean, default=True)
+router = APIRouter()
 
-# (สร้าง NeckType, SleeveType ในลักษณะเดียวกันได้เลยครับ)
+# --- Schemas ---
+class FabricResponse(BaseModel):
+    id: int
+    name: str
+    price_adjustment: float
+
+    class Config:
+        from_attributes = True # รองรับ SQLAlchemy Model
+
+# --- Endpoints ---
+@router.get("/fabrics", response_model=List[FabricResponse])
+def get_fabrics(db: Session = Depends(get_db)):
+    """ดึงข้อมูลชนิดผ้าทั้งหมด"""
+    # ดึงข้อมูลทั้งหมดจากตาราง FabricType (ที่เรา Seed ไว้)
+    fabrics = db.query(FabricType).all()
+    return fabrics

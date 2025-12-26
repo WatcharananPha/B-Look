@@ -6,6 +6,9 @@ import {
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 
+// --- CONFIG ---
+const API_URL = "http://localhost:8000/api/v1"; // ชี้ไปที่ FastAPI Backend
+
 // --- 1. MOCK DATA (ข้อมูลสมมติ) ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
 const FABRIC_TYPES = ["Micro Smooth (ไมโครเรียบ)", "Micro Eyelet (ไมโครรู)", "Atom (อะตอม)", "Msed (เม็ดข้าวสาร)"];
@@ -34,17 +37,48 @@ const MOCK_PRODUCTS = {
 
 // --- 2. COMPONENTS ---
 
-// 2.0 LOGIN PAGE
+// 2.0 LOGIN PAGE (Connected to Real API)
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (username && password) {
-      onLogin(); 
-    } else {
-      alert("กรุณากรอก Username และ Password");
+    setIsLoading(true);
+    setError("");
+
+    try {
+      // Create Form Data for OAuth2
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password);
+
+      // Call FastAPI Backend
+      const response = await fetch(`${API_URL}/auth/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Username หรือ Password ไม่ถูกต้อง');
+      }
+
+      const data = await response.json();
+      
+      // Save Token & Role
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user_role', data.role);
+      
+      onLogin(data.role); // Pass role to App
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -60,6 +94,12 @@ const LoginPage = ({ onLogin }) => {
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-5">
+          {error && (
+            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center">
+              <AlertCircle size={16} className="mr-2"/> {error}
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1">Username</label>
             <div className="relative">
@@ -70,6 +110,7 @@ const LoginPage = ({ onLogin }) => {
                 placeholder="admin"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                required
               />
             </div>
           </div>
@@ -83,21 +124,23 @@ const LoginPage = ({ onLogin }) => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </div>
           </div>
           
           <button 
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg shadow-lg hover:shadow-xl transition duration-200 mt-2"
+            disabled={isLoading}
+            className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg shadow-lg hover:shadow-xl transition duration-200 mt-2 flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            เข้าสู่ระบบ (Sign In)
+            {isLoading ? "Signing In..." : "เข้าสู่ระบบ (Sign In)"}
           </button>
         </form>
         
         <div className="mt-8 text-center text-xs text-slate-400">
           <p>© 2025 B-Look Co., Ltd. All rights reserved.</p>
-          <p className="mt-1">(Mock Login: กรอกอะไรก็ได้เพื่อเข้าใช้งาน)</p>
+          <p className="mt-1">Default: admin / 1234</p>
         </div>
       </div>
     </div>
@@ -109,7 +152,7 @@ const DashboardPage = () => {
     // --- STATE & MOCK DATA ---
     const [currentDate, setCurrentDate] = useState(new Date(2025, 11, 1)); // Dec 2025
     const [filterType, setFilterType] = useState('all'); // all, design, production, delivery, urgent
-    const [userRole, setUserRole] = useState('owner'); // toggle for demo: 'admin' vs 'owner'
+    const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'owner'); // Get role from login
 
     // Mock Events Data
     const rawEvents = [
@@ -166,21 +209,8 @@ const DashboardPage = () => {
                 {/* Role Toggle & Date Controls */}
                 <div className="flex flex-col items-end gap-2 w-full md:w-auto">
                     <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border shadow-sm w-full md:w-auto justify-between md:justify-end">
-                        <span className="text-xs text-slate-400 pl-2">View As:</span>
-                        <div className="flex space-x-1">
-                            <button 
-                                onClick={() => setUserRole('admin')} 
-                                className={`px-3 py-1 text-xs rounded transition ${userRole === 'admin' ? 'bg-slate-800 text-white' : 'hover:bg-slate-100 text-slate-600'}`}
-                            >
-                                Admin (Op)
-                            </button>
-                            <button 
-                                onClick={() => setUserRole('owner')} 
-                                className={`px-3 py-1 text-xs rounded transition ${userRole === 'owner' ? 'bg-blue-600 text-white' : 'hover:bg-slate-100 text-slate-600'}`}
-                            >
-                                MD (Owner)
-                            </button>
-                        </div>
+                        <span className="text-xs text-slate-400 pl-2">Current Role:</span>
+                        <span className="px-3 py-1 text-xs rounded bg-slate-100 text-slate-700 font-bold uppercase">{userRole}</span>
                     </div>
                     <div className="flex items-center space-x-2 w-full md:w-auto justify-between md:justify-end">
                         <button className="p-2 bg-white border rounded hover:bg-slate-50 shadow-sm"><ChevronLeft size={16}/></button>

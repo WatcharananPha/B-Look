@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, Date, ForeignKey, Text, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, Date, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import JSONB  # Key Feature!
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from app.db.base import Base
 
@@ -8,34 +8,53 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    order_no = Column(String, unique=True, index=True)
-    customer_name = Column(String) # Simplification for prototype
+    order_no = Column(String, unique=True, index=True, nullable=False) # e.g., PO-2512-001
     
-    # Status & Dates
-    status = Column(String, default="draft")
-    deadline_date = Column(Date, nullable=False)
-    urgency_level = Column(String) # normal, warning, critical
-    
-    # Financials
-    grand_total = Column(DECIMAL(10, 2))
+    # Foreign Keys
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Status & Timeline
+    status = Column(String, default="draft")  # draft, production, delivery, completed
+    deadline_date = Column(Date)
+    urgency_level = Column(String, default="normal") # normal, warning, critical
+
+    # Financials (Decimal for currency precision)
+    grand_total = Column(DECIMAL(10, 2), default=0)
     is_vat_included = Column(Boolean, default=False)
+    vat_amount = Column(DECIMAL(10, 2), default=0)
+    discount_amount = Column(DECIMAL(10, 2), default=0)
+    shipping_cost = Column(DECIMAL(10, 2), default=0)
+    add_on_cost = Column(DECIMAL(10, 2), default=0)
     deposit_amount = Column(DECIMAL(10, 2), default=0)
-    
+    balance_amount = Column(DECIMAL(10, 2), default=0)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relation
-    items = relationship("OrderItem", back_populates="order")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    customer = relationship("Customer", back_populates="orders")
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+
 
 class OrderItem(Base):
     __tablename__ = "order_items"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"))
-    
-    # JSONB เก็บ Size Matrix {"S": 10, "M": 5}
+
+    # Product Details Snapshot (บันทึกค่า ณ วันที่สั่ง เผื่อ Master เปลี่ยน)
+    product_name = Column(String)  # เช่น เสื้อ BG
+    fabric_type = Column(String)   # Micro Smooth
+    neck_type = Column(String)     # V-Neck
+    sleeve_type = Column(String)   # Short
+
+    # The Magic Field: เก็บ Size Matrix เป็น JSON {"S": 10, "M": 20, "XL": 5}
     quantity_matrix = Column(JSONB, nullable=False)
-    total_qty = Column(Integer)
-    selling_price_per_unit = Column(DECIMAL(10, 2))
-    
-    # Relation
+    total_qty = Column(Integer, default=0)
+
+    # Price
+    price_per_unit = Column(DECIMAL(10, 2))
+    total_price = Column(DECIMAL(10, 2))
+
     order = relationship("Order", back_populates="items")
