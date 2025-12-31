@@ -6,14 +6,13 @@ import {
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 
-// --- CONFIG ---
-const API_URL = "http://localhost:8000/api/v1"; // ชี้ไปที่ FastAPI Backend
+const API_URL = "http://localhost:8000/api/v1";
 
 // --- 1. MOCK DATA (ข้อมูลสมมติ) ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
 const FABRIC_TYPES = ["Micro Smooth (ไมโครเรียบ)", "Micro Eyelet (ไมโครรู)", "Atom (อะตอม)", "Msed (เม็ดข้าวสาร)"];
-const NECK_TYPES = ["V-Neck (คอวี)", "Round (คอกลม)", "Polo (คอปก)", "Chinese (คอจีน)"];
-const SLEEVE_TYPES = ["Short (แขนสั้น)", "Long (แขนยาว)", "Sleeveless (กุด)"];
+const NECK_TYPES = ["คอวี", "คอกลม", "คอปก", "คอจีน"];
+const SLEEVE_TYPES = ["แขนสั้น", "แขนยาว", "กุด"];
 const SIZES = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
 const MOCK_CUSTOMERS = [
@@ -89,7 +88,7 @@ const LoginPage = ({ onLogin }) => {
           <div className="bg-slate-900 text-white w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Lock size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">B-LOOK ADMIN</h1>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">B-LOOK</h1>
           <p className="text-slate-500 mt-2 text-sm">ระบบจัดการออเดอร์และคำนวณราคา</p>
         </div>
         
@@ -134,12 +133,12 @@ const LoginPage = ({ onLogin }) => {
             disabled={isLoading}
             className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg shadow-lg hover:shadow-xl transition duration-200 mt-2 flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {isLoading ? "Signing In..." : "เข้าสู่ระบบ (Sign In)"}
+            {isLoading ? "Signing In..." : "เข้าสู่ระบบ"}
           </button>
         </form>
         
         <div className="mt-8 text-center text-xs text-slate-400">
-          <p>© 2025 B-Look Co., Ltd. All rights reserved.</p>
+          <p>© 2025 B-Look., All rights reserved.</p>
           <p className="mt-1">Default: admin / 1234</p>
         </div>
       </div>
@@ -628,7 +627,7 @@ const InvoiceModal = ({ data, onClose }) => {
                             <span>{data.deposit.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-lg font-bold text-blue-700 border-t border-slate-300 pt-1">
-                            <span>ยอดคงเหลือ (Balance)</span>
+                            <span>ยอดคงเหลือ</span>
                             <span>{data.balance.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
                         </div>
                     </div>
@@ -778,7 +777,7 @@ const OrderCreationPage = () => {
                         onClick={() => setShowSuccess(false)}
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl shadow-lg transition transform hover:scale-105"
                     >
-                        ตกลง (OK)
+                        ตกลง
                     </button>
                 </div>
             </div>
@@ -786,7 +785,7 @@ const OrderCreationPage = () => {
 
         <header className={`mb-8 p-6 rounded-lg shadow-sm bg-white ${theme[urgencyStatus].border} flex flex-col md:flex-row justify-between items-start gap-4`}>
             <div>
-                <h1 className="text-2xl font-bold text-slate-800 mb-2">สร้างใบออเดอร์ใหม่ (Create Order)</h1>
+                <h1 className="text-2xl font-bold text-slate-800 mb-2">สร้างใบออเดอร์ใหม่</h1>
                 <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3 items-start md:items-center">
                     <span className="text-slate-500 text-sm bg-slate-100 px-2 py-1 rounded">Order ID: AUTO-GEN</span>
                     <select className="text-sm border-slate-300 rounded px-2 py-0.5 bg-blue-50 text-blue-700 font-semibold"
@@ -820,7 +819,7 @@ const OrderCreationPage = () => {
                                 value={customerName} onChange={e => setCustomerName(e.target.value)} />
                         </div>
                         <div className="col-span-1">
-                            <label className="block text-sm font-medium text-slate-600 mb-1">เบอร์โทร</label>
+                            <label className="block text-sm font-medium text-slate-600 mb-1">เบอร์โทรศัพท์</label>
                             <input type="text" className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" 
                                 value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
                         </div>
@@ -897,7 +896,7 @@ const OrderCreationPage = () => {
             <div className="col-span-12 lg:col-span-4 space-y-6">
                 <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-100 sticky top-6">
                     <h3 className="text-xl font-bold text-slate-800 mb-4 pb-4 border-b border-slate-100 flex items-center">
-                        <Tag className="mr-2" size={20}/> สรุปยอด (Summary)
+                        <Tag className="mr-2" size={20}/> สรุปยอด
                     </h3>
                     <div className="space-y-3 mb-6">
                         <div className="flex justify-between text-sm">
@@ -952,7 +951,7 @@ const OrderCreationPage = () => {
                                     placeholder="ใส่ยอดมัดจำ" value={deposit} onChange={(e) => setDeposit(parseInt(e.target.value) || 0)}/>
                             </div>
                             <div className="flex justify-between text-base font-bold text-rose-600">
-                                <span>ยอดคงเหลือ (Balance)</span>
+                                <span>ยอดคงเหลือ</span>
                                 <span>{balance.toLocaleString(undefined, {maximumFractionDigits:2})} ฿</span>
                             </div>
                         </div>
@@ -961,7 +960,7 @@ const OrderCreationPage = () => {
                     {role === 'owner' && (
                         <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg mb-4 text-xs">
                              <div className="flex justify-between text-emerald-800 font-bold">
-                                <span>กำไรโดยประมาณ (Est. Profit):</span>
+                                <span>กำไรโดยประมาณ</span>
                                 <span>+ {estimatedProfit.toLocaleString(undefined, {maximumFractionDigits:2})} ฿</span>
                             </div>
                         </div>
@@ -984,7 +983,7 @@ const OrderCreationPage = () => {
 
                     <button 
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-lg shadow-lg transition mb-2 flex justify-center items-center"
-                        onClick={handleSaveOrder} // <--- เรียกฟังก์ชันแสดง Popup
+                        onClick={handleSaveOrder} 
                     >
                         <Save className="mr-2" size={18}/> บันทึกออเดอร์
                     </button>

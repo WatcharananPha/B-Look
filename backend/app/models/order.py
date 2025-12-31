@@ -1,25 +1,24 @@
+#
 from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, Date, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
-from app.db.base import Base
+from app.db.base_class import Base
 
 class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    order_no = Column(String, unique=True, index=True, nullable=False) # e.g., PO-2512-001
+    order_no = Column(String, unique=True, index=True, nullable=False)
     
-    # Foreign Keys
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    # Status & Timeline
-    status = Column(String, default="draft")  # draft, production, delivery, completed
+    status = Column(String, default="draft")
     deadline_date = Column(Date)
-    urgency_level = Column(String, default="normal") # normal, warning, critical
+    urgency_level = Column(String, default="normal")
 
-    # Financials (Decimal for currency precision)
+    # Financials
     grand_total = Column(DECIMAL(10, 2), default=0)
     is_vat_included = Column(Boolean, default=False)
     vat_amount = Column(DECIMAL(10, 2), default=0)
@@ -28,11 +27,15 @@ class Order(Base):
     add_on_cost = Column(DECIMAL(10, 2), default=0)
     deposit_amount = Column(DECIMAL(10, 2), default=0)
     balance_amount = Column(DECIMAL(10, 2), default=0)
+    
+    # --- ส่วนที่ต้องเพิ่มใหม่ (New Columns) ---
+    total_cost = Column(DECIMAL(10, 2), default=0)      # ต้นทุนรวม
+    estimated_profit = Column(DECIMAL(10, 2), default=0) # กำไรโดยประมาณ
+    # --------------------------------------
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships
     customer = relationship("Customer", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
@@ -43,18 +46,20 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"))
 
-    # Product Details Snapshot (บันทึกค่า ณ วันที่สั่ง เผื่อ Master เปลี่ยน)
-    product_name = Column(String)  # เช่น เสื้อ BG
-    fabric_type = Column(String)   # Micro Smooth
-    neck_type = Column(String)     # V-Neck
-    sleeve_type = Column(String)   # Short
+    product_name = Column(String)
+    fabric_type = Column(String)
+    neck_type = Column(String)
+    sleeve_type = Column(String)
 
-    # The Magic Field: เก็บ Size Matrix เป็น JSON {"S": 10, "M": 20, "XL": 5}
     quantity_matrix = Column(JSONB, nullable=False)
     total_qty = Column(Integer, default=0)
 
-    # Price
     price_per_unit = Column(DECIMAL(10, 2))
     total_price = Column(DECIMAL(10, 2))
+    
+    # --- ส่วนที่ต้องเพิ่มใหม่ (New Columns) ---
+    cost_per_unit = Column(DECIMAL(10, 2), default=0) # ต้นทุนต่อตัว
+    total_cost = Column(DECIMAL(10, 2), default=0)    # ต้นทุนรวมบรรทัดนี้
+    # --------------------------------------
 
     order = relationship("Order", back_populates="items")

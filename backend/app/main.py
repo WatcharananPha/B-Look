@@ -1,15 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, orders, products
+
+# --- 1. Load Database & Models FIRST (Critical Order) ---
 from app.db.session import engine
 from app.db.base import Base
+# Import all models to register them with SQLAlchemy Base
+from app.models import User, Customer, Order, OrderItem, FabricType
 
-# Create Tables (Optional check)
+# --- 2. Create Tables ---
 Base.metadata.create_all(bind=engine)
+
+# --- 3. Import APIs AFTER Models are loaded ---
+from app.api import auth, orders, products
 
 app = FastAPI(title="B-Look OMS API")
 
-# CORS
+# CORS Setup
 origins = ["http://localhost:5173", "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +34,6 @@ app.include_router(products.router, prefix="/api/v1/products", tags=["Products"]
 def read_root():
     return {"message": "Welcome to B-Look API Server", "status": "running"}
 
-# Debug: Print Routes on Startup
 @app.on_event("startup")
 async def startup_event():
     print("\n🚀 Registered Routes:")

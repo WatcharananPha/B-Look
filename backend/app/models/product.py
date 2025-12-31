@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DECIMAL, Boolean
-from app.db.base import Base
+from app.db.base_class import Base
 
 class FabricType(Base):
     __tablename__ = "fabric_types"
