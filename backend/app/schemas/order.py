@@ -1,29 +1,36 @@
-#
+from typing import List, Optional
 from pydantic import BaseModel
-from typing import Dict, List, Optional
-from datetime import date
+from datetime import datetime
+from decimal import Decimal
 
-class OrderItemCreate(BaseModel):
-    product_name: str
-    fabric_type: str
-    neck_type: str
-    sleeve_type: str
-    quantity_matrix: Dict[str, int]
-    base_price: float
-    cost_per_unit: float = 0  # <--- เพิ่มบรรทัดนี้ (รับค่าต้นทุน)
+# Shared properties
+class OrderBase(BaseModel):
+    order_no: str
+    status: str = "draft"
+    total_amount: Decimal = 0
+    deposit: Decimal = 0
+    deadline: Optional[datetime] = None
+    contact_channel: Optional[str] = None
 
-class OrderCreate(BaseModel):
-    customer_name: str
-    phone: Optional[str] = None
-    channel: str = "LINE OA"
-    address: Optional[str] = None
-    deadline_date: date
-    urgency_level: str = "normal"
-    
-    items: List[OrderItemCreate]
-    
-    is_vat_included: bool = False
-    shipping_cost: float = 0
-    add_on_cost: float = 0
-    discount_amount: float = 0
-    deposit_amount: float = 0
+# Properties to receive via API on creation
+class OrderCreate(OrderBase):
+    customer_name: str  # Frontend ส่งชื่อลูกค้ามา
+    items: List[dict] = [] # รับเป็น list ว่างๆ ไปก่อนในเฟสนี้
+
+# Properties to return to client
+class OrderResponse(OrderBase):
+    id: int
+    customer_name: Optional[str] = None # ส่งชื่อลูกค้ากลับไปแสดงผล
+    grand_total: Optional[Decimal] = None # Alias for total_amount handling
+
+    class Config:
+        from_attributes = True
+        
+    # Helper to map database model to schema if needed
+    @staticmethod
+    def from_orm(obj):
+        model = OrderResponse.model_validate(obj)
+        if obj.customer:
+            model.customer_name = obj.customer.name
+        model.grand_total = obj.total_amount
+        return model
