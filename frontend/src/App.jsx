@@ -8,13 +8,11 @@ import {
 
 const API_URL = "http://localhost:8000/api/v1";
 
-// --- 1. MOCK DATA (ข้อมูลสมมติ) ---
+// --- 1. MOCK DATA (ข้อมูลสมมติ - คงไว้บางส่วนสำหรับหน้าที่ยังไม่มี API รองรับ) ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
-const FABRIC_TYPES = ["Micro Smooth (ไมโครเรียบ)", "Micro Eyelet (ไมโครรู)", "Atom (อะตอม)", "Msed (เม็ดข้าวสาร)"];
-const NECK_TYPES = ["คอวี", "คอกลม", "คอปก", "คอจีน"];
-const SLEEVE_TYPES = ["แขนสั้น", "แขนยาว", "กุด"];
 const SIZES = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
+// Mock Orders & Customers ยังคงไว้ก่อนจนกว่าจะมี API Orders/Customers
 const MOCK_ORDERS = [
   { id: "PO-2512-001", customer: "คุณสมชาย (บริษัท SCG)", amount: 15400, status: "production", deadline: "2025-12-20", items: "เสื้อโปโล 100 ตัว" },
   { id: "PO-2512-002", customer: "เจ๊แต๋ว (ทีมฟุตบอล)", amount: 4500, status: "draft", deadline: "2025-12-25", items: "เสื้อกีฬา 30 ตัว" },
@@ -27,19 +25,6 @@ const MOCK_CUSTOMERS = [
   { id: 2, name: "เจ๊แต๋ว (ทีมฟุตบอล อบต.)", channel: "Facebook", phone: "089-999-8888", orders: 3, lastOrder: "15/11/2025" },
   { id: 3, name: "โรงเรียนอนุบาลหมีน้อย", channel: "โทรศัพท์", phone: "02-555-4444", orders: 8, lastOrder: "01/12/2025" },
 ];
-
-const MOCK_PRODUCTS = {
-  fabrics: [
-    { id: 1, name: "Micro Smooth (ไมโครเรียบ)", price: 0, status: "active" },
-    { id: 2, name: "Micro Eyelet (ไมโครรู)", price: 0, status: "active" },
-    { id: 3, name: "Atom (อะตอม)", price: 20, status: "active" },
-  ],
-  necks: [
-    { id: 1, name: "V-Neck (คอวี)", status: "active" },
-    { id: 2, name: "Round (คอกลม)", status: "active" },
-    { id: 3, name: "Polo (คอปก)", status: "active" },
-  ]
-};
 
 // --- 2. COMPONENTS ---
 
@@ -56,12 +41,10 @@ const LoginPage = ({ onLogin }) => {
     setError("");
 
     try {
-      // Create Form Data for OAuth2
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
 
-      // Call FastAPI Backend
       const response = await fetch(`${API_URL}/auth/token`, {
         method: 'POST',
         headers: {
@@ -75,12 +58,9 @@ const LoginPage = ({ onLogin }) => {
       }
 
       const data = await response.json();
-      
-      // Save Token & Role
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user_role', data.role);
-      
-      onLogin(data.role); // Pass role to App
+      onLogin(data.role);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -669,9 +649,8 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// 2.2 หน้าสร้างออเดอร์ (Update: เพิ่ม Popup บันทึกสำเร็จ)
+// 2.2 หน้าสร้างออเดอร์ (Update: Add Product & Option from API State)
 const OrderCreationPage = () => {
-  // State เดิม
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
@@ -688,13 +667,42 @@ const OrderCreationPage = () => {
   const [isVatIncluded, setIsVatIncluded] = useState(false);
   const [deposit, setDeposit] = useState(0);
   const [costPerUnit, setCostPerUnit] = useState(80);
-  const [supplier, setSupplier] = useState("โรงงานลพบุรี A");
+  const [supplier, setSupplier] = useState("");
   
-  // State สำหรับ Modal (Preview & Success)
-  const [showPreview, setShowPreview] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false); // <--- 1. เพิ่ม State นี้
+  // Master Data State
+  const [fabrics, setFabrics] = useState([]);
+  const [necks, setNecks] = useState([]);
+  const [sleeves, setSleeves] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
 
-  // Calculations
+  const [showPreview, setShowPreview] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // Fetch Master Data on Mount
+  useEffect(() => {
+    const fetchData = async () => {
+      const token = localStorage.getItem('access_token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      try {
+        const [fabricsRes, necksRes, sleevesRes, suppliersRes] = await Promise.all([
+          fetch(`${API_URL}/products/fabrics`, { headers }),
+          fetch(`${API_URL}/products/necks`, { headers }),
+          fetch(`${API_URL}/products/sleeves`, { headers }),
+          fetch(`${API_URL}/suppliers`, { headers }),
+        ]);
+        
+        if (fabricsRes.ok) setFabrics(await fabricsRes.json());
+        if (necksRes.ok) setNecks(await necksRes.json());
+        if (sleevesRes.ok) setSleeves(await sleevesRes.json());
+        if (suppliersRes.ok) setSuppliers(await suppliersRes.json());
+        
+      } catch (err) {
+        console.error("Error fetching master data", err);
+      }
+    };
+    fetchData();
+  }, []);
+
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
   const productSubtotal = totalQty * basePrice;
   const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
@@ -714,16 +722,11 @@ const OrderCreationPage = () => {
   const totalCost = (totalQty * costPerUnit); 
   const estimatedProfit = (grandTotal - vatAmount) - totalCost;
 
-  // Function: Save Order Logic
   const handleSaveOrder = () => {
-    // ตรงนี้สามารถใส่ Logic ยิง API ไป Backend ได้
-    // ... API Call ...
-    
-    // แสดง Popup สำเร็จ
+    // API Call to save order logic here
     setShowSuccess(true);
   };
 
-  // Function: Copy to Clipboard
   const handleCopySummary = () => {
     const text = `
 📋 *สรุปรายการสั่งผลิต* (${brand})
@@ -737,7 +740,7 @@ const OrderCreationPage = () => {
 📅 กำหนดส่ง: ${deadline || '-'}
     `.trim();
     navigator.clipboard.writeText(text);
-    alert("คัดลอกข้อความสรุปเรียบร้อยแล้ว! (พร้อมวางใน Chat)");
+    alert("คัดลอกข้อความสรุปเรียบร้อยแล้ว!");
   };
 
   useEffect(() => {
@@ -772,7 +775,7 @@ const OrderCreationPage = () => {
             <InvoiceModal data={previewData} onClose={() => setShowPreview(false)} />
         )}
 
-        {/* Modal: Save Success (Popup แจ้งเตือนบันทึกสำเร็จ) */}
+        {/* Modal: Save Success */}
         {showSuccess && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
                 <div className="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full transform transition-all scale-100">
@@ -855,15 +858,21 @@ const OrderCreationPage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                          <div>
                             <label className="block text-sm font-medium text-slate-600 mb-1">ชนิดผ้า</label>
-                            <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white">{FABRIC_TYPES.map(t => <option key={t}>{t}</option>)}</select>
+                            <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white">
+                                {fabrics.length > 0 ? fabrics.map(t => <option key={t.id} value={t.id}>{t.name}</option>) : <option>Loading...</option>}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-600 mb-1">คอเสื้อ</label>
-                            <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white">{NECK_TYPES.map(t => <option key={t}>{t}</option>)}</select>
+                            <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white">
+                                {necks.length > 0 ? necks.map(t => <option key={t.id} value={t.id}>{t.name}</option>) : <option>Loading...</option>}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-600 mb-1">แขนเสื้อ</label>
-                            <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white">{SLEEVE_TYPES.map(t => <option key={t}>{t}</option>)}</select>
+                            <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white">
+                                {sleeves.length > 0 ? sleeves.map(t => <option key={t.id} value={t.id}>{t.name}</option>) : <option>Loading...</option>}
+                            </select>
                         </div>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -888,7 +897,7 @@ const OrderCreationPage = () => {
                             <div>
                                 <label className="block text-sm font-medium text-slate-600 mb-1">Supplier</label>
                                 <select className="w-full border border-slate-300 rounded-lg p-2.5 bg-white" value={supplier} onChange={e => setSupplier(e.target.value)}>
-                                    <option>โรงงานลพบุรี A</option><option>โรงงานลพบุรี B</option>
+                                    {suppliers.length > 0 ? suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>) : <option>Select Supplier</option>}
                                 </select>
                             </div>
                             <div>
@@ -1002,20 +1011,84 @@ const OrderCreationPage = () => {
   );
 };
 
-// 2.3 หน้าจัดการสินค้า
+// 2.3 หน้าจัดการสินค้า (Update: Fetch from API + Create Logic)
 const ProductPage = () => {
   const [activeTab, setActiveTab] = useState("fabric"); 
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemPrice, setNewItemPrice] = useState(0);
+
+  // Fetch Logic
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+        const token = localStorage.getItem('access_token');
+        const endpoint = activeTab === 'fabric' ? 'fabrics' : activeTab === 'neck' ? 'necks' : 'sleeves';
+        const res = await fetch(`${API_URL}/products/${endpoint}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if(res.ok) setItems(await res.json());
+    } catch(err) {
+        console.error(err);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+      fetchItems();
+  }, [activeTab]);
+
+  // Create Logic
+  const handleCreate = async () => {
+      const token = localStorage.getItem('access_token');
+      const endpoint = activeTab === 'fabric' ? 'fabrics' : activeTab === 'neck' ? 'necks' : 'sleeves';
+      const body = { name: newItemName, price_adjustment: newItemPrice, is_active: true };
+      
+      await fetch(`${API_URL}/products/${endpoint}`, {
+          method: 'POST',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}` 
+          },
+          body: JSON.stringify(body)
+      });
+      setShowAddModal(false);
+      setNewItemName("");
+      setNewItemPrice(0);
+      fetchItems(); // Refresh list
+  };
+
   const TabButton = ({ id, label }) => (
     <button onClick={() => setActiveTab(id)}
       className={`px-6 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === id ? "border-blue-600 text-blue-600 bg-blue-50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}>
       {label}
     </button>
   );
+
   return (
     <div className="p-4 md:p-8 fade-in overflow-y-auto pb-20 md:pb-8">
+      {showAddModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white p-6 rounded-xl w-full max-w-sm">
+                  <h3 className="text-lg font-bold mb-4">เพิ่มข้อมูล {activeTab}</h3>
+                  <input type="text" placeholder="ชื่อรายการ" className="w-full border p-2 rounded mb-3" 
+                      value={newItemName} onChange={e => setNewItemName(e.target.value)} />
+                  <input type="number" placeholder="ราคาบวกเพิ่ม" className="w-full border p-2 rounded mb-6" 
+                      value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} />
+                  <div className="flex justify-end gap-2">
+                      <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-slate-600">ยกเลิก</button>
+                      <button onClick={handleCreate} className="px-4 py-2 bg-blue-600 text-white rounded">บันทึก</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <header className="mb-8 flex justify-between items-center">
         <div><h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1><p className="text-slate-500 text-sm">ตั้งค่าตัวเลือกสินค้า ผ้า, คอ, แขน ที่จะแสดงในหน้าออเดอร์</p></div>
-        <button className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 shadow-sm whitespace-nowrap ml-2"><Plus size={18} className="mr-2"/> เพิ่มข้อมูลใหม่</button>
+        <button onClick={() => setShowAddModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 shadow-sm whitespace-nowrap ml-2"><Plus size={18} className="mr-2"/> เพิ่มข้อมูลใหม่</button>
       </header>
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
         <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
@@ -1025,14 +1098,15 @@ const ProductPage = () => {
             <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead><tr className="text-slate-500 text-sm border-b border-slate-100"><th className="py-3 px-4 font-medium">ชื่อรายการ</th><th className="py-3 px-4 font-medium">ราคาบวกเพิ่ม</th><th className="py-3 px-4 font-medium text-center">สถานะ</th><th className="py-3 px-4 font-medium text-right">จัดการ</th></tr></thead>
                 <tbody className="text-sm">
-                    {activeTab === 'fabric' ? MOCK_PRODUCTS.fabrics.map((item) => (
+                    {loading ? <tr><td colSpan="4" className="text-center py-8">Loading...</td></tr> : 
+                     items.length > 0 ? items.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50 border-b border-slate-50 group">
                             <td className="py-4 px-4 font-medium text-slate-700">{item.name}</td>
-                            <td className="py-4 px-4 text-slate-600">{item.price > 0 ? `+${item.price} ฿` : '-'}</td>
-                            <td className="py-4 px-4 text-center"><span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold">Active</span></td>
+                            <td className="py-4 px-4 text-slate-600">{item.price_adjustment > 0 ? `+${item.price_adjustment} ฿` : '-'}</td>
+                            <td className="py-4 px-4 text-center"><span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold">{item.is_active ? 'Active' : 'Inactive'}</span></td>
                             <td className="py-4 px-4 text-right"><button className="text-slate-400 hover:text-blue-600 mx-2"><Edit size={16}/></button><button className="text-slate-400 hover:text-red-600"><Trash2 size={16}/></button></td>
                         </tr>
-                    )) : <tr><td colSpan="4" className="py-12 text-center text-slate-400"><Box className="mx-auto mb-2 opacity-50" size={48}/>แสดงข้อมูลของหมวด {activeTab}... (Mockup)</td></tr>}
+                    )) : <tr><td colSpan="4" className="py-12 text-center text-slate-400"><Box className="mx-auto mb-2 opacity-50" size={48}/>ไม่พบข้อมูล</td></tr>}
                 </tbody>
             </table>
         </div>
