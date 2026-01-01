@@ -15,6 +15,13 @@ const NECK_TYPES = ["คอวี", "คอกลม", "คอปก", "คอ�
 const SLEEVE_TYPES = ["แขนสั้น", "แขนยาว", "กุด"];
 const SIZES = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
+const MOCK_ORDERS = [
+  { id: "PO-2512-001", customer: "คุณสมชาย (บริษัท SCG)", amount: 15400, status: "production", deadline: "2025-12-20", items: "เสื้อโปโล 100 ตัว" },
+  { id: "PO-2512-002", customer: "เจ๊แต๋ว (ทีมฟุตบอล)", amount: 4500, status: "draft", deadline: "2025-12-25", items: "เสื้อกีฬา 30 ตัว" },
+  { id: "PO-2512-003", customer: "โรงเรียนอนุบาลหมีน้อย", amount: 28000, status: "urgent", deadline: "2025-12-18", items: "ชุดพละ 200 ตัว" },
+  { id: "PO-2512-004", customer: "อบต. บางพลี", amount: 12000, status: "delivered", deadline: "2025-12-05", items: "เสื้อแจ็คเก็ต 20 ตัว" },
+];
+
 const MOCK_CUSTOMERS = [
   { id: 1, name: "คุณสมชาย (บริษัท SCG)", channel: "LINE OA", phone: "081-111-2222", orders: 15, lastOrder: "20/12/2025" },
   { id: 2, name: "เจ๊แต๋ว (ทีมฟุตบอล อบต.)", channel: "Facebook", phone: "089-999-8888", orders: 3, lastOrder: "15/11/2025" },
@@ -193,6 +200,7 @@ const DashboardPage = () => {
             default: return "bg-slate-50 text-slate-600 border-slate-200";
         }
     };
+    
 
     return (
         <div className="p-4 md:p-8 fade-in h-full flex flex-col bg-slate-50/50 overflow-y-auto pb-20 md:pb-8">
@@ -1071,6 +1079,93 @@ const CustomerPage = () => {
   );
 };
 
+// 2.5 หน้าจัดการรายการออเดอร์ (Order List) - เพิ่มใหม่ตาม Requirement
+const OrderListPage = ({ onNavigate }) => {
+  // Helper สำหรับสีป้ายสถานะ
+  const getStatusBadge = (status) => {
+    switch(status) {
+        case 'production': return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold border border-blue-200">กำลังผลิต</span>;
+        case 'urgent': return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs font-bold border border-rose-200 animate-pulse">งานด่วน!</span>;
+        case 'delivered': return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-bold border border-emerald-200">ส่งแล้ว</span>;
+        default: return <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold border border-slate-200">Draft</span>;
+    }
+  };
+
+  return (
+    <div className="p-4 md:p-8 fade-in overflow-y-auto pb-20 md:pb-8">
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+            <h1 className="text-2xl font-bold text-slate-800">รายการออเดอร์ (Order List)</h1>
+            <p className="text-slate-500 text-sm">ติดตามสถานะงานและประวัติการสั่งซื้อทั้งหมด</p>
+        </div>
+        <button 
+            onClick={() => onNavigate('create_order')} // ลิงก์ไปหน้าสร้าง
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 shadow-sm whitespace-nowrap ml-2"
+        >
+            <Plus size={18} className="mr-2"/> เปิดออเดอร์ใหม่
+        </button>
+      </header>
+
+      {/* Filter Bar */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+              <Search className="absolute left-3 top-3 text-slate-400" size={20}/>
+              <input type="text" placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า..." className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/>
+          </div>
+          <div className="flex gap-2 overflow-x-auto">
+              {['ทั้งหมด', 'กำลังผลิต', 'งานด่วน', 'ส่งแล้ว'].map(status => (
+                  <button key={status} className="px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50 whitespace-nowrap">
+                      {status}
+                  </button>
+              ))}
+          </div>
+      </div>
+
+      {/* Order Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[900px]">
+                <thead className="bg-slate-50">
+                    <tr className="text-slate-500 text-sm">
+                        <th className="py-4 px-6 font-medium">เลขที่เอกสาร</th>
+                        <th className="py-4 px-6 font-medium">ลูกค้า</th>
+                        <th className="py-4 px-6 font-medium">รายการสินค้า</th>
+                        <th className="py-4 px-6 font-medium">กำหนดส่ง</th>
+                        <th className="py-4 px-6 font-medium text-right">ยอดรวม</th>
+                        <th className="py-4 px-6 font-medium text-center">สถานะ</th>
+                        <th className="py-4 px-6 font-medium text-right">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                    {MOCK_ORDERS.map((order) => (
+                        <tr key={order.id} className="hover:bg-blue-50/30 transition group">
+                            <td className="py-4 px-6 font-mono font-bold text-slate-700">{order.id}</td>
+                            <td className="py-4 px-6 font-semibold text-slate-700">{order.customer}</td>
+                            <td className="py-4 px-6 text-slate-600">{order.items}</td>
+                            <td className="py-4 px-6 text-slate-600 flex items-center">
+                                <Calendar size={14} className="mr-2 text-slate-400"/>
+                                {new Date(order.deadline).toLocaleDateString('th-TH')}
+                            </td>
+                            <td className="py-4 px-6 text-right font-bold text-slate-800">{order.amount.toLocaleString()}</td>
+                            <td className="py-4 px-6 text-center">{getStatusBadge(order.status)}</td>
+                            <td className="py-4 px-6 text-right">
+                                <button className="text-slate-400 hover:text-blue-600 p-1 border border-slate-200 rounded hover:bg-white mr-2" title="Print Invoice">
+                                    <Printer size={16}/>
+                                </button>
+                                <button className="text-slate-400 hover:text-amber-600 p-1 border border-slate-200 rounded hover:bg-white" title="Edit">
+                                    <Edit size={16}/>
+                                </button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- 3. MAIN APP (Sidebar & Routing & Auth) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false); // Auth State
@@ -1086,9 +1181,11 @@ const App = () => {
   const renderContent = () => {
     switch(currentPage) {
         case 'dashboard': return <DashboardPage />;
+        case 'order_list': return <OrderListPage onNavigate={setCurrentPage} />;
+        case 'create_order': return <OrderCreationPage />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage />;
-        case 'order': default: return <OrderCreationPage />;
+        default: return <OrderListPage onNavigate={setCurrentPage} />;
     }
   };
 
@@ -1124,12 +1221,12 @@ const App = () => {
             </button>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-6">
-          <button onClick={() => handleNavClick('order')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'order' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
-            <FileText size={20} /> <span>New Order</span>
-          </button>
-          
           <button onClick={() => handleNavClick('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'dashboard' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
             <LayoutDashboard size={20} /> <span>Dashboard</span>
+          </button>
+
+          <button onClick={() => handleNavClick('order_list')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${['order_list', 'create_order'].includes(currentPage) ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
+            <FileText size={20} /> <span>Orders (รายการงาน)</span>
           </button>
           
           <button onClick={() => handleNavClick('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
