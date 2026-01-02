@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Save, Calculator, AlertCircle, User, Box, FileText, 
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
@@ -124,7 +124,8 @@ const LoginPage = ({ onLogin }) => {
 // 2.1 DASHBOARD
 const DashboardPage = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const userRole = useMemo(() => localStorage.getItem('user_role') || 'owner', []);
+    const [filterType, setFilterType] = useState('all');
+    const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'owner');
     const [stats, setStats] = useState({ newOrders: 0, pendingDelivery: 0, revenue: 0, urgent: 0 });
     const [events, setEvents] = useState([]);
     const [alerts, setAlerts] = useState([]);
@@ -221,7 +222,7 @@ const DashboardPage = () => {
                     </div>
                 )}
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
-                    <div className="text-rose-500 text-xs font-bold uppercase">Urgent</div>
+                    <div className="text-slate-500 text-xs font-bold uppercase text-rose-500">Urgent</div>
                     <div className="text-3xl font-black text-rose-600 mt-2">{stats.urgent}</div>
                 </div>
             </div>
@@ -303,6 +304,7 @@ const InvoiceModal = ({ data, onClose }) => {
           </button>
       </div>
       <div id="invoice-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
             <div>
                 <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
@@ -314,12 +316,14 @@ const InvoiceModal = ({ data, onClose }) => {
                 <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
             </div>
         </div>
+        {/* Customer Info */}
         <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
             <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
             <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
             <p className="text-sm text-slate-500">{data.phoneNumber} | {data.contactChannel}</p>
             <p className="text-sm text-slate-500 mt-1">{data.address}</p>
         </div>
+        {/* Table */}
         <table className="w-full text-sm mb-8">
             <thead>
                 <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
@@ -336,6 +340,7 @@ const InvoiceModal = ({ data, onClose }) => {
                 </tr>
             </tbody>
         </table>
+        {/* Totals */}
         <div className="flex justify-end">
             <div className="w-1/2 space-y-2 text-sm">
                 <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
@@ -351,7 +356,8 @@ const InvoiceModal = ({ data, onClose }) => {
 
 // 2.2 ORDER CREATION PAGE
 const OrderCreationPage = () => {
-  const [brand] = useState(BRANDS[0]);
+  const [role, setRole] = useState("owner"); 
+  const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
   const [customerName, setCustomerName] = useState("");
@@ -363,8 +369,10 @@ const OrderCreationPage = () => {
   const [addOnCost, setAddOnCost] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
   const [discount, setDiscount] = useState(0);
-  const [isVatIncluded] = useState(false);
+  const [isVatIncluded, setIsVatIncluded] = useState(false);
   const [deposit, setDeposit] = useState(0);
+  const [costPerUnit, setCostPerUnit] = useState(80);
+  const [supplier, setSupplier] = useState("");
   
   // Master Data State
   const [fabrics, setFabrics] = useState([]);
@@ -410,23 +418,19 @@ const OrderCreationPage = () => {
     grandTotal = totalBeforeCalc + vatAmount;
   }
   const balance = grandTotal - deposit;
-
-  // Generate order ID outside of render
-  const generateOrderId = useCallback(() => {
-    return `PO-${Date.now().toString().slice(-6)}`;
-  }, []);
+  const estimatedProfit = (grandTotal - vatAmount) - (totalQty * costPerUnit);
 
   const handleSaveOrder = async () => {
     try {
         const orderData = {
-            order_no: generateOrderId(),
+            order_no: `PO-${Date.now().toString().slice(-6)}`, // Mock ID gen for now
             customer_name: customerName,
             contact_channel: contactChannel,
             total_amount: grandTotal,
             deposit: deposit,
             status: "draft",
             deadline: deadline ? new Date(deadline).toISOString() : null,
-            items: []
+            items: [] // In real app, map quantities to order items
         };
         
         await fetchWithAuth('/orders/', {
@@ -550,15 +554,19 @@ const OrderCreationPage = () => {
   );
 };
 
-// 2.3 PRODUCT PAGE (UPDATED with Add Modal)
+// 2.3 PRODUCT PAGE (UPDATED with Add/Edit/Delete Logic)
 const ProductPage = () => {
   const [activeTab, setActiveTab] = useState("fabric"); 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // State for Edit Mode
+  const [modalMode, setModalMode] = useState("add"); // "add" | "edit"
+  const [editingItem, setEditingItem] = useState(null);
   const [newItem, setNewItem] = useState({ name: "", price_adjustment: 0 });
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = async () => {
       setLoading(true);
       try {
           const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
@@ -566,22 +574,59 @@ const ProductPage = () => {
           setItems(data || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
-  }, [activeTab]);
+  };
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchItems(); }, [activeTab]);
 
-  const handleAdd = async () => {
+  // Open Add Modal
+  const openAddModal = () => {
+      setModalMode("add");
+      setNewItem({ name: "", price_adjustment: 0 });
+      setIsModalOpen(true);
+  };
+
+  // Open Edit Modal
+  const openEditModal = (item) => {
+      setModalMode("edit");
+      setEditingItem(item);
+      setNewItem({ name: item.name, price_adjustment: item.price_adjustment });
+      setIsModalOpen(true);
+  };
+
+  const handleSave = async () => {
       try {
           const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
-          await fetchWithAuth(endpoint, {
-              method: 'POST',
-              body: JSON.stringify(newItem)
-          });
+          
+          if (modalMode === "add") {
+              await fetchWithAuth(endpoint, {
+                  method: 'POST',
+                  body: JSON.stringify(newItem)
+              });
+          } else {
+              // Edit mode
+              await fetchWithAuth(`${endpoint}/${editingItem.id}`, {
+                  method: 'PUT',
+                  body: JSON.stringify(newItem)
+              });
+          }
+          
           setIsModalOpen(false);
           setNewItem({ name: "", price_adjustment: 0 });
+          setEditingItem(null);
           fetchItems();
-      } catch (e) { alert("Failed to add: " + e.message); }
+      } catch (e) { alert(`Failed to ${modalMode}: ` + e.message); }
   };
+
+  const handleDelete = async (id) => {
+      if(!window.confirm("ยืนยันการลบข้อมูล?")) return;
+      try {
+          const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
+          await fetchWithAuth(`${endpoint}/${id}`, {
+              method: 'DELETE'
+          });
+          fetchItems();
+      } catch (e) { alert("Failed to delete: " + e.message); }
+  }
 
   const TabButton = ({ id, label }) => (
     <button onClick={() => setActiveTab(id)} className={`px-6 py-3 font-medium text-sm border-b-2 ${activeTab === id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500"}`}>{label}</button>
@@ -592,19 +637,19 @@ const ProductPage = () => {
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
-                  <h3 className="text-lg font-bold mb-4">เพิ่มข้อมูล ({activeTab})</h3>
+                  <h3 className="text-lg font-bold mb-4">{modalMode === 'add' ? 'เพิ่มข้อมูล' : 'แก้ไขข้อมูล'} ({activeTab})</h3>
                   <input className="w-full border p-2 rounded mb-3" placeholder="ชื่อรายการ (เช่น ผ้าจูติ, คอวี)" value={newItem.name} onChange={e=>setNewItem({...newItem, name: e.target.value})}/>
                   <input type="number" className="w-full border p-2 rounded mb-4" placeholder="ราคาปรับเพิ่ม (บาท)" value={newItem.price_adjustment} onChange={e=>setNewItem({...newItem, price_adjustment: e.target.value})}/>
                   <div className="flex justify-end gap-2">
                       <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600">ยกเลิก</button>
-                      <button onClick={handleAdd} className="px-4 py-2 bg-blue-600 text-white rounded">บันทึก</button>
+                      <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded">บันทึก</button>
                   </div>
               </div>
           </div>
       )}
       <header className="mb-8 flex justify-between">
         <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
-        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center"><Plus size={18} className="mr-2"/> เพิ่มข้อมูล</button>
+        <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center"><Plus size={18} className="mr-2"/> เพิ่มข้อมูล</button>
       </header>
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
         <div className="flex border-b overflow-x-auto"><TabButton id="fabric" label="ชนิดผ้า" /><TabButton id="neck" label="คอเสื้อ" /><TabButton id="sleeve" label="แขนเสื้อ" /></div>
@@ -617,7 +662,10 @@ const ProductPage = () => {
                             <tr key={item.id} className="border-b hover:bg-slate-50">
                                 <td className="py-3 font-medium">{item.name}</td>
                                 <td className="py-3 text-slate-600">{item.price_adjustment ? `+${item.price_adjustment}` : '-'}</td>
-                                <td className="py-3 text-right flex justify-end gap-2"><Edit size={16} className="text-blue-500 cursor-pointer"/><Trash2 size={16} className="text-red-500 cursor-pointer"/></td>
+                                <td className="py-3 text-right flex justify-end gap-2">
+                                    <Edit size={16} className="text-blue-500 cursor-pointer" onClick={() => openEditModal(item)}/>
+                                    <Trash2 size={16} className="text-red-500 cursor-pointer" onClick={() => handleDelete(item.id)}/>
+                                </td>
                             </tr>
                         ))}
                         {items.length === 0 && <tr><td colSpan="3" className="py-8 text-center text-slate-400">ไม่พบข้อมูล</td></tr>}
@@ -637,9 +685,11 @@ const CustomerPage = () => {
   useEffect(() => {
       const fetchCustomers = async () => {
           try {
-              const data = await fetchWithAuth('/customers/');
+              // Try fetching from customers API if available
+              const data = await fetchWithAuth('/customers/'); // Assuming endpoint exists
               setCustomers(data || []);
           } catch (e) { 
+              // Fallback or empty if not implemented in backend yet
               console.warn("Customer fetch failed or empty"); 
           }
       };
@@ -667,7 +717,7 @@ const CustomerPage = () => {
             </tbody>
         </table>
       </div>
-     </div>
+    </div>
   );
 };
 
