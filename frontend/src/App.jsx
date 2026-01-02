@@ -739,7 +739,7 @@ const ProductPage = () => {
       )}
 
       <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
+        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
         </button>
