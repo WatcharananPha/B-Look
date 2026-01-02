@@ -303,6 +303,7 @@ const InvoiceModal = ({ data, onClose }) => {
           </button>
       </div>
       <div id="invoice-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
             <div>
                 <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
@@ -314,12 +315,14 @@ const InvoiceModal = ({ data, onClose }) => {
                 <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
             </div>
         </div>
+        {/* Customer Info */}
         <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
             <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
             <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
             <p className="text-sm text-slate-500">{data.phoneNumber} | {data.contactChannel}</p>
             <p className="text-sm text-slate-500 mt-1">{data.address}</p>
         </div>
+        {/* Table */}
         <table className="w-full text-sm mb-8">
             <thead>
                 <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
@@ -336,6 +339,7 @@ const InvoiceModal = ({ data, onClose }) => {
                 </tr>
             </tbody>
         </table>
+        {/* Totals */}
         <div className="flex justify-end">
             <div className="w-1/2 space-y-2 text-sm">
                 <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
@@ -554,7 +558,7 @@ const OrderCreationPage = () => {
   );
 };
 
-// 2.3 PRODUCT PAGE (UPDATED with Add/Edit/Delete Modal)
+// 2.3 PRODUCT PAGE
 const ProductPage = () => {
   const [activeTab, setActiveTab] = useState("fabric"); 
   const [items, setItems] = useState([]);
@@ -739,7 +743,7 @@ const ProductPage = () => {
       )}
 
       <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า</h1>
+        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
         </button>
@@ -817,42 +821,138 @@ const ProductPage = () => {
   );
 };
 
-// 2.4 CUSTOMER PAGE
+// 2.4 CUSTOMER PAGE (NEW: UPDATED with CRUD)
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
-  
-  useEffect(() => {
-      const fetchCustomers = async () => {
-          try {
-              const data = await fetchWithAuth('/customers/');
-              setCustomers(data || []);
-          } catch (e) { 
-              console.warn("Customer fetch failed or empty"); 
+  const [loading, setLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState("add"); // "add" or "edit"
+  const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const fetchCustomers = async () => {
+      setLoading(true);
+      try {
+          const data = await fetchWithAuth('/customers/');
+          setCustomers(data || []);
+      } catch (e) { console.warn("Fetch failed"); }
+      finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchCustomers(); }, []);
+
+  const openAddModal = () => {
+      setModalMode("add");
+      setCurrentCustomer({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
+      setIsModalOpen(true);
+  };
+
+  const openEditModal = (cust) => {
+      setModalMode("edit");
+      setCurrentCustomer({ ...cust });
+      setIsModalOpen(true);
+  };
+
+  const handleSave = async () => {
+      try {
+          let url = '/customers/';
+          let method = 'POST';
+          if (modalMode === 'edit') {
+              url += `${currentCustomer.id}`;
+              method = 'PUT';
           }
-      };
-      fetchCustomers();
-  }, []);
+          await fetchWithAuth(url, {
+              method: method,
+              body: JSON.stringify(currentCustomer)
+          });
+          setIsModalOpen(false);
+          fetchCustomers();
+      } catch (e) { alert("Error: " + e.message); }
+  };
+
+  const handleDelete = async (id) => {
+      try {
+          await fetchWithAuth(`/customers/${id}`, { method: 'DELETE' });
+          setDeleteConfirm(null);
+          fetchCustomers();
+      } catch (e) { alert("Error: " + e.message); }
+  };
 
   return (
     <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
+      {/* Add/Edit Modal */}
+      {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
+                  <h3 className="text-lg font-bold mb-4">{modalMode === 'add' ? 'เพิ่มลูกค้าใหม่' : 'แก้ไขข้อมูลลูกค้า'}</h3>
+                  <div className="space-y-3">
+                      <input className="w-full border p-2 rounded" placeholder="ชื่อลูกค้า" value={currentCustomer.name} onChange={e => setCurrentCustomer({...currentCustomer, name: e.target.value})} />
+                      <input className="w-full border p-2 rounded" placeholder="เบอร์โทรศัพท์" value={currentCustomer.phone} onChange={e => setCurrentCustomer({...currentCustomer, phone: e.target.value})} />
+                      <select className="w-full border p-2 rounded" value={currentCustomer.channel} onChange={e => setCurrentCustomer({...currentCustomer, channel: e.target.value})}>
+                          <option>LINE OA</option>
+                          <option>Facebook</option>
+                          <option>Phone</option>
+                          <option>Walk-in</option>
+                      </select>
+                      <textarea className="w-full border p-2 rounded" placeholder="ที่อยู่จัดส่ง" rows="3" value={currentCustomer.address} onChange={e => setCurrentCustomer({...currentCustomer, address: e.target.value})}></textarea>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-4">
+                      <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">ยกเลิก</button>
+                      <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">บันทึก</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
+                  <div className="flex items-center mb-4">
+                      <AlertCircle className="text-rose-500 mr-3" size={24} />
+                      <h3 className="text-lg font-bold">ยืนยันการลบ</h3>
+                  </div>
+                  <p className="text-slate-600 mb-6">คุณต้องการลบลูกค้า <span className="font-bold">"{deleteConfirm.name}"</span> ใช่หรือไม่?</p>
+                  <div className="flex justify-end gap-2">
+                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">ยกเลิก</button>
+                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700">ลบ</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <header className="mb-8 flex justify-between">
         <h1 className="text-2xl font-bold text-slate-800">จัดการลูกค้า</h1>
-        <button className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
+        <button onClick={openAddModal} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center hover:bg-slate-700"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
       </header>
+      
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b text-sm text-slate-500"><th className="py-4 px-6">ชื่อลูกค้า</th><th className="py-4 px-6">ติดต่อ</th><th className="py-4 px-6 text-right">Action</th></thead>
-            <tbody className="divide-y">
-                {customers.map((cust) => (
-                    <tr key={cust.id} className="hover:bg-slate-50">
-                        <td className="py-4 px-6 font-semibold">{cust.name}</td>
-                        <td className="py-4 px-6 text-sm">{cust.phone}</td>
-                        <td className="py-4 px-6 text-right"><button className="text-blue-600"><Edit size={18}/></button></td>
+        {loading ? <p className="p-8 text-center">Loading...</p> : (
+            <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b text-sm text-slate-500">
+                    <tr>
+                        <th className="py-4 px-6">ชื่อลูกค้า</th>
+                        <th className="py-4 px-6">ช่องทาง</th>
+                        <th className="py-4 px-6">เบอร์โทร</th>
+                        <th className="py-4 px-6 text-right">จัดการ</th>
                     </tr>
-                ))}
-                {customers.length === 0 && <tr><td colSpan="3" className="py-8 text-center text-slate-400">ยังไม่มีข้อมูลลูกค้า (หรือ API เชื่อมต่อไม่ได้)</td></tr>}
-            </tbody>
-        </table>
+                </thead>
+                <tbody className="divide-y">
+                    {customers.map((cust) => (
+                        <tr key={cust.id} className="hover:bg-slate-50 transition">
+                            <td className="py-4 px-6 font-semibold text-slate-700">{cust.name}</td>
+                            <td className="py-4 px-6 text-sm text-slate-600"><span className="bg-slate-100 px-2 py-1 rounded text-xs border">{cust.channel}</span></td>
+                            <td className="py-4 px-6 text-sm text-slate-600">{cust.phone}</td>
+                            <td className="py-4 px-6 text-right">
+                                <button onClick={() => openEditModal(cust)} className="text-blue-500 hover:bg-blue-50 p-2 rounded mr-2"><Edit size={18}/></button>
+                                <button onClick={() => setDeleteConfirm(cust)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={18}/></button>
+                            </td>
+                        </tr>
+                    ))}
+                    {customers.length === 0 && <tr><td colSpan="4" className="py-12 text-center text-slate-400">ยังไม่มีข้อมูลลูกค้า</td></tr>}
+                </tbody>
+            </table>
+        )}
       </div>
     </div>
   );
