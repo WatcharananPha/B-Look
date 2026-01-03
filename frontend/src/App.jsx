@@ -23,29 +23,17 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
-    
-    // Handle 401 Unauthorized
     if (response.status === 401) {
         localStorage.removeItem('access_token');
         window.location.reload();
         return null;
     }
-
-    // Handle 204 No Content (Success Delete)
-    if (response.status === 204) {
-        return null; 
-    }
-
-    // Handle 404 Not Found (Allow caller to handle it)
-    if (response.status === 404) {
-        throw new Error("Not Found");
-    }
-
-    if (!response.ok) {
+    // Allow 404 for delete operations to handle "already deleted" gracefully
+    if (!response.ok && response.status !== 404) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `API Error: ${response.statusText}`);
     }
-    return response.json();
+    return response.status === 204 ? null : response.json();
   } catch (error) {
     console.error("Fetch Error:", error);
     throw error;
@@ -133,7 +121,7 @@ const LoginPage = ({ onLogin }) => {
   );
 };
 
-// 2.1 DASHBOARD
+// 2.1 DASHBOARD (FIXED CALENDAR LOGIC)
 const DashboardPage = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const userRole = useMemo(() => localStorage.getItem('user_role') || 'owner', []);
@@ -266,10 +254,25 @@ const DashboardPage = () => {
                         {[...Array(daysInMonth)].map((_, i) => {
                             const day = i + 1;
                             const evts = eventsByDay[day] || [];
+                            
+                            // --- Logic ตรวจสอบวันที่ปัจจุบัน ---
+                            const today = new Date();
+                            const isToday = day === today.getDate() && 
+                                          currentDate.getMonth() === today.getMonth() && 
+                                          currentDate.getFullYear() === today.getFullYear();
+
                             return (
-                                <div key={day} className="bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group border-t border-r border-slate-100">
+                                <div key={day} className={`bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group border-t border-r border-slate-100 ${isToday ? 'bg-blue-50/10' : ''}`}>
                                     <div className="flex justify-between items-start">
-                                        <span className={`text-xs font-semibold p-1 ${evts.length > 0 ? 'text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center' : 'text-slate-400'}`}>{day}</span>
+                                        <span className={`text-xs font-semibold p-1 ${
+                                            isToday 
+                                                ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md' // Style สำหรับวันนี้
+                                                : evts.length > 0 
+                                                    ? 'text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center' 
+                                                    : 'text-slate-400'
+                                        }`}>
+                                            {day}
+                                        </span>
                                     </div>
                                     <div className="mt-1 space-y-1 px-1">
                                         {evts.map((evt, idx) => (
@@ -766,7 +769,7 @@ const ProductPage = () => {
       )}
 
       <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
+        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
         </button>
@@ -1180,8 +1183,8 @@ const App = () => {
         <nav className="flex-1 px-4 space-y-2 mt-6">
           <button onClick={() => handleNavClick('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><LayoutDashboard size={20} /> <span>Dashboard</span></button>
           <button onClick={() => handleNavClick('order_list')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${['order_list', 'create_order'].includes(currentPage) ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><FileText size={20} /> <span>Orders</span></button>
-          <button onClick={() => handleNavClick('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><Box size={20} /> <span>Product Master</span></button>
-          <button onClick={() => handleNavClick('customer')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'customer' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><User size={20} /> <span>Customers</span></button>
+          <button onClick={() => handleNavClick('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><Box size={20} /> <span>จัดการข้อมูลสินค้า</span></button>
+          <button onClick={() => handleNavClick('customer')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'customer' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><User size={20} /> <span>ข้อมูลลูกค้า</span></button>
         </nav>
         <div className="p-4 border-t border-slate-800">
             <button onClick={() => { localStorage.removeItem('access_token'); setIsLoggedIn(false); }} className="w-full flex items-center text-slate-400 hover:text-white transition text-sm p-2 hover:bg-slate-800 rounded"><LogOut size={16} className="mr-2"/> Sign Out</button>
