@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X
 } from 'lucide-react';
 
-const API_URL = "http://localhost:8000/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 // --- CONSTANTS (Configuration) ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
@@ -23,12 +23,24 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+    
+    // Handle 401 Unauthorized
     if (response.status === 401) {
-        // Handle Token Expired or Unauthorized
         localStorage.removeItem('access_token');
         window.location.reload();
         return null;
     }
+
+    // Handle 204 No Content (Success Delete)
+    if (response.status === 204) {
+        return null; 
+    }
+
+    // Handle 404 Not Found (Allow caller to handle it)
+    if (response.status === 404) {
+        throw new Error("Not Found");
+    }
+
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `API Error: ${response.statusText}`);
@@ -69,7 +81,7 @@ const LoginPage = ({ onLogin }) => {
 
       const data = await response.json();
       localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user_role', data.role || 'owner'); // Fallback role
+      localStorage.setItem('user_role', data.role || 'owner');
       
       onLogin(data.role || 'owner');
     } catch (err) {
@@ -129,38 +141,48 @@ const DashboardPage = () => {
     const [events, setEvents] = useState([]);
     const [alerts, setAlerts] = useState([]);
 
-    // Fetch Data for Dashboard
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const orders = await fetchWithAuth('/orders/');
                 
-                // Calculate Stats
-                const newOrders = orders.length; // Simplified for now
-                const pendingDelivery = orders.filter(o => o.status !== 'delivered').length;
-                const revenue = orders.reduce((sum, o) => sum + (o.grand_total || 0), 0);
-                const urgent = orders.filter(o => {
+                const newOrders = orders?.length || 0; 
+                const pendingDelivery = orders?.filter(o => o.status !== 'delivered').length || 0;
+                const revenue = orders?.reduce((sum, o) => sum + (o.grand_total || 0), 0) || 0;
+                const urgent = orders?.filter(o => {
                     if (!o.deadline) return false;
                     const diff = new Date(o.deadline) - new Date();
                     return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
-                }).length;
+                }).length || 0;
 
                 setStats({ newOrders, pendingDelivery, revenue, urgent });
 
                 // Map Orders to Calendar Events
-                const mappedEvents = orders.map(o => ({
-                    id: o.id,
-                    date: o.deadline ? new Date(o.deadline).getDate() : null,
-                    month: o.deadline ? new Date(o.deadline).getMonth() : null,
-                    title: `ส่งงาน ${o.customer_name || 'ลูกค้า'}`,
-                    type: 'delivery',
-                    status: o.status || 'pending'
-                })).filter(e => e.date !== null && e.month === currentDate.getMonth());
+                const mappedEvents = (orders || []).map(o => {
+                    if (!o.deadline) return null;
+                    const d = new Date(o.deadline);
+                    return {
+                        id: o.id,
+                        day: d.getDate(),
+                        month: d.getMonth(),
+                        year: d.getFullYear(),
+                        title: `ส่ง: ${o.customer_name || 'ลูกค้า'}`,
+                        type: 'delivery',
+                        status: o.status || 'pending',
+                        order_no: o.order_no
+                    };
+                }).filter(e => e !== null);
 
-                setEvents(mappedEvents);
+                // Filter for current view
+                const currentMonthEvents = mappedEvents.filter(e => 
+                    e.month === currentDate.getMonth() && 
+                    e.year === currentDate.getFullYear()
+                );
 
-                // Generate Alerts (Mock Logic based on fetched orders)
-                const urgencyAlerts = orders.filter(o => o.status === 'urgent').map(o => ({
+                setEvents(currentMonthEvents);
+
+                // Generate Alerts
+                const urgencyAlerts = (orders || []).filter(o => o.status === 'urgent').map(o => ({
                     type: 'CRITICAL', title: `งานด่วน: ${o.order_no}`, desc: 'กำหนดส่งใกล้ถึงแล้ว'
                 }));
                 setAlerts(urgencyAlerts);
@@ -172,9 +194,8 @@ const DashboardPage = () => {
         fetchData();
     }, [currentDate]);
 
-    // Group events by date
-    const eventsByDate = events.reduce((acc, evt) => {
-        acc[evt.date] = [...(acc[evt.date] || []), evt];
+    const eventsByDay = events.reduce((acc, evt) => {
+        acc[evt.day] = [...(acc[evt.day] || []), evt];
         return acc;
     }, {});
 
@@ -241,16 +262,18 @@ const DashboardPage = () => {
                         ))}
                     </div>
                     <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-slate-100 gap-px border-b rounded-b-xl overflow-hidden min-h-[300px]">
-                        {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="bg-white"></div>)}
+                        {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="bg-white border-r border-slate-50"></div>)}
                         {[...Array(daysInMonth)].map((_, i) => {
-                            const date = i + 1;
-                            const evts = eventsByDate[date] || [];
+                            const day = i + 1;
+                            const evts = eventsByDay[day] || [];
                             return (
-                                <div key={date} className="bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group">
-                                    <span className="text-xs font-semibold text-slate-400">{date}</span>
-                                    <div className="mt-1 space-y-1">
+                                <div key={day} className="bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group border-t border-r border-slate-100">
+                                    <div className="flex justify-between items-start">
+                                        <span className={`text-xs font-semibold p-1 ${evts.length > 0 ? 'text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center' : 'text-slate-400'}`}>{day}</span>
+                                    </div>
+                                    <div className="mt-1 space-y-1 px-1">
                                         {evts.map((evt, idx) => (
-                                            <div key={idx} className={`text-[9px] px-1.5 py-1 rounded truncate font-medium ${getTypeStyle(evt.type, evt.status)}`}>
+                                            <div key={idx} className={`text-[9px] px-1.5 py-1 rounded truncate font-medium cursor-pointer hover:opacity-80 ${getTypeStyle(evt.type, evt.status)}`} title={evt.title}>
                                                 {evt.title}
                                             </div>
                                         ))}
@@ -268,7 +291,7 @@ const DashboardPage = () => {
                         </h3>
                     </div>
                     <div className="p-4 space-y-4 overflow-y-auto flex-1">
-                        {alerts.length === 0 ? <p className="text-sm text-slate-400 text-center">No active alerts</p> : alerts.map((alert, idx) => (
+                        {alerts.length === 0 ? <p className="text-sm text-slate-400 text-center mt-10">No active alerts</p> : alerts.map((alert, idx) => (
                             <div key={idx} className="bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
                                 <span className="text-[10px] font-bold bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">{alert.type}</span>
                                 <p className="text-sm font-bold text-slate-800 mt-1">{alert.title}</p>
@@ -821,13 +844,14 @@ const ProductPage = () => {
   );
 };
 
-// 2.4 CUSTOMER PAGE (NEW: UPDATED with CRUD)
+// 2.4 CUSTOMER PAGE (NEW: UPDATED with CRUD and Correct UI)
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); // "add" or "edit"
-  const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
+  // แก้ไข: ใช้ contact_channel แทน channel เพื่อให้ตรงกับ Backend
+  const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", contact_channel: "LINE OA", address: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const fetchCustomers = async () => {
@@ -843,13 +867,20 @@ const CustomerPage = () => {
 
   const openAddModal = () => {
       setModalMode("add");
-      setCurrentCustomer({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
+      setCurrentCustomer({ id: null, name: "", phone: "", contact_channel: "LINE OA", address: "" });
       setIsModalOpen(true);
   };
 
   const openEditModal = (cust) => {
       setModalMode("edit");
-      setCurrentCustomer({ ...cust });
+      // Map data from table to modal state (Handle both channel and contact_channel keys)
+      setCurrentCustomer({ 
+          id: cust.id,
+          name: cust.name,
+          phone: cust.phone,
+          contact_channel: cust.contact_channel || cust.channel || "LINE OA",
+          address: cust.address
+      });
       setIsModalOpen(true);
   };
 
@@ -886,19 +917,31 @@ const CustomerPage = () => {
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
                   <h3 className="text-lg font-bold mb-4">{modalMode === 'add' ? 'เพิ่มลูกค้าใหม่' : 'แก้ไขข้อมูลลูกค้า'}</h3>
                   <div className="space-y-3">
-                      <input className="w-full border p-2 rounded" placeholder="ชื่อลูกค้า" value={currentCustomer.name} onChange={e => setCurrentCustomer({...currentCustomer, name: e.target.value})} />
-                      <input className="w-full border p-2 rounded" placeholder="เบอร์โทรศัพท์" value={currentCustomer.phone} onChange={e => setCurrentCustomer({...currentCustomer, phone: e.target.value})} />
-                      <select className="w-full border p-2 rounded" value={currentCustomer.channel} onChange={e => setCurrentCustomer({...currentCustomer, channel: e.target.value})}>
-                          <option>LINE OA</option>
-                          <option>Facebook</option>
-                          <option>Phone</option>
-                          <option>Walk-in</option>
-                      </select>
-                      <textarea className="w-full border p-2 rounded" placeholder="ที่อยู่จัดส่ง" rows="3" value={currentCustomer.address} onChange={e => setCurrentCustomer({...currentCustomer, address: e.target.value})}></textarea>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า</label>
+                        <input className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="ชื่อลูกค้า" value={currentCustomer.name} onChange={e => setCurrentCustomer({...currentCustomer, name: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรศัพท์</label>
+                        <input className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="เบอร์โทรศัพท์" value={currentCustomer.phone} onChange={e => setCurrentCustomer({...currentCustomer, phone: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">ช่องทางติดต่อ</label>
+                        <select className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value={currentCustomer.contact_channel} onChange={e => setCurrentCustomer({...currentCustomer, contact_channel: e.target.value})}>
+                            <option>LINE OA</option>
+                            <option>Facebook</option>
+                            <option>Phone</option>
+                            <option>Walk-in</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">ที่อยู่จัดส่ง</label>
+                        <textarea className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="ที่อยู่จัดส่ง" rows="3" value={currentCustomer.address} onChange={e => setCurrentCustomer({...currentCustomer, address: e.target.value})}></textarea>
+                      </div>
                   </div>
-                  <div className="flex justify-end gap-2 mt-4">
-                      <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">ยกเลิก</button>
-                      <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">บันทึก</button>
+                  <div className="flex justify-end gap-2 mt-6">
+                      <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                      <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">บันทึก</button>
                   </div>
               </div>
           </div>
@@ -914,8 +957,8 @@ const CustomerPage = () => {
                   </div>
                   <p className="text-slate-600 mb-6">คุณต้องการลบลูกค้า <span className="font-bold">"{deleteConfirm.name}"</span> ใช่หรือไม่?</p>
                   <div className="flex justify-end gap-2">
-                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">ยกเลิก</button>
-                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700">ลบ</button>
+                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
                   </div>
               </div>
           </div>
@@ -923,54 +966,85 @@ const CustomerPage = () => {
 
       <header className="mb-8 flex justify-between">
         <h1 className="text-2xl font-bold text-slate-800">จัดการลูกค้า</h1>
-        <button onClick={openAddModal} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center hover:bg-slate-700"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
+        <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
       </header>
       
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        {loading ? <p className="p-8 text-center">Loading...</p> : (
-            <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b text-sm text-slate-500">
-                    <tr>
-                        <th className="py-4 px-6">ชื่อลูกค้า</th>
-                        <th className="py-4 px-6">ช่องทาง</th>
-                        <th className="py-4 px-6">เบอร์โทร</th>
-                        <th className="py-4 px-6 text-right">จัดการ</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y">
-                    {customers.map((cust) => (
-                        <tr key={cust.id} className="hover:bg-slate-50 transition">
-                            <td className="py-4 px-6 font-semibold text-slate-700">{cust.name}</td>
-                            <td className="py-4 px-6 text-sm text-slate-600"><span className="bg-slate-100 px-2 py-1 rounded text-xs border">{cust.channel}</span></td>
-                            <td className="py-4 px-6 text-sm text-slate-600">{cust.phone}</td>
-                            <td className="py-4 px-6 text-right">
-                                <button onClick={() => openEditModal(cust)} className="text-blue-500 hover:bg-blue-50 p-2 rounded mr-2"><Edit size={18}/></button>
-                                <button onClick={() => setDeleteConfirm(cust)} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={18}/></button>
-                            </td>
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
+        <div className="p-6">
+            {loading ? <p className="text-center text-slate-500">Loading...</p> : (
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="border-b text-sm text-slate-500">
+                            <th className="py-3 px-4">ชื่อลูกค้า</th>
+                            <th className="py-3 px-4">ช่องทาง</th>
+                            <th className="py-3 px-4">เบอร์โทร</th>
+                            <th className="py-3 px-4 text-right">จัดการ</th>
                         </tr>
-                    ))}
-                    {customers.length === 0 && <tr><td colSpan="4" className="py-12 text-center text-slate-400">ยังไม่มีข้อมูลลูกค้า</td></tr>}
-                </tbody>
-            </table>
-        )}
+                    </thead>
+                    <tbody>
+                        {customers.map((cust) => (
+                            <tr key={cust.id} className="border-b hover:bg-slate-50 transition">
+                                <td className="py-3 px-4 font-medium text-slate-800">{cust.name}</td>
+                                <td className="py-3 px-4 text-sm text-slate-600">
+                                    <span className="bg-slate-100 px-2 py-1 rounded text-xs border">
+                                        {cust.contact_channel || cust.channel}
+                                    </span>
+                                </td>
+                                <td className="py-3 px-4 text-sm text-slate-600 font-mono">{cust.phone}</td>
+                                <td className="py-3 px-4 text-right">
+                                    <div className="flex justify-end gap-3">
+                                        <button onClick={() => openEditModal(cust)} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition" title="แก้ไข"><Edit size={16}/></button>
+                                        <button onClick={() => setDeleteConfirm(cust)} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded transition" title="ลบ"><Trash2 size={16}/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {customers.length === 0 && (
+                            <tr>
+                                <td colSpan="4" className="py-12 text-center">
+                                    <div className="flex flex-col items-center justify-center text-slate-400">
+                                        <User size={48} className="mb-3 opacity-50" />
+                                        <p className="text-lg font-medium">ไม่พบข้อมูลลูกค้า</p>
+                                        <p className="text-sm mt-1">เริ่มต้นด้วยการเพิ่มลูกค้าใหม่</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            )}
+        </div>
       </div>
     </div>
   );
 };
 
-// 2.5 ORDER LIST PAGE
+// 2.5 ORDER LIST PAGE (UPDATED UI & CRUD)
 const OrderListPage = ({ onNavigate }) => {
   const [orders, setOrders] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [loading, setLoading] = useState(false);
   
-  useEffect(() => {
-      const fetchOrders = async () => {
-          try {
-              const data = await fetchWithAuth('/orders/');
-              setOrders(data || []);
-          } catch (e) { console.error(e); }
-      };
-      fetchOrders();
+  const fetchOrders = useCallback(async () => {
+      setLoading(true);
+      try {
+          const data = await fetchWithAuth('/orders/');
+          setOrders(data || []);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
   }, []);
+
+  useEffect(() => {
+      fetchOrders();
+  }, [fetchOrders]);
+
+  const handleDelete = async (id) => {
+      try {
+          await fetchWithAuth(`/orders/${id}`, { method: 'DELETE' });
+          setDeleteConfirm(null);
+          fetchOrders();
+      } catch (e) { alert("Error: " + e.message); }
+  };
 
   const getStatusBadge = (status) => {
     const s = status?.toLowerCase() || 'draft';
@@ -982,26 +1056,88 @@ const OrderListPage = ({ onNavigate }) => {
 
   return (
     <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
+                  <div className="flex items-center mb-4">
+                      <AlertCircle className="text-rose-500 mr-3" size={24} />
+                      <h3 className="text-lg font-bold">ยืนยันการลบออเดอร์</h3>
+                  </div>
+                  <p className="text-slate-600 mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
+                  <div className="flex justify-end gap-2">
+                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <header className="mb-8 flex justify-between">
         <h1 className="text-2xl font-bold text-slate-800">รายการออเดอร์</h1>
-        <button onClick={() => onNavigate('create_order')} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center"><Plus size={18} className="mr-2"/> สร้างใหม่</button>
+        <button onClick={() => onNavigate('create_order')} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition"><Plus size={18} className="mr-2"/> สร้างใหม่</button>
       </header>
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b text-sm text-slate-500"><th className="py-4 px-6">เลขที่</th><th className="py-4 px-6">ลูกค้า</th><th className="py-4 px-6">ยอดรวม</th><th className="py-4 px-6 text-center">สถานะ</th><th className="py-4 px-6 text-right">จัดการ</th></thead>
-            <tbody className="divide-y">
-                {orders.map((order) => (
-                    <tr key={order.id} className="hover:bg-slate-50">
-                        <td className="py-4 px-6 font-mono font-bold">{order.order_no}</td>
-                        <td className="py-4 px-6">{order.customer_name}</td>
-                        <td className="py-4 px-6 text-right">{order.grand_total?.toLocaleString()}</td>
-                        <td className="py-4 px-6 text-center">{getStatusBadge(order.status)}</td>
-                        <td className="py-4 px-6 text-right"><button className="text-slate-400 hover:text-blue-600"><Edit size={16}/></button></td>
-                    </tr>
-                ))}
-                {orders.length === 0 && <tr><td colSpan="5" className="py-8 text-center text-slate-400">ยังไม่มีรายการออเดอร์</td></tr>}
-            </tbody>
-        </table>
+      
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
+        <div className="p-6">
+            {loading ? <p className="text-center text-slate-500">Loading...</p> : (
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="border-b text-sm text-slate-500">
+                            {/* Adjusted width to be equal */}
+                            <th className="py-3 px-4 w-1/6">เลขที่</th>
+                            <th className="py-3 px-4 w-1/6">ลูกค้า</th>
+                            <th className="py-3 px-4 w-1/6">กำหนดส่ง</th>
+                            <th className="py-3 px-4 w-1/6 text-right">ยอดรวม</th>
+                            <th className="py-3 px-4 w-1/6 text-center">สถานะ</th>
+                            <th className="py-3 px-4 w-1/6 text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {orders.map((order) => (
+                            <tr key={order.id} className="border-b hover:bg-slate-50 transition">
+                                <td className="py-3 px-4 font-mono font-bold text-slate-800">{order.order_no}</td>
+                                <td className="py-3 px-4 text-slate-700">{order.customer_name}</td>
+                                <td className="py-3 px-4 text-slate-500 text-sm">
+                                    {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
+                                </td>
+                                <td className="py-3 px-4 text-right font-medium">{order.grand_total?.toLocaleString()}</td>
+                                <td className="py-3 px-4 text-center">{getStatusBadge(order.status)}</td>
+                                <td className="py-3 px-4 text-right">
+                                    <div className="flex justify-end gap-3">
+                                        <button 
+                                            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition" 
+                                            title="แก้ไข (ยังไม่เปิดใช้งาน)"
+                                            onClick={() => alert("ฟังก์ชันแก้ไขออเดอร์จะเปิดให้ใช้งานเร็วๆ นี้ (กรุณาสร้างใหม่หากต้องการแก้ไขข้อมูลหลัก)")}
+                                        >
+                                            <Edit size={16}/>
+                                        </button>
+                                        <button 
+                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded transition" 
+                                            title="ลบ"
+                                            onClick={() => setDeleteConfirm(order)}
+                                        >
+                                            <Trash2 size={16}/>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {orders.length === 0 && (
+                            <tr>
+                                <td colSpan="6" className="py-12 text-center">
+                                    <div className="flex flex-col items-center justify-center text-slate-400">
+                                        <FileText size={48} className="mb-3 opacity-50" />
+                                        <p className="text-lg font-medium">ยังไม่มีรายการออเดอร์</p>
+                                        <p className="text-sm mt-1">เริ่มต้นด้วยการสร้างออเดอร์ใหม่</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            )}
+        </div>
       </div>
     </div>
   );

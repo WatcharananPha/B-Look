@@ -1,4 +1,3 @@
-#
 from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, Date, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -15,23 +14,33 @@ class Order(Base):
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     status = Column(String, default="draft")
-    deadline_date = Column(Date)
+    
+    # --- แก้ไขตรงนี้ (Change deadline_date to deadline) ---
+    deadline = Column(Date)
+    # --------------------------------------------------
+
     urgency_level = Column(String, default="normal")
 
-    # Financials
+    # --- Financials ---
+    total_amount = Column(DECIMAL(10, 2), default=0) 
     grand_total = Column(DECIMAL(10, 2), default=0)
+    
+    deposit = Column(DECIMAL(10, 2), default=0)        
+    deposit_amount = Column(DECIMAL(10, 2), default=0) 
+    
+    balance = Column(DECIMAL(10, 2), default=0)        
+    balance_amount = Column(DECIMAL(10, 2), default=0) 
+
     is_vat_included = Column(Boolean, default=False)
     vat_amount = Column(DECIMAL(10, 2), default=0)
     discount_amount = Column(DECIMAL(10, 2), default=0)
     shipping_cost = Column(DECIMAL(10, 2), default=0)
     add_on_cost = Column(DECIMAL(10, 2), default=0)
-    deposit_amount = Column(DECIMAL(10, 2), default=0)
-    balance_amount = Column(DECIMAL(10, 2), default=0)
     
-    # --- ส่วนที่ต้องเพิ่มใหม่ (New Columns) ---
-    total_cost = Column(DECIMAL(10, 2), default=0)      # ต้นทุนรวม
-    estimated_profit = Column(DECIMAL(10, 2), default=0) # กำไรโดยประมาณ
-    # --------------------------------------
+    # --- Cost & Profit ---
+    total_cost = Column(DECIMAL(10, 2), default=0)       
+    estimated_profit = Column(DECIMAL(10, 2), default=0) 
+    # ---------------------
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -57,9 +66,8 @@ class OrderItem(Base):
     price_per_unit = Column(DECIMAL(10, 2))
     total_price = Column(DECIMAL(10, 2))
     
-    # --- ส่วนที่ต้องเพิ่มใหม่ (New Columns) ---
-    cost_per_unit = Column(DECIMAL(10, 2), default=0) # ต้นทุนต่อตัว
-    total_cost = Column(DECIMAL(10, 2), default=0)    # ต้นทุนรวมบรรทัดนี้
-    # --------------------------------------
+    # Cost per item
+    cost_per_unit = Column(DECIMAL(10, 2), default=0)
+    total_cost = Column(DECIMAL(10, 2), default=0)
 
     order = relationship("Order", back_populates="items")
