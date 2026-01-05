@@ -24,14 +24,16 @@ class PricingRuleOut(PricingRuleBase):
     class Config:
         from_attributes = True 
 
+# --- GET: Public Access (No Login Required) ---
 @router.get("/", response_model=List[PricingRuleOut])
 def read_pricing_rules(
     db: Session = Depends(get_db),
-    current_user: Any = Depends(get_current_user)
+    # ลบ current_user ออกแล้ว เพื่อให้ Frontend ดึงข้อมูลได้
 ):
     rules = db.query(PricingRule).order_by(PricingRule.fabric_type, PricingRule.min_qty).all()
     return rules
 
+# --- POST: Restricted (Login Required) ---
 @router.post("/", response_model=PricingRuleOut)
 def create_pricing_rule(
     rule_in: PricingRuleCreate,
@@ -44,6 +46,7 @@ def create_pricing_rule(
     db.refresh(rule)
     return rule
 
+# --- DELETE: Restricted (Login Required) ---
 @router.delete("/{id}")
 def delete_pricing_rule(
     id: int,

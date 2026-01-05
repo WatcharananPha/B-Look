@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/config", response_model=CompanyInfoOut)
 def get_company_config(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    # ลบ current_user ออกเพื่อให้ Frontend ดึงค่าไปคำนวณราคาได้โดยไม่ต้อง Login
 ):
     # ดึงแถวแรกเสมอ ถ้าไม่มีให้สร้างใหม่ (Singleton Pattern)
     company = db.query(CompanyInfo).first()
@@ -25,7 +25,7 @@ def get_company_config(
 def update_company_config(
     config_in: CompanyInfoUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user) # การแก้ไขข้อมูลยังต้อง Login
 ):
     company = db.query(CompanyInfo).first()
     if not company:

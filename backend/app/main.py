@@ -5,7 +5,8 @@ from app.db.base import Base
 
 Base.metadata.create_all(bind=engine)
 
-from app.api import auth, orders, products, suppliers, admin, customers
+# Update imports to include pricing_rules (and company if needed)
+from app.api import auth, orders, products, suppliers, admin, customers, pricing_rules, company
 
 app = FastAPI(title="B-Look OMS API")
 
@@ -27,8 +28,12 @@ app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products & Config"])
 app.include_router(suppliers.router, prefix="/api/v1/suppliers", tags=["Suppliers"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin & Settings"])
-
 app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
+
+# --- Add these lines ---
+app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
+app.include_router(company.router, prefix="/api/v1/company", tags=["Company"]) # It seems company is also missing
+# ---------------------
 
 @app.get("/")
 def read_root():
