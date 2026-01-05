@@ -13,5 +13,19 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  backend:
+    build: ./backend
+    container_name: blook_backend
+    # ใช้ command นี้เพื่อให้แก้ code แล้ว reload อัตโนมัติ
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db/blook_db
+    depends_on:
+      - db
+
 volumes:
   postgres_data:

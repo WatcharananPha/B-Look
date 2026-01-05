@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os # <--- 1. เพิ่ม import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -6,39 +7,49 @@ from sqlalchemy import pool
 from alembic import context
 
 # --- Import App Config & Models ---
-from app.core.config import settings  # <--- เพิ่มบรรทัดนี้
+from app.core.config import settings
 from app.db.base import Base
+# Import Models ให้ครบเพื่อให้ Autogenerate ทำงาน
 from app.models.user import User
 from app.models.order import Order
 from app.models.customer import Customer
 from app.models.product import *
+from app.models.pricing_rule import PricingRule, ShippingRate
+from app.models.audit_log import AuditLog
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+# this is the Alembic Config object
 config = context.config
 
-# --- Override sqlalchemy.url with App Settings ---
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL) # <--- เพิ่มบรรทัดนี้สำคัญมาก!
+# --- 2. Override URL Logic (แก้ไขใหม่) ---
+# อ่านค่าจาก Environment Variable โดยตรง (ซึ่ง Docker Compose ส่งมาให้แล้วว่าเป็น postgresql://...@db/...)
+# ถ้าไม่มีใน Env ให้ใช้จาก settings หรือ alembic.ini ตามลำดับ
+db_url = os.getenv("DATABASE_URL")
+if not db_url:
+    db_url = settings.DATABASE_URL
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+config.set_main_option("sqlalchemy.url", db_url)
+# ------------------------------------------------
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
 target_metadata = Base.metadata
 
-# ... (ส่วนที่เหลือเหมือนเดิม) ...
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode."""
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-    # แก้ไข connectable ให้ใช้ config ที่เรา Override ไปแล้ว
+    """Run migrations in 'online' mode."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
