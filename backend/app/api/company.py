@@ -25,7 +25,7 @@ def get_company_config(
 def update_company_config(
     config_in: CompanyInfoUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user) # การแก้ไขข้อมูลยังต้อง Login
+    # current_user = Depends(get_current_user) # การแก้ไขข้อมูลยังต้อง Login
 ):
     company = db.query(CompanyInfo).first()
     if not company:
