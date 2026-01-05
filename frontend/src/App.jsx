@@ -3,7 +3,7 @@ import {
   Calendar, Save, Calculator, AlertCircle, User, Box, FileText, 
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
-  LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X
+  LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
@@ -70,7 +70,7 @@ const LoginPage = ({ onLogin }) => {
       const data = await response.json();
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user_role', data.role || 'owner');
-      
+       
       onLogin(data.role || 'owner');
     } catch (err) {
       setError(err.message);
@@ -121,18 +121,26 @@ const LoginPage = ({ onLogin }) => {
   );
 };
 
-// 2.1 DASHBOARD (FIXED CALENDAR LOGIC)
-const DashboardPage = () => {
+// 2.1 DASHBOARD
+const DashboardPage = ({ onEdit }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const userRole = useMemo(() => localStorage.getItem('user_role') || 'owner', []);
+    
+    // Data States
+    const [allOrders, setAllOrders] = useState([]);
     const [stats, setStats] = useState({ newOrders: 0, pendingDelivery: 0, revenue: 0, urgent: 0 });
     const [events, setEvents] = useState([]);
     const [alerts, setAlerts] = useState([]);
+
+    // View State: 'calendar' or 'list'
+    const [viewMode, setViewMode] = useState('calendar');
+    const [filterType, setFilterType] = useState('all');
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const orders = await fetchWithAuth('/orders/');
+                setAllOrders(orders || []); // เก็บข้อมูลทั้งหมดไว้สำหรับ List View
                 
                 const newOrders = orders?.length || 0; 
                 const pendingDelivery = orders?.filter(o => o.status !== 'delivered').length || 0;
@@ -182,14 +190,13 @@ const DashboardPage = () => {
         fetchData();
     }, [currentDate]);
 
+    // Calendar Helper Logic
     const eventsByDay = events.reduce((acc, evt) => {
         acc[evt.day] = [...(acc[evt.day] || []), evt];
         return acc;
     }, {});
-
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-
     const getTypeStyle = (type, status) => {
         if (status === 'urgent') return "bg-rose-600 text-white border-rose-700 shadow-sm animate-pulse";
         switch (type) {
@@ -197,6 +204,35 @@ const DashboardPage = () => {
             case 'delivery': return "bg-emerald-50 text-emerald-700 border-emerald-200 border";
             default: return "bg-slate-50 text-slate-600 border-slate-200";
         }
+    };
+
+    // Filter Logic for List Mode
+    const getFilteredOrders = () => {
+        if (!allOrders) return [];
+        switch(filterType) {
+            case 'pending': return allOrders.filter(o => o.status !== 'delivered');
+            case 'revenue': return allOrders.filter(o => o.status === 'delivered');
+            case 'urgent': return allOrders.filter(o => {
+                if (!o.deadline) return false;
+                const diff = new Date(o.deadline) - new Date();
+                return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
+            });
+            case 'all': default: return allOrders;
+        }
+    };
+    const filteredOrders = getFilteredOrders();
+
+    const handleCardClick = (type) => {
+        setFilterType(type);
+        setViewMode('list');
+    };
+
+    const getStatusBadge = (status) => {
+        const s = status?.toLowerCase() || 'draft';
+        if(s === 'production') return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">ผลิต</span>;
+        if(s === 'urgent') return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs">ด่วน</span>;
+        if(s === 'delivered') return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">ส่งแล้ว</span>;
+        return <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs">Draft</span>;
     };
 
     return (
@@ -214,96 +250,165 @@ const DashboardPage = () => {
                 </div>
             </header>
 
+            {/* STATS CARDS (Clickable) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                <div 
+                    onClick={() => handleCardClick('all')}
+                    className={`bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition hover:scale-[1.02] ${filterType==='all' && viewMode==='list' ? 'ring-2 ring-blue-500' : ''}`}
+                >
                     <div className="text-slate-500 text-xs font-bold uppercase">All Orders</div>
                     <div className="text-3xl font-black text-slate-800 mt-2">{stats.newOrders}</div>
                 </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                <div 
+                    onClick={() => handleCardClick('pending')}
+                    className={`bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition hover:scale-[1.02] ${filterType==='pending' && viewMode==='list' ? 'ring-2 ring-blue-500' : ''}`}
+                >
                     <div className="text-slate-500 text-xs font-bold uppercase">Pending</div>
                     <div className="text-3xl font-black text-blue-600 mt-2">{stats.pendingDelivery}</div>
                 </div>
                 {userRole === 'owner' && (
-                    <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-xl shadow-md text-white relative overflow-hidden">
+                    <div 
+                        onClick={() => handleCardClick('revenue')}
+                        className={`bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-xl shadow-md text-white relative overflow-hidden cursor-pointer hover:shadow-lg transition hover:scale-[1.02] ${filterType==='revenue' && viewMode==='list' ? 'ring-4 ring-emerald-200' : ''}`}
+                    >
                         <div className="text-emerald-100 text-xs font-bold uppercase">Revenue</div>
                         <div className="text-3xl font-black mt-2">฿{stats.revenue.toLocaleString()}</div>
                     </div>
                 )}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                <div 
+                    onClick={() => handleCardClick('urgent')}
+                    className={`bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition hover:scale-[1.02] ${filterType==='urgent' && viewMode==='list' ? 'ring-2 ring-rose-500' : ''}`}
+                >
                     <div className="text-rose-500 text-xs font-bold uppercase">Urgent</div>
                     <div className="text-3xl font-black text-rose-600 mt-2">{stats.urgent}</div>
                 </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-6 flex-1 h-full min-h-[500px]">
-                <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                    <div className="p-3 border-b border-slate-100 flex justify-between items-center">
-                        <span className="font-bold text-slate-700">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-                        <div className="flex space-x-1">
-                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-slate-100 rounded"><ChevronLeft size={16}/></button>
-                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-slate-100 rounded"><ChevronRight size={16}/></button>
+            {/* CONDITIONAL CONTENT: CALENDAR or LIST */}
+            {viewMode === 'list' ? (
+                // --- LIST VIEW ---
+                <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden fade-in min-h-[500px]">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div className="flex items-center gap-2">
+                             <h3 className="font-bold text-slate-700 flex items-center">
+                                <FileText size={18} className="mr-2 text-blue-600"/> 
+                                รายการออเดอร์: <span className="ml-1 uppercase text-blue-600">{filterType}</span>
+                             </h3>
+                             <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">{filteredOrders.length}</span>
+                        </div>
+                        <button 
+                            onClick={() => setViewMode('calendar')} 
+                            className="bg-white border hover:bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center shadow-sm transition"
+                        >
+                            <XCircle size={16} className="mr-1.5"/> ปิด / กลับไปปฏิทิน
+                        </button>
+                    </div>
+                    <div className="overflow-auto p-0 flex-1">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+                                <tr className="text-sm text-slate-500">
+                                    <th className="py-3 px-4 w-1/6 font-semibold">เลขที่</th>
+                                    <th className="py-3 px-4 w-1/6 font-semibold">ลูกค้า</th>
+                                    <th className="py-3 px-4 w-1/6 font-semibold">กำหนดส่ง</th>
+                                    <th className="py-3 px-4 w-1/6 text-right font-semibold">ยอดรวม</th>
+                                    <th className="py-3 px-4 w-1/6 text-center font-semibold">สถานะ</th>
+                                    <th className="py-3 px-4 w-1/6 text-right font-semibold">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {filteredOrders.map((order) => (
+                                    <tr key={order.id} className="hover:bg-blue-50/50 transition">
+                                        <td className="py-3 px-4 font-mono font-bold text-slate-800 text-sm">{order.order_no}</td>
+                                        <td className="py-3 px-4 text-slate-700 text-sm">{order.customer_name}</td>
+                                        <td className="py-3 px-4 text-slate-500 text-sm">
+                                            {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
+                                        </td>
+                                        <td className="py-3 px-4 text-right font-medium text-sm">{order.grand_total?.toLocaleString()}</td>
+                                        <td className="py-3 px-4 text-center">{getStatusBadge(order.status)}</td>
+                                        <td className="py-3 px-4 text-right">
+                                            <button 
+                                                className="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1.5 rounded transition" 
+                                                title="ดู/แก้ไข"
+                                                onClick={() => onEdit && onEdit(order)}
+                                            >
+                                                <Edit size={16}/>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredOrders.length === 0 && (
+                                    <tr>
+                                        <td colSpan="6" className="py-12 text-center text-slate-400">
+                                            ไม่พบข้อมูลในหมวดหมู่นี้
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ) : (
+                // --- CALENDAR VIEW ---
+                <div className="flex flex-col lg:flex-row gap-6 flex-1 h-full min-h-[500px] fade-in">
+                    <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+                        <div className="p-3 border-b border-slate-100 flex justify-between items-center">
+                            <span className="font-bold text-slate-700">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
+                            <div className="flex space-x-1">
+                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-slate-100 rounded"><ChevronLeft size={16}/></button>
+                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-slate-100 rounded"><ChevronRight size={16}/></button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                                <div key={d} className="py-2 text-center text-[10px] font-bold text-slate-400 uppercase">{d}</div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-slate-100 gap-px border-b rounded-b-xl overflow-hidden min-h-[300px]">
+                            {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="bg-white border-r border-slate-50"></div>)}
+                            {[...Array(daysInMonth)].map((_, i) => {
+                                const day = i + 1;
+                                const evts = eventsByDay[day] || [];
+                                const today = new Date();
+                                const isToday = day === today.getDate() && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear();
+
+                                return (
+                                    <div key={day} className={`bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group border-t border-r border-slate-100 ${isToday ? 'bg-blue-50/10' : ''}`}>
+                                        <div className="flex justify-between items-start">
+                                            <span className={`text-xs font-semibold p-1 ${
+                                                isToday ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md' : evts.length > 0 ? 'text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center' : 'text-slate-400'
+                                            }`}>{day}</span>
+                                        </div>
+                                        <div className="mt-1 space-y-1 px-1">
+                                            {evts.map((evt, idx) => (
+                                                <div key={idx} className={`text-[9px] px-1.5 py-1 rounded truncate font-medium cursor-pointer hover:opacity-80 ${getTypeStyle(evt.type, evt.status)}`} title={evt.title}>
+                                                    {evt.title}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
-                    <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                            <div key={d} className="py-2 text-center text-[10px] font-bold text-slate-400 uppercase">{d}</div>
-                        ))}
-                    </div>
-                    <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-slate-100 gap-px border-b rounded-b-xl overflow-hidden min-h-[300px]">
-                        {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="bg-white border-r border-slate-50"></div>)}
-                        {[...Array(daysInMonth)].map((_, i) => {
-                            const day = i + 1;
-                            const evts = eventsByDay[day] || [];
-                            
-                            // --- Logic ตรวจสอบวันที่ปัจจุบัน ---
-                            const today = new Date();
-                            const isToday = day === today.getDate() && 
-                                          currentDate.getMonth() === today.getMonth() && 
-                                          currentDate.getFullYear() === today.getFullYear();
 
-                            return (
-                                <div key={day} className={`bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group border-t border-r border-slate-100 ${isToday ? 'bg-blue-50/10' : ''}`}>
-                                    <div className="flex justify-between items-start">
-                                        <span className={`text-xs font-semibold p-1 ${
-                                            isToday 
-                                                ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md' // Style สำหรับวันนี้
-                                                : evts.length > 0 
-                                                    ? 'text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center' 
-                                                    : 'text-slate-400'
-                                        }`}>
-                                            {day}
-                                        </span>
-                                    </div>
-                                    <div className="mt-1 space-y-1 px-1">
-                                        {evts.map((evt, idx) => (
-                                            <div key={idx} className={`text-[9px] px-1.5 py-1 rounded truncate font-medium cursor-pointer hover:opacity-80 ${getTypeStyle(evt.type, evt.status)}`} title={evt.title}>
-                                                {evt.title}
-                                            </div>
-                                        ))}
-                                    </div>
+                    <div className="w-full lg:w-80 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-700 flex items-center">
+                                <AlertCircle size={18} className="mr-2 text-rose-500" /> Alerts
+                            </h3>
+                        </div>
+                        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                            {alerts.length === 0 ? <p className="text-sm text-slate-400 text-center mt-10">No active alerts</p> : alerts.map((alert, idx) => (
+                                <div key={idx} className="bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
+                                    <span className="text-[10px] font-bold bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">{alert.type}</span>
+                                    <p className="text-sm font-bold text-slate-800 mt-1">{alert.title}</p>
+                                    <p className="text-xs text-slate-600">{alert.desc}</p>
                                 </div>
-                            );
-                        })}
+                            ))}
+                        </div>
                     </div>
                 </div>
-
-                <div className="w-full lg:w-80 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                        <h3 className="font-bold text-slate-700 flex items-center">
-                            <AlertCircle size={18} className="mr-2 text-rose-500" /> Alerts
-                        </h3>
-                    </div>
-                    <div className="p-4 space-y-4 overflow-y-auto flex-1">
-                        {alerts.length === 0 ? <p className="text-sm text-slate-400 text-center mt-10">No active alerts</p> : alerts.map((alert, idx) => (
-                            <div key={idx} className="bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
-                                <span className="text-[10px] font-bold bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">{alert.type}</span>
-                                <p className="text-sm font-bold text-slate-800 mt-1">{alert.title}</p>
-                                <p className="text-xs text-slate-600">{alert.desc}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
+            )}
         </div>
     );
 };
@@ -339,6 +444,7 @@ const InvoiceModal = ({ data, onClose }) => {
             <div className="text-right">
                 <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
                 <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
+                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
             </div>
         </div>
         {/* Customer Info */}
@@ -379,8 +485,8 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// 2.2 ORDER CREATION PAGE
-const OrderCreationPage = () => {
+// 2.2 ORDER CREATION PAGE (With Edit Support)
+const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
@@ -397,8 +503,7 @@ const OrderCreationPage = () => {
   const [isVatIncluded, setIsVatIncluded] = useState(false);
   const [deposit, setDeposit] = useState(0);
   const [costPerUnit, setCostPerUnit] = useState(80);
-  const [supplier, setSupplier] = useState("");
-  
+   
   // Master Data State
   const [fabrics, setFabrics] = useState([]);
   const [necks, setNecks] = useState([]);
@@ -409,6 +514,25 @@ const OrderCreationPage = () => {
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Auto-fill Data when editingOrder is present
+  useEffect(() => {
+    if (editingOrder) {
+        setCustomerName(editingOrder.customer_name || "");
+        // Note: Some fields like phone/address might be missing if backend response is simple
+        // You might need to fetch customer details if needed, but for now we map what we have.
+        setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
+        setDeposit(editingOrder.deposit || 0);
+        // Reset quantities/specs if not stored in Order model (assuming default re-entry for specs)
+        // If you want to keep them, backend needs to store items detail properly.
+    } else {
+        // Reset form for new order
+        setCustomerName("");
+        setDeadline("");
+        setDeposit(0);
+        setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
+    }
+  }, [editingOrder]);
 
   // Fetch Master Data
   useEffect(() => {
@@ -422,18 +546,20 @@ const OrderCreationPage = () => {
               setFabrics(fData || []);
               setNecks(nData || []);
               setSleeves(sData || []);
-              if (fData?.length) setSelectedFabric(fData[0].name);
-              if (nData?.length) setSelectedNeck(nData[0].name);
-              if (sData?.length) setSelectedSleeve(sData[0].name);
+              if (!editingOrder) { // Only set defaults if new order
+                  if (fData?.length) setSelectedFabric(fData[0].name);
+                  if (nData?.length) setSelectedNeck(nData[0].name);
+                  if (sData?.length) setSelectedSleeve(sData[0].name);
+              }
           } catch (e) { console.error(e); }
       };
       fetchMasters();
-  }, []);
+  }, [editingOrder]);
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
   const productSubtotal = totalQty * basePrice;
   const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
-  
+   
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
     grandTotal = totalBeforeCalc;
@@ -443,12 +569,11 @@ const OrderCreationPage = () => {
     grandTotal = totalBeforeCalc + vatAmount;
   }
   const balance = grandTotal - deposit;
-  const estimatedProfit = (grandTotal - vatAmount) - (totalQty * costPerUnit);
 
-  // Generate order ID outside of render
+  // Generate order ID
   const generateOrderId = useCallback(() => {
-    return `PO-${Date.now().toString().slice(-6)}`;
-  }, []);
+    return editingOrder ? editingOrder.order_no : `PO-${Date.now().toString().slice(-6)}`;
+  }, [editingOrder]);
 
   const handleSaveOrder = async () => {
     try {
@@ -458,15 +583,24 @@ const OrderCreationPage = () => {
             contact_channel: contactChannel,
             total_amount: grandTotal,
             deposit: deposit,
-            status: "draft",
+            status: editingOrder ? editingOrder.status : "draft",
             deadline: deadline ? new Date(deadline).toISOString() : null,
             items: []
         };
         
-        await fetchWithAuth('/orders/', {
-            method: 'POST',
-            body: JSON.stringify(orderData)
-        });
+        if (editingOrder) {
+            // PUT request for Edit
+            await fetchWithAuth(`/orders/${editingOrder.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(orderData)
+            });
+        } else {
+            // POST request for Create
+            await fetchWithAuth('/orders/', {
+                method: 'POST',
+                body: JSON.stringify(orderData)
+            });
+        }
         setShowSuccess(true);
     } catch (e) {
         alert("Failed to save order: " + e.message);
@@ -493,19 +627,24 @@ const OrderCreationPage = () => {
 
   return (
     <div className="p-4 md:p-8 fade-in overflow-y-auto pb-20 md:pb-8">
-        {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discount, isVatIncluded, vatAmount, grandTotal, deposit, balance, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve}} onClose={() => setShowPreview(false)} />}
+        {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discount, isVatIncluded, vatAmount, grandTotal, deposit, balance, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve, order_no: generateOrderId()}} onClose={() => setShowPreview(false)} />}
         {showSuccess && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
                 <div className="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full">
                     <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5"><CheckCircle size={48} className="text-emerald-500"/></div>
                     <h3 className="text-2xl font-bold text-slate-800 mb-2">บันทึกสำเร็จ!</h3>
-                    <button onClick={() => setShowSuccess(false)} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl mt-4">ตกลง</button>
+                    <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
                 </div>
             </div>
         )}
 
         <header className={`mb-8 p-6 rounded-lg shadow-sm bg-white ${theme[urgencyStatus].border} flex flex-col md:flex-row justify-between items-start gap-4`}>
-            <div><h1 className="text-2xl font-bold text-slate-800 mb-2">สร้างใบออเดอร์ใหม่</h1></div>
+            <div>
+                <div className="flex items-center gap-2 mb-2">
+                    <button onClick={() => onNavigate('order_list')} className="p-1 hover:bg-slate-100 rounded-full"><ArrowLeft size={24}/></button>
+                    <h1 className="text-2xl font-bold text-slate-800">{editingOrder ? `แก้ไขออเดอร์: ${editingOrder.order_no}` : "สร้างใบออเดอร์ใหม่"}</h1>
+                </div>
+            </div>
             <div className={`px-4 py-2 rounded-lg ${theme[urgencyStatus].header}`}><AlertCircle size={20} className="inline mr-2"/>{urgencyStatus.toUpperCase()}</div>
         </header>
 
@@ -517,7 +656,7 @@ const OrderCreationPage = () => {
                         <input type="text" className="border p-2.5 rounded-lg" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
                         <input type="text" className="border p-2.5 rounded-lg" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
                         <select className="border p-2.5 rounded-lg" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
-                        <input type="date" className="border p-2.5 rounded-lg" onChange={(e) => setDeadline(e.target.value)} />
+                        <input type="date" className="border p-2.5 rounded-lg" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
                         <textarea className="col-span-2 border p-2.5 rounded-lg" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
                     </div>
                 </section>
@@ -571,7 +710,7 @@ const OrderCreationPage = () => {
                         <div className="flex justify-between font-bold text-xl text-blue-700 mt-2 p-2 bg-blue-50 rounded"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
                     </div>
                     <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center items-center" onClick={handleSaveOrder}>
-                        <Save className="mr-2" size={18}/> บันทึกออเดอร์
+                        <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
                     </button>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                         <button className="border py-2 rounded text-sm hover:bg-slate-50" onClick={() => setShowPreview(true)}>Preview</button>
@@ -769,7 +908,7 @@ const ProductPage = () => {
       )}
 
       <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า</h1>
+        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
         </button>
@@ -971,7 +1110,7 @@ const CustomerPage = () => {
         <h1 className="text-2xl font-bold text-slate-800">จัดการลูกค้า</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
       </header>
-      
+       
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
         <div className="p-6">
             {loading ? <p className="text-center text-slate-500">Loading...</p> : (
@@ -1023,11 +1162,11 @@ const CustomerPage = () => {
 };
 
 // 2.5 ORDER LIST PAGE (UPDATED UI & CRUD)
-const OrderListPage = ({ onNavigate }) => {
+const OrderListPage = ({ onNavigate, onEdit }) => {
   const [orders, setOrders] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
-  
+   
   const fetchOrders = useCallback(async () => {
       setLoading(true);
       try {
@@ -1076,11 +1215,14 @@ const OrderListPage = ({ onNavigate }) => {
           </div>
       )}
 
-      <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">รายการออเดอร์</h1>
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+            <h1 className="text-2xl font-bold text-slate-800">รายการออเดอร์</h1>
+            <p className="text-slate-500 text-sm mt-1">แสดงผล: {orders.length} รายการ</p>
+        </div>
         <button onClick={() => onNavigate('create_order')} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition"><Plus size={18} className="mr-2"/> สร้างใหม่</button>
       </header>
-      
+       
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
         <div className="p-6">
             {loading ? <p className="text-center text-slate-500">Loading...</p> : (
@@ -1110,8 +1252,8 @@ const OrderListPage = ({ onNavigate }) => {
                                     <div className="flex justify-end gap-3">
                                         <button 
                                             className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition" 
-                                            title="แก้ไข (ยังไม่เปิดใช้งาน)"
-                                            onClick={() => alert("ฟังก์ชันแก้ไขออเดอร์จะเปิดให้ใช้งานเร็วๆ นี้ (กรุณาสร้างใหม่หากต้องการแก้ไขข้อมูลหลัก)")}
+                                            title="แก้ไข"
+                                            onClick={() => onEdit(order)}
                                         >
                                             <Edit size={16}/>
                                         </button>
@@ -1151,21 +1293,34 @@ const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
 
   if (!isLoggedIn) return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
 
-  const renderContent = () => {
-    switch(currentPage) {
-        case 'dashboard': return <DashboardPage />;
-        case 'order_list': return <OrderListPage onNavigate={setCurrentPage} />;
-        case 'create_order': return <OrderCreationPage />;
-        case 'product': return <ProductPage />;
-        case 'customer': return <CustomerPage />;
-        default: return <OrderListPage onNavigate={setCurrentPage} />;
-    }
+  const handleEditOrder = (order) => {
+      setEditingOrder(order);
+      setCurrentPage('create_order');
   };
 
-  const handleNavClick = (page) => { setCurrentPage(page); setIsSidebarOpen(false); }
+  const handleNavigate = (page) => {
+      setCurrentPage(page);
+      if (page !== 'create_order') {
+          setEditingOrder(null);
+      }
+      setIsSidebarOpen(false);
+  };
+
+  const renderContent = () => {
+    switch(currentPage) {
+        // Pass handleEditOrder to Dashboard so we can edit from the filtered list view
+        case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
+        case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} />;
+        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} />;
+        case 'product': return <ProductPage />;
+        case 'customer': return <CustomerPage />;
+        default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-slate-800 flex flex-col md:flex-row relative">
@@ -1181,10 +1336,10 @@ const App = () => {
             <button className="md:hidden text-slate-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={24}/></button>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-6">
-          <button onClick={() => handleNavClick('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><LayoutDashboard size={20} /> <span>Dashboard</span></button>
-          <button onClick={() => handleNavClick('order_list')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${['order_list', 'create_order'].includes(currentPage) ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><FileText size={20} /> <span>Orders</span></button>
-          <button onClick={() => handleNavClick('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><Box size={20} /> <span>จัดการข้อมูลสินค้า</span></button>
-          <button onClick={() => handleNavClick('customer')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'customer' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><User size={20} /> <span>ข้อมูลลูกค้า</span></button>
+          <button onClick={() => handleNavigate('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><LayoutDashboard size={20} /> <span>Dashboard</span></button>
+          <button onClick={() => handleNavigate('order_list')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${['order_list', 'create_order'].includes(currentPage) ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><FileText size={20} /> <span>Orders</span></button>
+          <button onClick={() => handleNavigate('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><Box size={20} /> <span>จัดการข้อมูลสินค้า</span></button>
+          <button onClick={() => handleNavigate('customer')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'customer' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><User size={20} /> <span>ข้อมูลลูกค้า</span></button>
         </nav>
         <div className="p-4 border-t border-slate-800">
             <button onClick={() => { localStorage.removeItem('access_token'); setIsLoggedIn(false); }} className="w-full flex items-center text-slate-400 hover:text-white transition text-sm p-2 hover:bg-slate-800 rounded"><LogOut size={16} className="mr-2"/> Sign Out</button>
