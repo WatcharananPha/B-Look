@@ -4,7 +4,7 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings
+  Download, Settings, DollarSign
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
@@ -29,7 +29,6 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         window.location.reload();
         return null;
     }
-    // Allow 404 for delete operations to handle "already deleted" gracefully
     if (!response.ok && response.status !== 404) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `API Error: ${response.statusText}`);
@@ -41,7 +40,7 @@ const fetchWithAuth = async (endpoint, options = {}) => {
   }
 };
 
-// --- 2. COMPONENTS ---
+// --- COMPONENTS ---
 
 // 2.0 LOGIN PAGE
 const LoginPage = ({ onLogin }) => {
@@ -478,6 +477,8 @@ const InvoiceModal = ({ data, onClose }) => {
                 <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{(data.addOnCost + data.shippingCost).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span>ส่วนลด</span><span>-{data.discount.toLocaleString()}</span></div>
+                {/* เพิ่มบรรทัด VAT */}
+                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{data.vatAmount.toLocaleString()}</span></div>
                 <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{data.grandTotal.toLocaleString()}</span></div>
             </div>
         </div>
@@ -486,7 +487,7 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// 2.2 ORDER CREATION PAGE (With Edit Support)
+// 2.2 ORDER CREATION PAGE (With Edit Support & Auto Pricing & Global Config)
 const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
@@ -512,6 +513,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   const [selectedFabric, setSelectedFabric] = useState("");
   const [selectedNeck, setSelectedNeck] = useState("");
   const [selectedSleeve, setSelectedSleeve] = useState("");
+  const [pricingRules, setPricingRules] = useState([]);
+  
+  // Global Config
+  const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -520,14 +525,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   useEffect(() => {
     if (editingOrder) {
         setCustomerName(editingOrder.customer_name || "");
-        // Note: Some fields like phone/address might be missing if backend response is simple
-        // You might need to fetch customer details if needed, but for now we map what we have.
         setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
         setDeposit(editingOrder.deposit || 0);
-        // Reset quantities/specs if not stored in Order model (assuming default re-entry for specs)
-        // If you want to keep them, backend needs to store items detail properly.
     } else {
-        // Reset form for new order
         setCustomerName("");
         setDeadline("");
         setDeposit(0);
@@ -535,19 +535,32 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
     }
   }, [editingOrder]);
 
-  // Fetch Master Data
+  // Fetch Master Data, Pricing Rules & Global Config
   useEffect(() => {
       const fetchMasters = async () => {
           try {
-              const [fData, nData, sData] = await Promise.all([
+              const [fData, nData, sData, pData, cData] = await Promise.all([
                   fetchWithAuth('/products/fabrics'),
                   fetchWithAuth('/products/necks'),
-                  fetchWithAuth('/products/sleeves')
+                  fetchWithAuth('/products/sleeves'),
+                  fetchWithAuth('/pricing-rules/'),
+                  fetchWithAuth('/company/config')
               ]);
               setFabrics(fData || []);
               setNecks(nData || []);
               setSleeves(sData || []);
-              if (!editingOrder) { // Only set defaults if new order
+              setPricingRules(pData || []);
+              
+              if (cData) {
+                  setConfig({ 
+                      vat_rate: cData.vat_rate || 0.07, 
+                      default_shipping_cost: cData.default_shipping_cost || 0 
+                  });
+                  // Set initial shipping cost only for new orders
+                  if (!editingOrder) setShippingCost(cData.default_shipping_cost || 0);
+              }
+
+              if (!editingOrder) { 
                   if (fData?.length) setSelectedFabric(fData[0].name);
                   if (nData?.length) setSelectedNeck(nData[0].name);
                   if (sData?.length) setSelectedSleeve(sData[0].name);
@@ -558,20 +571,35 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   }, [editingOrder]);
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
+
+  // --- AUTOMATIC PRICING ENGINE LOGIC ---
+  useEffect(() => {
+      if (totalQty > 0 && selectedFabric && pricingRules.length > 0) {
+          const matchedRule = pricingRules.find(rule => 
+              rule.fabric_type === selectedFabric &&
+              totalQty >= rule.min_qty &&
+              totalQty <= rule.max_qty
+          );
+          if (matchedRule) setBasePrice(matchedRule.unit_price);
+      }
+  }, [totalQty, selectedFabric, pricingRules]);
+  // -------------------------------------
+
   const productSubtotal = totalQty * basePrice;
   const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
    
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
     grandTotal = totalBeforeCalc;
-    vatAmount = (totalBeforeCalc * 7) / 107;
+    // Formula: Total * (7 / 107) for Included VAT
+    vatAmount = (totalBeforeCalc * (config.vat_rate * 100)) / (100 + (config.vat_rate * 100));
   } else {
-    vatAmount = totalBeforeCalc * 0.07;
+    // Formula: Total * 0.07 for Excluded VAT
+    vatAmount = totalBeforeCalc * config.vat_rate;
     grandTotal = totalBeforeCalc + vatAmount;
   }
   const balance = grandTotal - deposit;
 
-  // Generate order ID
   const generateOrderId = useCallback(() => {
     return editingOrder ? editingOrder.order_no : `PO-${Date.now().toString().slice(-6)}`;
   }, [editingOrder]);
@@ -589,19 +617,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
             items: []
         };
         
-        if (editingOrder) {
-            // PUT request for Edit
-            await fetchWithAuth(`/orders/${editingOrder.id}`, {
-                method: 'PUT',
-                body: JSON.stringify(orderData)
-            });
-        } else {
-            // POST request for Create
-            await fetchWithAuth('/orders/', {
-                method: 'POST',
-                body: JSON.stringify(orderData)
-            });
-        }
+        const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders/';
+        const method = editingOrder ? 'PUT' : 'POST';
+        
+        await fetchWithAuth(url, {
+            method: method,
+            body: JSON.stringify(orderData)
+        });
         setShowSuccess(true);
     } catch (e) {
         alert("Failed to save order: " + e.message);
@@ -708,6 +730,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
                         <div className="flex justify-between items-center"><span>ค่าบล็อก/Addon</span><input type="number" className="w-20 text-right border rounded p-1" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
                         <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-20 text-right border rounded p-1" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
                         <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-20 text-right border border-red-200 rounded p-1" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
+                        
+                        {/* VAT CONFIGURATION SECTION */}
+                        <div className="flex justify-between items-center py-2 border-t border-dashed">
+                            <label className="flex items-center text-xs cursor-pointer">
+                                <input type="checkbox" className="mr-2" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
+                                ราคารวม VAT ({config.vat_rate*100}%) แล้ว
+                            </label>
+                            <span className="text-xs text-slate-500">VAT: {vatAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                        </div>
+
                         <div className="flex justify-between font-bold text-xl text-blue-700 mt-2 p-2 bg-blue-50 rounded"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
                     </div>
                     <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center items-center" onClick={handleSaveOrder}>
@@ -909,9 +941,7 @@ const ProductPage = () => {
       )}
 
       <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า
-
-        </h1>
+        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
         </button>
@@ -1428,33 +1458,45 @@ const SettingsPage = () => {
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(false);
   
-  // State สำหรับ Form เพิ่มกฎราคา
-  const [newRule, setNewRule] = useState({ min_qty: 0, max_qty: 0, fabric_type: "Micro", unit_price: 0 });
-  
-  // Mock Fabrics (ควรดึงจาก Master Data จริง)
-  const fabricOptions = ["Micro", "TK", "TC", "Cotton"]; 
+  // Pricing Rule State
+  const [newRule, setNewRule] = useState({ min_qty: 0, max_qty: 0, fabric_type: "", unit_price: 0 });
+  const [fabrics, setFabrics] = useState([]); 
 
-  const fetchRules = async () => {
+  // Global Config State
+  const [globalConfig, setGlobalConfig] = useState({ vat_rate: 7, default_shipping_cost: 0 });
+
+  const fetchRulesAndMasters = async () => {
     setLoading(true);
     try {
-        // เปลี่ยน endpoint ให้ตรงกับ Backend ของคุณ
-        const data = await fetchWithAuth('/pricing-rules/'); 
-        // ถ้า Backend ยังไม่เสร็จ ให้ใช้ Mock data นี้แทนไปก่อนเพื่อทดสอบ UI
-        if (!data) {
-            setPricingRules([
-                { id: 1, min_qty: 1, max_qty: 20, fabric_type: "Micro", unit_price: 150 },
-                { id: 2, min_qty: 21, max_qty: 50, fabric_type: "Micro", unit_price: 140 },
-                { id: 3, min_qty: 51, max_qty: 100, fabric_type: "Micro", unit_price: 130 },
-            ]);
-        } else {
-            setPricingRules(data);
+        const [pData, fData] = await Promise.all([
+            fetchWithAuth('/pricing-rules/'),
+            fetchWithAuth('/products/fabrics')
+        ]);
+        setPricingRules(pData || []);
+        setFabrics(fData || []);
+        
+        if (fData && fData.length > 0) {
+            setNewRule(prev => ({ ...prev, fabric_type: fData[0].name }));
         }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
+  const fetchGlobalConfig = async () => {
+      try {
+          const data = await fetchWithAuth('/company/config');
+          if(data) {
+              setGlobalConfig({
+                  vat_rate: (data.vat_rate || 0) * 100, // Convert 0.07 -> 7
+                  default_shipping_cost: data.default_shipping_cost || 0
+              });
+          }
+      } catch(e) { console.error(e); }
+  }
+
   useEffect(() => {
-    if (activeTab === 'pricing') fetchRules();
+    if (activeTab === 'pricing') fetchRulesAndMasters();
+    if (activeTab === 'general') fetchGlobalConfig();
   }, [activeTab]);
 
   const handleAddRule = async () => {
@@ -1463,18 +1505,34 @@ const SettingsPage = () => {
             method: 'POST',
             body: JSON.stringify(newRule)
         });
-        setNewRule({ ...newRule, min_qty: 0, max_qty: 0, unit_price: 0 }); // Reset form excluding fabric
-        fetchRules();
-    } catch (e) { alert("Failed (Mock Mode: Backend needed)"); }
+        setNewRule(prev => ({ ...prev, min_qty: 0, max_qty: 0, unit_price: 0 })); 
+        // Re-fetch
+        const rules = await fetchWithAuth('/pricing-rules/');
+        setPricingRules(rules || []);
+    } catch (e) { alert("Failed to add rule: " + e.message); }
   };
 
   const handleDeleteRule = async (id) => {
     if(!confirm("ยืนยันการลบ?")) return;
     try {
         await fetchWithAuth(`/pricing-rules/${id}`, { method: 'DELETE' });
-        fetchRules();
+        const rules = await fetchWithAuth('/pricing-rules/');
+        setPricingRules(rules || []);
     } catch (e) { alert("Failed"); }
   };
+
+  const handleSaveConfig = async () => {
+      try {
+          await fetchWithAuth('/company/config', {
+              method: 'PUT',
+              body: JSON.stringify({
+                  vat_rate: globalConfig.vat_rate / 100, // Convert 7 -> 0.07
+                  default_shipping_cost: globalConfig.default_shipping_cost
+              })
+          });
+          alert("บันทึกการตั้งค่าเรียบร้อยแล้ว");
+      } catch(e) { alert("Error saving config: " + e.message); }
+  }
 
   return (
     <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
@@ -1506,7 +1564,11 @@ const SettingsPage = () => {
                             value={newRule.fabric_type}
                             onChange={e => setNewRule({...newRule, fabric_type: e.target.value})}
                           >
-                              {fabricOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                              {fabrics.length > 0 ? (
+                                  fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)
+                              ) : (
+                                  <option value="">กำลังโหลด...</option>
+                              )}
                           </select>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -1563,13 +1625,53 @@ const SettingsPage = () => {
       )}
 
       {activeTab === "general" && (
-          <div className="bg-white p-8 rounded-xl shadow-sm border max-w-2xl mx-auto text-center">
-              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calculator size={32} className="text-slate-400"/>
+          <div className="bg-white p-8 rounded-xl shadow-sm border max-w-lg mx-auto">
+              <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Calculator size={32} className="text-slate-400"/>
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800">Global Configuration</h3>
+                  <p className="text-slate-500">ตั้งค่าตัวแปรกลางของระบบ</p>
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Global Configuration</h3>
-              <p className="text-slate-500 mb-6">ตั้งค่า VAT และค่าขนส่งเริ่มต้น (Coming Soon)</p>
-              <button className="bg-slate-200 text-slate-400 px-6 py-2 rounded-lg cursor-not-allowed">บันทึกการตั้งค่า</button>
+              
+              <div className="space-y-4">
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">อัตราภาษีมูลค่าเพิ่ม (VAT %)</label>
+                      <div className="relative">
+                          <input 
+                              type="number" 
+                              className="w-full border p-3 rounded-lg pl-10" 
+                              placeholder="7" 
+                              value={globalConfig.vat_rate}
+                              onChange={e => setGlobalConfig({...globalConfig, vat_rate: parseFloat(e.target.value)})}
+                          />
+                          <span className="absolute left-3 top-3 text-slate-400">%</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">ค่ามาตรฐานประเทศไทยคือ 7%</p>
+                  </div>
+
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">ค่าขนส่งเริ่มต้น (บาท)</label>
+                      <div className="relative">
+                          <input 
+                              type="number" 
+                              className="w-full border p-3 rounded-lg pl-10" 
+                              placeholder="0" 
+                              value={globalConfig.default_shipping_cost}
+                              onChange={e => setGlobalConfig({...globalConfig, default_shipping_cost: parseFloat(e.target.value)})}
+                          />
+                          <DollarSign className="absolute left-3 top-3 text-slate-400" size={18} />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">ค่านี้จะถูกใส่ให้ในช่อง "ค่าขนส่ง" โดยอัตโนมัติเมื่อสร้างออเดอร์ใหม่</p>
+                  </div>
+
+                  <button 
+                      onClick={handleSaveConfig}
+                      className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition mt-4"
+                  >
+                      บันทึกการตั้งค่า
+                  </button>
+              </div>
           </div>
       )}
     </div>
