@@ -3,7 +3,8 @@ import {
   Calendar, Save, Calculator, AlertCircle, User, Box, FileText, 
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
-  LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft
+  LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
+  Download, Settings
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
@@ -300,7 +301,7 @@ const DashboardPage = ({ onEdit }) => {
                             onClick={() => setViewMode('calendar')} 
                             className="bg-white border hover:bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center shadow-sm transition"
                         >
-                            <XCircle size={16} className="mr-1.5"/> ปิด / กลับไปปฏิทิน
+                            <XCircle size={16} className="mr-1.5"/> ปิด
                         </button>
                     </div>
                     <div className="overflow-auto p-0 flex-1">
@@ -909,7 +910,7 @@ const ProductPage = () => {
 
       <header className="mb-8 flex justify-between">
         <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า
-            
+
         </h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
@@ -1163,11 +1164,12 @@ const CustomerPage = () => {
   );
 };
 
-// 2.5 ORDER LIST PAGE (UPDATED UI & CRUD)
-const OrderListPage = ({ onNavigate, onEdit }) => {
+// 2.5 ORDER LIST PAGE (UPDATED: With Search & Export CSV)
+const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
   const [orders, setOrders] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // State สำหรับคำค้นหา
    
   const fetchOrders = useCallback(async () => {
       setLoading(true);
@@ -1198,6 +1200,89 @@ const OrderListPage = ({ onNavigate, onEdit }) => {
     return <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs">Draft</span>;
   };
 
+  // --- FILTER & SEARCH LOGIC ---
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    
+    // 1. Filter by Type (All, Pending, Revenue, Urgent)
+    let data = orders;
+    switch (filterType) {
+        case 'pending':
+            data = data.filter(o => o.status !== 'delivered');
+            break;
+        case 'revenue':
+            data = data.filter(o => o.status === 'delivered');
+            break;
+        case 'urgent':
+            data = data.filter(o => {
+                if (!o.deadline) return false;
+                const diff = new Date(o.deadline) - new Date();
+                return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
+            });
+            break;
+        default:
+            break;
+    }
+
+    // 2. Filter by Search Term
+    if (searchTerm.trim() !== "") {
+        const lowerTerm = searchTerm.toLowerCase();
+        data = data.filter(o => 
+            (o.order_no || "").toLowerCase().includes(lowerTerm) ||
+            (o.customer_name || "").toLowerCase().includes(lowerTerm) ||
+            (o.contact_channel || "").toLowerCase().includes(lowerTerm) ||
+            (o.phone || "").includes(lowerTerm)
+        );
+    }
+
+    return data;
+  }, [orders, filterType, searchTerm]);
+
+  const getTitle = () => {
+      switch(filterType) {
+          case 'pending': return 'รายการออเดอร์ (ค้างส่ง)';
+          case 'revenue': return 'รายการออเดอร์ (ส่งแล้ว/รับรู้รายได้)';
+          case 'urgent': return 'รายการออเดอร์ (ด่วน)';
+          default: return 'รายการออเดอร์ทั้งหมด';
+      }
+  };
+
+  // --- EXPORT CSV FUNCTION ---
+  const handleExportCSV = () => {
+      if (filteredOrders.length === 0) {
+          alert("ไม่มีข้อมูลสำหรับ Export");
+          return;
+      }
+
+      // 1. Define Headers
+      const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
+      
+      // 2. Map Data to Rows
+      const rows = filteredOrders.map(order => [
+          `"${order.order_no}"`, // Wrap in quotes to handle commas in content
+          `"${order.customer_name || ''}"`,
+          `"${order.contact_channel || ''}"`,
+          `"${order.phone || ''}"`,
+          `"${order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : ''}"`,
+          `"${order.grand_total || 0}"`,
+          `"${order.deposit || 0}"`,
+          `"${order.status || 'draft'}"`
+      ]);
+
+      // 3. Combine with BOM for Thai support in Excel
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+      // 4. Create Download Link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
   return (
     <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
       {/* Delete Confirmation Modal */}
@@ -1217,21 +1302,62 @@ const OrderListPage = ({ onNavigate, onEdit }) => {
           </div>
       )}
 
-      <header className="mb-8 flex justify-between items-center">
+      {/* HEADER: Title + Search + Actions */}
+      <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-            <h1 className="text-2xl font-bold text-slate-800">รายการออเดอร์</h1>
-            <p className="text-slate-500 text-sm mt-1">แสดงผล: {orders.length} รายการ</p>
+            <h1 className="text-2xl font-bold text-slate-800">{getTitle()}</h1>
+            <p className="text-slate-500 text-sm mt-1">แสดงผล: {filteredOrders.length} รายการ</p>
         </div>
-        <button onClick={() => onNavigate('create_order')} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition"><Plus size={18} className="mr-2"/> สร้างใหม่</button>
+
+        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            {/* Search Bar */}
+            <div className="relative flex-1 md:w-64">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                <input 
+                    type="text" 
+                    placeholder="ค้นหาเลขที่, ชื่อลูกค้า..." 
+                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                    <button 
+                        onClick={() => setSearchTerm("")}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                    >
+                        <XCircle size={16} />
+                    </button>
+                )}
+            </div>
+
+            <div className="flex gap-2">
+                {/* Export Button */}
+                <button 
+                    onClick={handleExportCSV}
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-emerald-700 transition shadow-sm whitespace-nowrap"
+                    title="Download CSV"
+                >
+                    <Download size={18} className="mr-2"/> Export
+                </button>
+
+                {/* Create Button */}
+                <button 
+                    onClick={() => onNavigate('create_order')} 
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition shadow-sm whitespace-nowrap"
+                >
+                    <Plus size={18} className="mr-2"/> สร้างใหม่
+                </button>
+            </div>
+        </div>
       </header>
        
+      {/* TABLE CONTENT */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
-        <div className="p-6">
-            {loading ? <p className="text-center text-slate-500">Loading...</p> : (
-                <table className="w-full text-left">
+        <div className="p-0 md:p-6 overflow-x-auto">
+            {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
+                <table className="w-full text-left min-w-[800px]">
                     <thead>
-                        <tr className="border-b text-sm text-slate-500">
-                            {/* Adjusted width to be equal */}
+                        <tr className="border-b text-sm text-slate-500 bg-slate-50 md:bg-white">
                             <th className="py-3 px-4 w-1/6">เลขที่</th>
                             <th className="py-3 px-4 w-1/6">ลูกค้า</th>
                             <th className="py-3 px-4 w-1/6">กำหนดส่ง</th>
@@ -1241,10 +1367,13 @@ const OrderListPage = ({ onNavigate, onEdit }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {orders.map((order) => (
+                        {filteredOrders.map((order) => (
                             <tr key={order.id} className="border-b hover:bg-slate-50 transition">
                                 <td className="py-3 px-4 font-mono font-bold text-slate-800">{order.order_no}</td>
-                                <td className="py-3 px-4 text-slate-700">{order.customer_name}</td>
+                                <td className="py-3 px-4 text-slate-700">
+                                    <div className="font-medium">{order.customer_name}</div>
+                                    <div className="text-xs text-slate-400">{order.contact_channel}</div>
+                                </td>
                                 <td className="py-3 px-4 text-slate-500 text-sm">
                                     {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
                                 </td>
@@ -1270,13 +1399,15 @@ const OrderListPage = ({ onNavigate, onEdit }) => {
                                 </td>
                             </tr>
                         ))}
-                        {orders.length === 0 && (
+                        {filteredOrders.length === 0 && (
                             <tr>
                                 <td colSpan="6" className="py-12 text-center">
                                     <div className="flex flex-col items-center justify-center text-slate-400">
-                                        <FileText size={48} className="mb-3 opacity-50" />
-                                        <p className="text-lg font-medium">ยังไม่มีรายการออเดอร์</p>
-                                        <p className="text-sm mt-1">เริ่มต้นด้วยการสร้างออเดอร์ใหม่</p>
+                                        {searchTerm ? <Search size={48} className="mb-3 opacity-50"/> : <FileText size={48} className="mb-3 opacity-50" />}
+                                        <p className="text-lg font-medium">
+                                            {searchTerm ? `ไม่พบผลลัพธ์สำหรับ "${searchTerm}"` : "ไม่พบรายการออเดอร์ในกลุ่มนี้"}
+                                        </p>
+                                        {!searchTerm && <p className="text-sm mt-1">ลองเปลี่ยนตัวกรองหรือสร้างออเดอร์ใหม่</p>}
                                     </div>
                                 </td>
                             </tr>
@@ -1286,6 +1417,161 @@ const OrderListPage = ({ onNavigate, onEdit }) => {
             )}
         </div>
       </div>
+    </div>
+  );
+};
+
+
+// 2.6 SETTINGS PAGE (NEW: Pricing Rules & Global Config)
+const SettingsPage = () => {
+  const [activeTab, setActiveTab] = useState("pricing");
+  const [pricingRules, setPricingRules] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  // State สำหรับ Form เพิ่มกฎราคา
+  const [newRule, setNewRule] = useState({ min_qty: 0, max_qty: 0, fabric_type: "Micro", unit_price: 0 });
+  
+  // Mock Fabrics (ควรดึงจาก Master Data จริง)
+  const fabricOptions = ["Micro", "TK", "TC", "Cotton"]; 
+
+  const fetchRules = async () => {
+    setLoading(true);
+    try {
+        // เปลี่ยน endpoint ให้ตรงกับ Backend ของคุณ
+        const data = await fetchWithAuth('/pricing-rules/'); 
+        // ถ้า Backend ยังไม่เสร็จ ให้ใช้ Mock data นี้แทนไปก่อนเพื่อทดสอบ UI
+        if (!data) {
+            setPricingRules([
+                { id: 1, min_qty: 1, max_qty: 20, fabric_type: "Micro", unit_price: 150 },
+                { id: 2, min_qty: 21, max_qty: 50, fabric_type: "Micro", unit_price: 140 },
+                { id: 3, min_qty: 51, max_qty: 100, fabric_type: "Micro", unit_price: 130 },
+            ]);
+        } else {
+            setPricingRules(data);
+        }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'pricing') fetchRules();
+  }, [activeTab]);
+
+  const handleAddRule = async () => {
+    try {
+        await fetchWithAuth('/pricing-rules/', {
+            method: 'POST',
+            body: JSON.stringify(newRule)
+        });
+        setNewRule({ ...newRule, min_qty: 0, max_qty: 0, unit_price: 0 }); // Reset form excluding fabric
+        fetchRules();
+    } catch (e) { alert("Failed (Mock Mode: Backend needed)"); }
+  };
+
+  const handleDeleteRule = async (id) => {
+    if(!confirm("ยืนยันการลบ?")) return;
+    try {
+        await fetchWithAuth(`/pricing-rules/${id}`, { method: 'DELETE' });
+        fetchRules();
+    } catch (e) { alert("Failed"); }
+  };
+
+  return (
+    <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-800 flex items-center">
+            <Filter className="mr-3" /> การตั้งค่าระบบ (Settings)
+        </h1>
+      </header>
+
+      <div className="flex gap-4 mb-6 border-b border-slate-200">
+          <button onClick={() => setActiveTab("pricing")} className={`pb-3 px-4 font-medium text-sm border-b-2 transition ${activeTab==="pricing" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+             ตั้งราคาขาย (Tier Pricing)
+          </button>
+          <button onClick={() => setActiveTab("general")} className={`pb-3 px-4 font-medium text-sm border-b-2 transition ${activeTab==="general" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+             ค่าทั่วไป (VAT/Shipping)
+          </button>
+      </div>
+
+      {activeTab === "pricing" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Form เพิ่มกฎ */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border h-fit">
+                  <h3 className="font-bold text-lg mb-4 text-slate-700">เพิ่มกฎราคาใหม่</h3>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium mb-1">ชนิดผ้า</label>
+                          <select 
+                            className="w-full border p-2 rounded"
+                            value={newRule.fabric_type}
+                            onChange={e => setNewRule({...newRule, fabric_type: e.target.value})}
+                          >
+                              {fabricOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                          </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                          <div>
+                              <label className="block text-sm font-medium mb-1">ขั้นต่ำ (ตัว)</label>
+                              <input type="number" className="w-full border p-2 rounded" value={newRule.min_qty} onChange={e => setNewRule({...newRule, min_qty: parseInt(e.target.value)||0})} />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium mb-1">ถึง (ตัว)</label>
+                              <input type="number" className="w-full border p-2 rounded" value={newRule.max_qty} onChange={e => setNewRule({...newRule, max_qty: parseInt(e.target.value)||0})} />
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium mb-1">ราคาต่อหน่วย (บาท)</label>
+                          <input type="number" className="w-full border p-2 rounded bg-blue-50 text-blue-800 font-bold" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
+                      </div>
+                      <button onClick={handleAddRule} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-medium">บันทึกกฎราคา</button>
+                  </div>
+              </div>
+
+              {/* Table รายการกฎ */}
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border overflow-hidden">
+                  <div className="p-4 border-b bg-slate-50 font-bold text-slate-700">รายการ Pricing Tiers ปัจจุบัน</div>
+                  <table className="w-full text-left text-sm">
+                      <thead className="bg-white text-slate-500 border-b">
+                          <tr>
+                              <th className="p-4">ชนิดผ้า</th>
+                              <th className="p-4">ช่วงจำนวน (Qty Range)</th>
+                              <th className="p-4 text-right">ราคา/ตัว</th>
+                              <th className="p-4 text-right">Action</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {pricingRules.length === 0 ? (
+                              <tr><td colSpan="4" className="p-8 text-center text-slate-400">ยังไม่มีการตั้งราคา</td></tr>
+                          ) : pricingRules.map((rule) => (
+                              <tr key={rule.id} className="hover:bg-slate-50">
+                                  <td className="p-4 font-bold text-slate-700">{rule.fabric_type}</td>
+                                  <td className="p-4">
+                                      <span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">
+                                          {rule.min_qty} - {rule.max_qty > 9999 ? 'ขึ้นไป' : rule.max_qty}
+                                      </span>
+                                  </td>
+                                  <td className="p-4 text-right font-bold text-blue-600">{rule.unit_price} ฿</td>
+                                  <td className="p-4 text-right">
+                                      <button onClick={() => handleDeleteRule(rule.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16}/></button>
+                                  </td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      )}
+
+      {activeTab === "general" && (
+          <div className="bg-white p-8 rounded-xl shadow-sm border max-w-2xl mx-auto text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Calculator size={32} className="text-slate-400"/>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Global Configuration</h3>
+              <p className="text-slate-500 mb-6">ตั้งค่า VAT และค่าขนส่งเริ่มต้น (Coming Soon)</p>
+              <button className="bg-slate-200 text-slate-400 px-6 py-2 rounded-lg cursor-not-allowed">บันทึกการตั้งค่า</button>
+          </div>
+      )}
     </div>
   );
 };
@@ -1314,9 +1600,9 @@ const App = () => {
 
   const renderContent = () => {
     switch(currentPage) {
-        // Pass handleEditOrder to Dashboard so we can edit from the filtered list view
         case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
         case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} />;
+        case 'settings': return <SettingsPage />;
         case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage />;
@@ -1338,10 +1624,12 @@ const App = () => {
             <button className="md:hidden text-slate-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={24}/></button>
         </div>
         <nav className="flex-1 px-4 space-y-2 mt-6">
+        
           <button onClick={() => handleNavigate('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><LayoutDashboard size={20} /> <span>Dashboard</span></button>
           <button onClick={() => handleNavigate('order_list')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${['order_list', 'create_order'].includes(currentPage) ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><FileText size={20} /> <span>Orders</span></button>
           <button onClick={() => handleNavigate('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><Box size={20} /> <span>จัดการข้อมูลสินค้า</span></button>
           <button onClick={() => handleNavigate('customer')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'customer' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><User size={20} /> <span>ข้อมูลลูกค้า</span></button>
+          <button onClick={() => handleNavigate('settings')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'settings' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}> <Settings size={20} /><span>ตั้งค่าระบบ</span></button>
         </nav>
         <div className="p-4 border-t border-slate-800">
             <button onClick={() => { localStorage.removeItem('access_token'); setIsLoggedIn(false); }} className="w-full flex items-center text-slate-400 hover:text-white transition text-sm p-2 hover:bg-slate-800 rounded"><LogOut size={16} className="mr-2"/> Sign Out</button>
