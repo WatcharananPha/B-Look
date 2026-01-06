@@ -42,13 +42,74 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
 // --- COMPONENTS ---
 
-// 2.0 LOGIN PAGE
+// 2.0 LOGIN PAGE (Updated with Google Login)
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Logic สำหรับจัดการเมื่อ User Login ผ่าน Google สำเร็จ
+  const handleGoogleCallback = useCallback(async (response) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      // ส่ง Google ID Token ไปให้ Backend ตรวจสอบ
+      const res = await fetch(`${API_URL}/auth/login/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: response.credential })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Google Login Failed');
+      }
+
+      const data = await res.json();
+      
+      // บันทึก Token และ Role
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user_role', data.role || 'user'); // Default เป็น user ถ้าไม่มี role กลับมา
+        
+      onLogin(data.role || 'user');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onLogin]);
+
+  // โหลด Script Google Sign-In และแสดงปุ่ม
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google) {
+        window.google.accounts.id.initialize({
+          // TODO: ใส่ Google Client ID ของคุณที่นี่
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com", 
+          callback: handleGoogleCallback
+        });
+        window.google.accounts.id.renderButton(
+          document.getElementById("googleSignInButton"),
+          { theme: "outline", size: "large", width: "100%", text: "continue_with" } 
+        );
+      }
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      // Cleanup script เมื่อ Component unmount (ถ้าจำเป็น)
+      if(document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, [handleGoogleCallback]);
+
+  // Handle Login ปกติ (Username/Password)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -59,7 +120,7 @@ const LoginPage = ({ onLogin }) => {
       formData.append('username', username);
       formData.append('password', password);
 
-      const response = await fetch(`${API_URL}/auth/token`, {
+      const response = await fetch(`${API_URL}/auth/login/access-token`, { // แก้ไข path ให้ตรงกับ backend ใหม่
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData
@@ -70,7 +131,7 @@ const LoginPage = ({ onLogin }) => {
       const data = await response.json();
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user_role', data.role || 'owner');
-       
+        
       onLogin(data.role || 'owner');
     } catch (err) {
       setError(err.message);
@@ -90,6 +151,7 @@ const LoginPage = ({ onLogin }) => {
           <p className="text-slate-500 mt-2 text-sm">ระบบจัดการออเดอร์และคำนวณราคา</p>
         </div>
         
+        {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center">
@@ -100,7 +162,7 @@ const LoginPage = ({ onLogin }) => {
             <label className="block text-sm font-semibold text-slate-700 mb-1">Username</label>
             <div className="relative">
               <User className="absolute left-3 top-3 text-slate-400" size={20} />
-              <input type="text" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none"
+              <input type="text" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
                 placeholder="admin" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </div>
           </div>
@@ -108,14 +170,29 @@ const LoginPage = ({ onLogin }) => {
             <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
             <div className="relative">
               <Key className="absolute left-3 top-3 text-slate-400" size={20} />
-              <input type="password" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none"
+              <input type="password" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
                 placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
           </div>
-          <button type="submit" disabled={isLoading} className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg shadow-lg mt-2 flex justify-center items-center ${isLoading ? 'opacity-70' : ''}`}>
+          
+          <button type="submit" disabled={isLoading} className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition transform hover:scale-[1.02] flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}>
             {isLoading ? "Signing In..." : "เข้าสู่ระบบ"}
           </button>
         </form>
+
+        {/* Divider */}
+        <div className="relative mt-8 mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-slate-200"></span>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-slate-400">หรือเข้าสู่ระบบด้วย</span>
+          </div>
+        </div>
+
+        {/* Google Login Button Container */}
+        <div id="googleSignInButton" className="flex justify-center min-h-[44px]"></div>
+        
       </div>
     </div>
   );
