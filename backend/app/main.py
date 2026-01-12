@@ -3,21 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine
 from app.db.base import Base
 
+# 1. Import Models first (Register with SQLAlchemy)
+from app.models import User, Customer, Order, OrderItem, FabricType
+
+# 2. Create Tables
 Base.metadata.create_all(bind=engine)
 
-# Update imports to include pricing_rules (and company if needed)
-from app.api import auth, orders, products, suppliers, admin, customers, pricing_rules, company
+# 3. Import APIs
+from app.api import auth, orders, products
 
 app = FastAPI(title="B-Look OMS API")
 
-origins = [
-    "http://localhost:5173", 
-    "http://localhost:3000",
-    "https://blook-web-app.azurewebsites.net"
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -25,24 +24,8 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
-app.include_router(products.router, prefix="/api/v1/products", tags=["Products & Config"])
-app.include_router(suppliers.router, prefix="/api/v1/suppliers", tags=["Suppliers"])
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin & Settings"])
-app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
-
-# --- Add these lines ---
-app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
-app.include_router(company.router, prefix="/api/v1/company", tags=["Company"]) # It seems company is also missing
-# ---------------------
+app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to B-Look API Server", "status": "running"}
-
-@app.on_event("startup")
-async def startup_event():
-    print("\n🚀 Registered Routes:")
-    for route in app.routes:
-        if hasattr(route, "methods"):
-            print(f"   - {route.path} {route.methods}")
-    print("\n")
+    return {"status": "ok"}

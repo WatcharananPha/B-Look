@@ -6,6 +6,8 @@ import {
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
   Download, Settings, DollarSign
 } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
@@ -42,23 +44,24 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
 // --- COMPONENTS ---
 
-// 2.0 LOGIN PAGE (Updated with Google Login)
+// 2.0 LOGIN PAGE (Updated: Using @react-oauth/google Component)
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Logic สำหรับจัดการเมื่อ User Login ผ่าน Google สำเร็จ
-  const handleGoogleCallback = useCallback(async (response) => {
+  // Logic สำหรับจัดการเมื่อ User Login ผ่าน Google สำเร็จ (รับค่าจาก Component)
+  const handleGoogleSuccess = async (credentialResponse) => {
     setIsLoading(true);
     setError("");
     try {
       // ส่ง Google ID Token ไปให้ Backend ตรวจสอบ
-      const res = await fetch(`${API_URL}/auth/login/google`, {
+      // หมายเหตุ: endpoint ต้องตรงกับที่ตั้งไว้ใน FastAPI (เช่น /auth/google)
+      const res = await fetch(`${API_URL}/auth/google`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: response.credential })
+        body: JSON.stringify({ token: credentialResponse.credential })
       });
 
       if (!res.ok) {
@@ -69,45 +72,17 @@ const LoginPage = ({ onLogin }) => {
       const data = await res.json();
       
       // บันทึก Token และ Role
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user_role', data.role || 'user'); // Default เป็น user ถ้าไม่มี role กลับมา
+      localStorage.setItem('access_token', data.access_token || data.token); // เช็ค key ให้ตรงกับ backend
+      localStorage.setItem('user_role', data.role || 'user'); 
         
       onLogin(data.role || 'user');
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google Login");
     } finally {
       setIsLoading(false);
     }
-  }, [onLogin]);
-
-  // โหลด Script Google Sign-In และแสดงปุ่ม
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if (window.google) {
-        window.google.accounts.id.initialize({
-          // TODO: ใส่ Google Client ID ของคุณที่นี่
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com", 
-          callback: handleGoogleCallback
-        });
-        window.google.accounts.id.renderButton(
-          document.getElementById("googleSignInButton"),
-          { theme: "outline", size: "large", width: "100%", text: "continue_with" } 
-        );
-      }
-    };
-    document.body.appendChild(script);
-
-    return () => {
-      // Cleanup script เมื่อ Component unmount (ถ้าจำเป็น)
-      if(document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
-  }, [handleGoogleCallback]);
+  };
 
   // Handle Login ปกติ (Username/Password)
   const handleSubmit = async (e) => {
@@ -120,7 +95,7 @@ const LoginPage = ({ onLogin }) => {
       formData.append('username', username);
       formData.append('password', password);
 
-      const response = await fetch(`${API_URL}/auth/login/access-token`, { // แก้ไข path ให้ตรงกับ backend ใหม่
+      const response = await fetch(`${API_URL}/auth/login/access-token`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData
@@ -190,8 +165,20 @@ const LoginPage = ({ onLogin }) => {
           </div>
         </div>
 
-        {/* Google Login Button Container */}
-        <div id="googleSignInButton" className="flex justify-center min-h-[44px]"></div>
+        {/* Google Login Button Component */}
+        <div className="flex justify-center w-full">
+            <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => {
+                    console.error('Google Login Failed');
+                    setError("Google Login ไม่สำเร็จ");
+                }}
+                theme="outline"
+                size="large"
+                width="100%" 
+                text="continue_with"
+            />
+        </div>
         
       </div>
     </div>
