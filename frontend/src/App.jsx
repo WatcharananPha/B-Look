@@ -51,18 +51,18 @@ const LoginPage = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Logic สำหรับจัดการเมื่อ User Login ผ่าน Google สำเร็จ (รับค่าจาก Component)
+// Logic สำหรับจัดการเมื่อ User Login ผ่าน Google สำเร็จ (รับค่าจาก Component)
   const handleGoogleSuccess = async (credentialResponse) => {
     setIsLoading(true);
     setError("");
     try {
-      // ส่ง Google ID Token ไปให้ Backend ตรวจสอบ
-      // หมายเหตุ: endpoint ต้องตรงกับที่ตั้งไว้ใน FastAPI (เช่น /auth/google)
-      const res = await fetch(`${API_URL}/auth/google`, { 
+      // --- แก้ไขตรงนี้ (เพิ่ม /login เข้าไปใน URL) ---
+      const res = await fetch(`${API_URL}/auth/login/google`, {  // <--- แก้บรรทัดนี้
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: credentialResponse.credential })
       });
+      // ---------------------------------------------
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
