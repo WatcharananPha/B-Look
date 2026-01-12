@@ -1005,7 +1005,7 @@ const ProductPage = () => {
       )}
 
       <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า (Master Data)</h1>
+        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า</h1>
         <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
             <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
         </button>
@@ -1601,17 +1601,16 @@ const SettingsPage = () => {
   return (
     <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center">
-            <Filter className="mr-3" /> การตั้งค่าระบบ (Settings)
+        <h1 className="text-2xl font-bold text-slate-800 flex items-center"> การตั้งค่าระบบ
         </h1>
       </header>
 
       <div className="flex gap-4 mb-6 border-b border-slate-200">
           <button onClick={() => setActiveTab("pricing")} className={`pb-3 px-4 font-medium text-sm border-b-2 transition ${activeTab==="pricing" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-             ตั้งราคาขาย (Tier Pricing)
+             ตั้งราคาขาย
           </button>
           <button onClick={() => setActiveTab("general")} className={`pb-3 px-4 font-medium text-sm border-b-2 transition ${activeTab==="general" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-             ค่าทั่วไป (VAT/Shipping)
+             VAT and Shipping
           </button>
       </div>
 
@@ -1619,7 +1618,7 @@ const SettingsPage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Form เพิ่มกฎ */}
               <div className="bg-white p-6 rounded-xl shadow-sm border h-fit">
-                  <h3 className="font-bold text-lg mb-4 text-slate-700">เพิ่มกฎราคาใหม่</h3>
+                  <h3 className="font-bold text-lg mb-4 text-slate-700">เพิ่มรายละเอียดราคาใหม่</h3>
                   <div className="space-y-4">
                       <div>
                           <label className="block text-sm font-medium mb-1">ชนิดผ้า</label>
@@ -1649,7 +1648,7 @@ const SettingsPage = () => {
                           <label className="block text-sm font-medium mb-1">ราคาต่อหน่วย (บาท)</label>
                           <input type="number" className="w-full border p-2 rounded bg-blue-50 text-blue-800 font-bold" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
                       </div>
-                      <button onClick={handleAddRule} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-medium">บันทึกกฎราคา</button>
+                      <button onClick={handleAddRule} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-medium">บันทึกราคา</button>
                   </div>
               </div>
 
@@ -1660,7 +1659,7 @@ const SettingsPage = () => {
                       <thead className="bg-white text-slate-500 border-b">
                           <tr>
                               <th className="p-4">ชนิดผ้า</th>
-                              <th className="p-4">ช่วงจำนวน (Qty Range)</th>
+                              <th className="p-4">Qty Range</th>
                               <th className="p-4 text-right">ราคา/ตัว</th>
                               <th className="p-4 text-right">Action</th>
                           </tr>

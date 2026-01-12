@@ -1,19 +1,103 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from pydantic import BaseModel
 from app.db.session import get_db
-from app.models.product import FabricType
+from app.models.product import FabricType, NeckType, SleeveType
+from app.schemas.master import FabricTypeResponse, NeckTypeResponse, SleeveTypeResponse
+from pydantic import BaseModel
 
 router = APIRouter()
 
-class FabricResponse(BaseModel):
-    id: int
+# --- Common Schema for Create/Update (Simple Version) ---
+class MasterCreate(BaseModel):
     name: str
-    price_adjustment: float
-    class Config:
-        from_attributes = True
+    price_adjustment: float = 0
+    quantity: int = 0 # Optional support for frontend compatibility
+    cost_price: float = 0 
 
-@router.get("/fabrics", response_model=List[FabricResponse])
+# --- FABRICS ---
+@router.get("/fabrics", response_model=List[FabricTypeResponse])
 def get_fabrics(db: Session = Depends(get_db)):
     return db.query(FabricType).filter(FabricType.is_active == True).all()
+
+@router.post("/fabrics")
+def create_fabric(item: MasterCreate, db: Session = Depends(get_db)):
+    new_item = FabricType(name=item.name, price_adjustment=item.price_adjustment)
+    db.add(new_item)
+    db.commit()
+    return new_item
+
+@router.put("/fabrics/{item_id}")
+def update_fabric(item_id: int, item: MasterCreate, db: Session = Depends(get_db)):
+    db_item = db.query(FabricType).filter(FabricType.id == item_id).first()
+    if not db_item: raise HTTPException(status_code=404, detail="Not found")
+    db_item.name = item.name
+    db_item.price_adjustment = item.price_adjustment
+    db.commit()
+    return db_item
+
+@router.delete("/fabrics/{item_id}")
+def delete_fabric(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(FabricType).filter(FabricType.id == item_id).first()
+    if db_item:
+        db.delete(db_item) # หรือใช้ is_active = False
+        db.commit()
+    return {"message": "Deleted"}
+
+# --- NECKS ---
+@router.get("/necks", response_model=List[NeckTypeResponse])
+def get_necks(db: Session = Depends(get_db)):
+    return db.query(NeckType).filter(NeckType.is_active == True).all()
+
+@router.post("/necks")
+def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
+    new_item = NeckType(name=item.name, price_adjustment=item.price_adjustment)
+    db.add(new_item)
+    db.commit()
+    return new_item
+
+@router.put("/necks/{item_id}")
+def update_neck(item_id: int, item: MasterCreate, db: Session = Depends(get_db)):
+    db_item = db.query(NeckType).filter(NeckType.id == item_id).first()
+    if not db_item: raise HTTPException(status_code=404, detail="Not found")
+    db_item.name = item.name
+    db_item.price_adjustment = item.price_adjustment
+    db.commit()
+    return db_item
+
+@router.delete("/necks/{item_id}")
+def delete_neck(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(NeckType).filter(NeckType.id == item_id).first()
+    if db_item:
+        db.delete(db_item)
+        db.commit()
+    return {"message": "Deleted"}
+
+# --- SLEEVES ---
+@router.get("/sleeves", response_model=List[SleeveTypeResponse])
+def get_sleeves(db: Session = Depends(get_db)):
+    return db.query(SleeveType).filter(SleeveType.is_active == True).all()
+
+@router.post("/sleeves")
+def create_sleeve(item: MasterCreate, db: Session = Depends(get_db)):
+    new_item = SleeveType(name=item.name, price_adjustment=item.price_adjustment)
+    db.add(new_item)
+    db.commit()
+    return new_item
+
+@router.put("/sleeves/{item_id}")
+def update_sleeve(item_id: int, item: MasterCreate, db: Session = Depends(get_db)):
+    db_item = db.query(SleeveType).filter(SleeveType.id == item_id).first()
+    if not db_item: raise HTTPException(status_code=404, detail="Not found")
+    db_item.name = item.name
+    db_item.price_adjustment = item.price_adjustment
+    db.commit()
+    return db_item
+
+@router.delete("/sleeves/{item_id}")
+def delete_sleeve(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(SleeveType).filter(SleeveType.id == item_id).first()
+    if db_item:
+        db.delete(db_item)
+        db.commit()
+    return {"message": "Deleted"}

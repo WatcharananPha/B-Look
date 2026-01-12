@@ -1,201 +1,195 @@
-from typing import List, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.orm import Session
-from datetime import date, datetime
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session, joinedload
+from typing import List, Any
+import uuid
+from decimal import Decimal
 
 from app.db.session import get_db
-from app.models.order import Order
+from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
 from app.models.customer import Customer
-from app.models.user import User
-# ต้องแน่ใจว่าได้สร้างไฟล์ app/models/audit_log.py ตามแผนแล้ว
-from app.models.audit_log import AuditLog 
-from app.schemas.order import OrderCreate, OrderResponse
-from app.api.deps import get_current_user
+from app.schemas.order import OrderCreate, Order as OrderSchema
 
 router = APIRouter()
 
-# Helper function สำหรับแปลงค่าเป็น String เพื่อเก็บลง Log
-def to_str(value: Any) -> str:
-    if value is None:
-        return "None"
-    if isinstance(value, (date, datetime)):
-        return value.isoformat()
-    return str(value)
-
-# --- GET Orders ---
-@router.get("/", response_model=List[OrderResponse])
+# --- 1. GET ALL ORDERS (แก้ปัญหา 404) ---
+@router.get("/", response_model=List[OrderSchema])
 def read_orders(
     skip: int = 0, 
     limit: int = 100, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # บังคับ Login
+    db: Session = Depends(get_db)
 ):
-    # TODO: ในอนาคตสามารถเพิ่ม Logic กรองตาม Role ได้ที่นี่ (เช่น Sales เห็นเฉพาะของตัวเอง)
-    orders = db.query(Order).order_by(Order.id.desc()).offset(skip).limit(limit).all()
-    return [OrderResponse.from_orm(o) for o in orders]
-
-# --- CREATE Order ---
-@router.post("/", response_model=OrderResponse)
-async def create_order(
-    request: Request, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    data = await request.json()
+    """
+    ดึงรายการออเดอร์ทั้งหมด พร้อมข้อมูลลูกค้าและสินค้า
+    """
+    orders = db.query(OrderModel)\
+        .options(joinedload(OrderModel.customer), joinedload(OrderModel.items))\
+        .order_by(OrderModel.id.desc())\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
     
-    # 1. จัดการลูกค้า (Auto-create logic)
-    customer_name = data.get("customer_name")
-    customer = db.query(Customer).filter(Customer.name == customer_name).first()
+    # Map ข้อมูล Manual เพื่อความชัวร์เรื่องชื่อลูกค้า
+    results = []
+    for o in orders:
+        # แปลง SQLAlchemy Model เป็น Dictionary เพื่อใส่ใน Schema
+        o_dict = o.__dict__.copy()
+        if o.customer:
+            o_dict['customer_name'] = o.customer.name
+            o_dict['phone'] = o.customer.phone
+            o_dict['contact_channel'] = o.customer.channel
+        
+        # Map fields ที่ชื่อไม่ตรงกัน 100%
+        o_dict['deposit'] = o.deposit_amount
+        o_dict['deadline'] = o.deadline_date # DB เก็บเป็น Date หรือ DateTime ต้องเช็ค model
+        
+        results.append(o_dict)
+
+    return results
+
+# --- 2. CREATE ORDER (พร้อมคำนวณกำไร) ---
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
+    """
+    สร้างออเดอร์ใหม่ + คำนวณราคา/กำไรอัตโนมัติ
+    """
+    # 1. จัดการลูกค้า (Find or Create)
+    customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
         customer = Customer(
-            name=customer_name,
-            channel=data.get("contact_channel", "Unknown"),
-            phone=data.get("phone"),
-            address=data.get("address")
+            name=order_in.customer_name,
+            phone=order_in.phone,
+            channel=order_in.contact_channel,
+            address=order_in.address
         )
         db.add(customer)
-        db.commit()
-        db.refresh(customer)
+        db.flush() # เอา ID ออกมา
+
+    # 2. คำนวณยอดเงินและต้นทุน
+    items_total_price = Decimal(0)
+    items_total_cost = Decimal(0)
     
-    # 2. เตรียมข้อมูล Financials
-    total_amount = data.get("total_amount", 0)
-    deposit = data.get("deposit", 0)
-    balance = float(total_amount) - float(deposit)
+    order_items_data = []
 
-    # 3. สร้าง Order
-    db_order = Order(
-        order_no=data.get("order_no"),
-        customer_id=customer.id,
-        created_by_id=current_user.id, # บันทึกว่าใครสร้าง
-        total_amount=total_amount,
-        grand_total=total_amount,
-        deposit=deposit,
-        balance=balance,
-        status=data.get("status", "draft"),
-        deadline=data.get("deadline"),
-        usage_date=data.get("usage_date"),
-        proof_date=data.get("proof_date"),
-        rush_fee=data.get("rush_fee", 0),
-        urgency_level="normal"
-    )
-    
-    db.add(db_order)
-    db.commit()
-    db.refresh(db_order)
-
-    # 4. (Optional) บันทึก Log การสร้าง (Action: create)
-    log = AuditLog(
-        order_id=db_order.id,
-        user_id=current_user.id,
-        action="create",
-        field_name="order",
-        new_value=f"Created Order {db_order.order_no}"
-    )
-    db.add(log)
-    db.commit()
-    
-    return OrderResponse.from_orm(db_order)
-
-# --- UPDATE Order (With History Log) ---
-@router.put("/{order_id}", response_model=OrderResponse)
-async def update_order(
-    order_id: int, 
-    request: Request, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    data = await request.json()
-    
-    # 1. หาออเดอร์เดิม
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    log_entries = [] # เก็บรายการที่จะบันทึก Log
-
-    # Helper function สำหรับเช็คความเปลี่ยนแปลง
-    def check_and_set(field: str, new_val: Any):
-        old_val = getattr(order, field)
-        # แปลงเป็น String เพื่อเปรียบเทียบ (ป้องกัน Error เรื่อง Type ต่างกัน)
-        if to_str(old_val) != to_str(new_val) and new_val is not None:
-            log_entries.append({
-                "field": field,
-                "old": to_str(old_val),
-                "new": to_str(new_val)
-            })
-            setattr(order, field, new_val)
-
-    # 2. อัปเดตลูกค้า (Special Logic)
-    if "customer_name" in data:
-        new_name = data["customer_name"]
-        if order.customer.name != new_name:
-            # หาหรือสร้างลูกค้าใหม่
-            customer = db.query(Customer).filter(Customer.name == new_name).first()
-            if not customer:
-                customer = Customer(
-                    name=new_name, 
-                    channel=data.get("contact_channel", "Unknown"),
-                    phone=data.get("phone"),
-                    address=data.get("address")
-                )
-                db.add(customer)
-                db.commit()
-                db.refresh(customer)
-            
-            # บันทึก Log
-            log_entries.append({
-                "field": "customer",
-                "old": order.customer.name,
-                "new": customer.name
-            })
-            order.customer_id = customer.id
-
-    # 3. อัปเดตข้อมูลทั่วไป
-    simple_fields = ["status", "deadline", "usage_date", "proof_date", "rush_fee", "total_amount", "deposit"]
-    for field in simple_fields:
-        if field in data:
-            check_and_set(field, data[field])
-
-    # 4. คำนวณ Balance ใหม่ถ้ามีการเปลี่ยนยอดเงิน
-    if "total_amount" in data or "deposit" in data:
-        order.grand_total = order.total_amount # ใน Phase นี้ให้ grand_total = total_amount ไปก่อน
-        order.balance = (float(order.grand_total or 0) - float(order.deposit or 0))
-
-    # 5. บันทึก Changes ลง Database และ Audit Log
-    try:
-        # บันทึก Audit Logs
-        for entry in log_entries:
-            audit_log = AuditLog(
-                order_id=order.id,
-                user_id=current_user.id,
-                action="update",
-                field_name=entry["field"],
-                old_value=entry["old"],
-                new_value=entry["new"]
-            )
-            db.add(audit_log)
+    for item in order_in.items:
+        qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
         
-        db.commit()
-        db.refresh(order)
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        # แปลงเป็น Decimal เพื่อความแม่นยำ
+        base_price = Decimal(str(item.base_price))
+        cost_per_unit = Decimal(str(item.cost_per_unit))
+        
+        line_price = base_price * qty
+        line_cost = cost_per_unit * qty
+        
+        items_total_price += line_price
+        items_total_cost += line_cost
+        
+        order_items_data.append({
+            "data": item,
+            "qty": qty,
+            "total_price": line_price,
+            "total_cost": line_cost
+        })
 
-    return OrderResponse.from_orm(order)
+    # คำนวณ Grand Total
+    shipping = Decimal(str(order_in.shipping_cost))
+    addon = Decimal(str(order_in.add_on_cost))
+    discount = Decimal(str(order_in.discount_amount))
+    deposit = Decimal(str(order_in.deposit_amount))
 
-# --- DELETE Order ---
-@router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_order(
-    order_id: int, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    order = db.query(Order).filter(Order.id == order_id).first()
+    total_before_vat = items_total_price + addon + shipping - discount
+    
+    vat_amount = Decimal(0)
+    grand_total = Decimal(0)
+    
+    if order_in.is_vat_included:
+        grand_total = total_before_vat
+        # ถอด VAT: Price / 1.07 * 0.07
+        vat_amount = (total_before_vat * 7) / 107
+    else:
+        vat_amount = total_before_vat * Decimal('0.07')
+        grand_total = total_before_vat + vat_amount
+
+    # Profit Logic: (ยอดขายถอด VAT) - (ต้นทุนสินค้า)
+    revenue_ex_vat = grand_total - vat_amount
+    estimated_profit = revenue_ex_vat - items_total_cost
+    balance = grand_total - deposit
+
+    # 3. บันทึก Order Header
+    new_order = OrderModel(
+        order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
+        customer_id=customer.id,
+        deadline_date=order_in.deadline,
+        urgency_level=order_in.urgency_level,
+        status="production",
+        
+        # Financials
+        is_vat_included=order_in.is_vat_included,
+        shipping_cost=shipping,
+        add_on_cost=addon,
+        discount_amount=discount,
+        vat_amount=vat_amount,
+        grand_total=grand_total,
+        deposit_amount=deposit,
+        balance_amount=balance,
+        
+        # Profitability
+        total_cost=items_total_cost,
+        estimated_profit=estimated_profit,
+    )
+    db.add(new_order)
+    db.flush() # เอา Order ID
+
+    # 4. บันทึก Order Items
+    for item_data in order_items_data:
+        src = item_data["data"]
+        new_item = OrderItemModel(
+            order_id=new_order.id,
+            product_name=src.product_name,
+            fabric_type=src.fabric_type,
+            neck_type=src.neck_type,
+            sleeve_type=src.sleeve_type,
+            quantity_matrix=src.quantity_matrix,
+            
+            total_qty=item_data["qty"],
+            price_per_unit=src.base_price,
+            total_price=item_data["total_price"],
+            
+            cost_per_unit=src.cost_per_unit,
+            total_cost=item_data["total_cost"]
+        )
+        db.add(new_item)
+    
+    db.commit()
+    db.refresh(new_order)
+    
+    return {
+        "message": "Order created successfully",
+        "order_no": new_order.order_no,
+        "id": new_order.id
+    }
+
+# --- 3. GET SINGLE ORDER ---
+@router.get("/{order_id}", response_model=OrderSchema)
+def read_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    # Optional: บันทึก Log ก่อนลบ (แต่ต้องระวัง FK ถ้าลบ Order แล้ว Log จะหายไหม -> ควรตั้ง FK เป็น SET NULL หรือเก็บแค่ Text)
-    # ในที่นี้เราจะลบ Order ไปเลย
+    # Map customer name manually
+    order_dict = order.__dict__.copy()
+    if order.customer:
+        order_dict['customer_name'] = order.customer.name
+        order_dict['phone'] = order.customer.phone
+        order_dict['contact_channel'] = order.customer.channel
+        
+    return order_dict
+
+# --- 4. DELETE ORDER ---
+@router.delete("/{order_id}", status_code=204)
+def delete_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
     
     db.delete(order)
     db.commit()
