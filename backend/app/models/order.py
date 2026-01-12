@@ -14,8 +14,7 @@ class Order(Base):
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     status = Column(String, default="draft")
-    
-    # --- แก้ไขตรงนี้ (Change deadline_date to deadline) ---
+
     deadline = Column(Date)
     # --------------------------------------------------
 
