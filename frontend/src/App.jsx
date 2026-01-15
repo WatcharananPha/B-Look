@@ -4,7 +4,7 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign
+  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal
 } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
@@ -44,25 +44,22 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
 // --- COMPONENTS ---
 
-// 2.0 LOGIN PAGE (Updated: Using @react-oauth/google Component)
+// 2.0 LOGIN PAGE
 const LoginPage = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-// Logic สำหรับจัดการเมื่อ User Login ผ่าน Google สำเร็จ (รับค่าจาก Component)
   const handleGoogleSuccess = async (credentialResponse) => {
     setIsLoading(true);
     setError("");
     try {
-      // --- แก้ไขตรงนี้ (เพิ่ม /login เข้าไปใน URL) ---
-      const res = await fetch(`${API_URL}/auth/login/google`, {  // <--- แก้บรรทัดนี้
+      const res = await fetch(`${API_URL}/auth/login/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: credentialResponse.credential })
       });
-      // ---------------------------------------------
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -70,11 +67,8 @@ const LoginPage = ({ onLogin }) => {
       }
 
       const data = await res.json();
-      
-      // บันทึก Token และ Role
-      localStorage.setItem('access_token', data.access_token || data.token); // เช็ค key ให้ตรงกับ backend
+      localStorage.setItem('access_token', data.access_token || data.token);
       localStorage.setItem('user_role', data.role || 'user'); 
-        
       onLogin(data.role || 'user');
     } catch (err) {
       console.error(err);
@@ -84,7 +78,6 @@ const LoginPage = ({ onLogin }) => {
     }
   };
 
-  // Handle Login ปกติ (Username/Password)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -116,17 +109,16 @@ const LoginPage = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 font-sans text-slate-800 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans text-slate-800 p-4">
       <div className="bg-white p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
         <div className="text-center mb-8">
-          <div className="bg-slate-900 text-white w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="bg-[#1a1c23] text-white w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <Lock size={32} />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">B-LOOK</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">INVENTORY360</h1>
           <p className="text-slate-500 mt-2 text-sm">ระบบจัดการออเดอร์และคำนวณราคา</p>
         </div>
         
-        {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center">
@@ -150,12 +142,11 @@ const LoginPage = ({ onLogin }) => {
             </div>
           </div>
           
-          <button type="submit" disabled={isLoading} className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition transform hover:scale-[1.02] flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}>
+          <button type="submit" disabled={isLoading} className={`w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-3 rounded-lg shadow-md transition transform hover:scale-[1.02] flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}>
             {isLoading ? "Signing In..." : "เข้าสู่ระบบ"}
           </button>
         </form>
 
-        {/* Divider */}
         <div className="relative mt-8 mb-6">
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t border-slate-200"></span>
@@ -165,7 +156,6 @@ const LoginPage = ({ onLogin }) => {
           </div>
         </div>
 
-        {/* Google Login Button Component */}
         <div className="flex justify-center w-full">
             <GoogleLogin
                 onSuccess={handleGoogleSuccess}
@@ -179,13 +169,12 @@ const LoginPage = ({ onLogin }) => {
                 text="continue_with"
             />
         </div>
-        
       </div>
     </div>
   );
 };
 
-// 2.1 DASHBOARD
+// 2.1 DASHBOARD (Redesigned UI, Logic Intact)
 const DashboardPage = ({ onEdit }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const userRole = useMemo(() => localStorage.getItem('user_role') || 'owner', []);
@@ -196,7 +185,7 @@ const DashboardPage = ({ onEdit }) => {
     const [events, setEvents] = useState([]);
     const [alerts, setAlerts] = useState([]);
 
-    // View State: 'calendar' or 'list'
+    // View State
     const [viewMode, setViewMode] = useState('calendar');
     const [filterType, setFilterType] = useState('all');
 
@@ -204,7 +193,7 @@ const DashboardPage = ({ onEdit }) => {
         const fetchData = async () => {
             try {
                 const orders = await fetchWithAuth('/orders/');
-                setAllOrders(orders || []); // เก็บข้อมูลทั้งหมดไว้สำหรับ List View
+                setAllOrders(orders || []);
                 
                 const newOrders = orders?.length || 0; 
                 const pendingDelivery = orders?.filter(o => o.status !== 'delivered').length || 0;
@@ -226,24 +215,22 @@ const DashboardPage = ({ onEdit }) => {
                         day: d.getDate(),
                         month: d.getMonth(),
                         year: d.getFullYear(),
-                        title: `ส่ง: ${o.customer_name || 'ลูกค้า'}`,
+                        title: `${o.customer_name}`,
                         type: 'delivery',
                         status: o.status || 'pending',
                         order_no: o.order_no
                     };
                 }).filter(e => e !== null);
 
-                // Filter for current view
                 const currentMonthEvents = mappedEvents.filter(e => 
                     e.month === currentDate.getMonth() && 
                     e.year === currentDate.getFullYear()
                 );
-
                 setEvents(currentMonthEvents);
 
                 // Generate Alerts
                 const urgencyAlerts = (orders || []).filter(o => o.status === 'urgent').map(o => ({
-                    type: 'CRITICAL', title: `งานด่วน: ${o.order_no}`, desc: 'กำหนดส่งใกล้ถึงแล้ว'
+                    type: 'CRITICAL', title: `งานด่วน: ${o.order_no}`, desc: `ส่ง: ${o.customer_name}`
                 }));
                 setAlerts(urgencyAlerts);
 
@@ -261,192 +248,118 @@ const DashboardPage = ({ onEdit }) => {
     }, {});
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-    const getTypeStyle = (type, status) => {
-        if (status === 'urgent') return "bg-rose-600 text-white border-rose-700 shadow-sm animate-pulse";
-        switch (type) {
-            case 'production': return "bg-blue-50 text-blue-700 border-blue-200 border";
-            case 'delivery': return "bg-emerald-50 text-emerald-700 border-emerald-200 border";
-            default: return "bg-slate-50 text-slate-600 border-slate-200";
-        }
-    };
 
-    // Filter Logic for List Mode
-    const getFilteredOrders = () => {
-        if (!allOrders) return [];
-        switch(filterType) {
-            case 'pending': return allOrders.filter(o => o.status !== 'delivered');
-            case 'revenue': return allOrders.filter(o => o.status === 'delivered');
-            case 'urgent': return allOrders.filter(o => {
-                if (!o.deadline) return false;
-                const diff = new Date(o.deadline) - new Date();
-                return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
-            });
-            case 'all': default: return allOrders;
-        }
-    };
-    const filteredOrders = getFilteredOrders();
-
-    const handleCardClick = (type) => {
-        setFilterType(type);
-        setViewMode('list');
-    };
-
-    const getStatusBadge = (status) => {
-        const s = status?.toLowerCase() || 'draft';
-        if(s === 'production') return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">ผลิต</span>;
-        if(s === 'urgent') return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs">ด่วน</span>;
-        if(s === 'delivered') return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">ส่งแล้ว</span>;
-        return <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs">Draft</span>;
-    };
+    // Visual Chart Component
+    const SimpleLineChart = () => (
+      <svg viewBox="0 0 500 100" className="w-full h-24 stroke-[#a3b18a] fill-none stroke-[3px]" style={{filter: 'drop-shadow(0px 4px 6px rgba(163,177,138,0.3))'}}>
+        <path d="M0,80 Q50,70 100,60 T200,50 T300,30 T400,40 T500,10" />
+        <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#a3b18a" stopOpacity="0.2"/>
+          <stop offset="100%" stopColor="#a3b18a" stopOpacity="0"/>
+        </linearGradient>
+        <path d="M0,80 Q50,70 100,60 T200,50 T300,30 T400,40 T500,10 V100 H0 Z" fill="url(#gradient)" stroke="none" />
+      </svg>
+    );
 
     return (
-        <div className="p-4 md:p-8 fade-in h-full flex flex-col bg-slate-50/50 overflow-y-auto pb-20 md:pb-8">
-            <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
+            {/* Header Section */}
+            <header className="mb-8 flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center">
-                        <LayoutDashboard className="mr-2 text-blue-600" /> Production Dashboard
+                    <h1 className="text-4xl font-black text-[#1a1c23] tracking-tight leading-tight">
+                        Hi, here's what's happening <br/> in your stores
                     </h1>
-                    <p className="text-slate-500 text-sm mt-1">ข้อมูล Realtime จากระบบ</p>
                 </div>
-                <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border shadow-sm">
-                    <span className="text-xs text-slate-400 pl-2">Role:</span>
-                    <span className="px-3 py-1 text-xs rounded bg-slate-100 text-slate-700 font-bold uppercase">{userRole}</span>
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="bg-white border border-gray-200 rounded-lg p-1 flex shadow-sm">
+                        <button className="px-4 py-1.5 text-sm font-semibold text-gray-800 bg-gray-100 rounded-md shadow-sm">Today</button>
+                        <button className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-md transition">This Week</button>
+                        <button className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-md transition">This Month</button>
+                    </div>
+                    <div className="relative">
+                        <button className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm flex items-center">
+                            All Outlets <ChevronDown size={16} className="ml-2 text-gray-400"/>
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            {/* STATS CARDS (Clickable) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div 
-                    onClick={() => handleCardClick('all')}
-                    className={`bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition hover:scale-[1.02] ${filterType==='all' && viewMode==='list' ? 'ring-2 ring-blue-500' : ''}`}
-                >
-                    <div className="text-slate-500 text-xs font-bold uppercase">All Orders</div>
-                    <div className="text-3xl font-black text-slate-800 mt-2">{stats.newOrders}</div>
-                </div>
-                <div 
-                    onClick={() => handleCardClick('pending')}
-                    className={`bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition hover:scale-[1.02] ${filterType==='pending' && viewMode==='list' ? 'ring-2 ring-blue-500' : ''}`}
-                >
-                    <div className="text-slate-500 text-xs font-bold uppercase">Pending</div>
-                    <div className="text-3xl font-black text-blue-600 mt-2">{stats.pendingDelivery}</div>
-                </div>
-                {userRole === 'owner' && (
-                    <div 
-                        onClick={() => handleCardClick('revenue')}
-                        className={`bg-gradient-to-br from-emerald-500 to-teal-600 p-4 rounded-xl shadow-md text-white relative overflow-hidden cursor-pointer hover:shadow-lg transition hover:scale-[1.02] ${filterType==='revenue' && viewMode==='list' ? 'ring-4 ring-emerald-200' : ''}`}
-                    >
-                        <div className="text-emerald-100 text-xs font-bold uppercase">Revenue</div>
-                        <div className="text-3xl font-black mt-2">฿{stats.revenue.toLocaleString()}</div>
+            {/* Top Main Card (Revenue & Stats) */}
+            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-6 flex flex-col lg:flex-row relative overflow-hidden">
+                <div className="flex-1 z-10">
+                    <h3 className="text-lg font-bold text-gray-800 mb-1">This month your stores have sold</h3>
+                    <div className="text-5xl font-black text-[#1a1c23] mb-2 tracking-tight">
+                        ฿{stats.revenue.toLocaleString()}
                     </div>
-                )}
-                <div 
-                    onClick={() => handleCardClick('urgent')}
-                    className={`bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md transition hover:scale-[1.02] ${filterType==='urgent' && viewMode==='list' ? 'ring-2 ring-rose-500' : ''}`}
-                >
-                    <div className="text-rose-500 text-xs font-bold uppercase">Urgent</div>
-                    <div className="text-3xl font-black text-rose-600 mt-2">{stats.urgent}</div>
+                    <p className="text-gray-500 text-sm mb-8 font-medium">
+                        Based on delivered orders in current period.
+                    </p>
+                    {/* Visual Chart Area */}
+                    <div className="w-full h-32 relative">
+                         <div className="absolute top-0 left-0 text-xs font-bold text-gray-400">All Outlets</div>
+                         <div className="absolute bottom-0 right-0 text-xs font-bold text-gray-400">30 Apr</div>
+                         <div className="mt-6">
+                             <SimpleLineChart />
+                         </div>
+                    </div>
+                </div>
+
+                <div className="w-px bg-gray-100 mx-8 hidden lg:block"></div>
+
+                <div className="lg:w-72 flex flex-col justify-center space-y-8 z-10 mt-6 lg:mt-0">
+                    <div>
+                        <div className="text-sm font-bold text-gray-800 mb-1">Total Orders</div>
+                        <div className="text-3xl font-black text-[#1a1c23]">{stats.newOrders}</div>
+                    </div>
+                    <div>
+                        <div className="text-sm font-bold text-gray-800 mb-1">Avg Items per Sale</div>
+                        <div className="text-3xl font-black text-[#1a1c23]">
+                            {stats.newOrders > 0 ? (stats.revenue / stats.newOrders / 100).toFixed(1) : '0'}
+                        </div>
+                    </div>
+                    <div>
+                         <div className="text-sm font-bold text-gray-800 mb-1">Avg Value</div>
+                         <div className="text-3xl font-black text-[#1a1c23]">
+                            ${stats.newOrders > 0 ? (stats.revenue / stats.newOrders).toFixed(0) : '0'}
+                         </div>
+                    </div>
                 </div>
             </div>
 
-            {/* CONDITIONAL CONTENT: CALENDAR or LIST */}
-            {viewMode === 'list' ? (
-                // --- LIST VIEW ---
-                <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden fade-in min-h-[500px]">
-                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                        <div className="flex items-center gap-2">
-                             <h3 className="font-bold text-slate-700 flex items-center">
-                                <FileText size={18} className="mr-2 text-blue-600"/> 
-                                รายการออเดอร์: <span className="ml-1 uppercase text-blue-600">{filterType}</span>
-                             </h3>
-                             <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">{filteredOrders.length}</span>
+            {/* Bottom Grid Section */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* Left Column: Calendar (Functionality) */}
+                <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col min-h-[400px]">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-xl font-bold text-[#1a1c23]">Production Schedule</h3>
+                            <p className="text-xs text-gray-400">Monitor upcoming deadlines</p>
                         </div>
-                        <button 
-                            onClick={() => setViewMode('calendar')} 
-                            className="bg-white border hover:bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center shadow-sm transition"
-                        >
-                            <XCircle size={16} className="mr-1.5"/> ปิด
-                        </button>
-                    </div>
-                    <div className="overflow-auto p-0 flex-1">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
-                                <tr className="text-sm text-slate-500">
-                                    <th className="py-3 px-4 w-1/6 font-semibold">เลขที่</th>
-                                    <th className="py-3 px-4 w-1/6 font-semibold">ลูกค้า</th>
-                                    <th className="py-3 px-4 w-1/6 font-semibold">กำหนดส่ง</th>
-                                    <th className="py-3 px-4 w-1/6 text-right font-semibold">ยอดรวม</th>
-                                    <th className="py-3 px-4 w-1/6 text-center font-semibold">สถานะ</th>
-                                    <th className="py-3 px-4 w-1/6 text-right font-semibold">จัดการ</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredOrders.map((order) => (
-                                    <tr key={order.id} className="hover:bg-blue-50/50 transition">
-                                        <td className="py-3 px-4 font-mono font-bold text-slate-800 text-sm">{order.order_no}</td>
-                                        <td className="py-3 px-4 text-slate-700 text-sm">{order.customer_name}</td>
-                                        <td className="py-3 px-4 text-slate-500 text-sm">
-                                            {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
-                                        </td>
-                                        <td className="py-3 px-4 text-right font-medium text-sm">{order.grand_total?.toLocaleString()}</td>
-                                        <td className="py-3 px-4 text-center">{getStatusBadge(order.status)}</td>
-                                        <td className="py-3 px-4 text-right">
-                                            <button 
-                                                className="text-blue-500 hover:text-blue-700 hover:bg-blue-100 p-1.5 rounded transition" 
-                                                title="ดู/แก้ไข"
-                                                onClick={() => onEdit && onEdit(order)}
-                                            >
-                                                <Edit size={16}/>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {filteredOrders.length === 0 && (
-                                    <tr>
-                                        <td colSpan="6" className="py-12 text-center text-slate-400">
-                                            ไม่พบข้อมูลในหมวดหมู่นี้
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            ) : (
-                // --- CALENDAR VIEW ---
-                <div className="flex flex-col lg:flex-row gap-6 flex-1 h-full min-h-[500px] fade-in">
-                    <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
-                        <div className="p-3 border-b border-slate-100 flex justify-between items-center">
-                            <span className="font-bold text-slate-700">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-                            <div className="flex space-x-1">
-                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-slate-100 rounded"><ChevronLeft size={16}/></button>
-                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-slate-100 rounded"><ChevronRight size={16}/></button>
+                        <div className="flex space-x-2">
+                             <div className="flex space-x-1">
+                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 rounded"><ChevronLeft size={16}/></button>
+                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 rounded"><ChevronRight size={16}/></button>
                             </div>
                         </div>
-                        <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                                <div key={d} className="py-2 text-center text-[10px] font-bold text-slate-400 uppercase">{d}</div>
-                            ))}
+                    </div>
+
+                    <div className="flex-1">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="font-bold text-gray-800">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
                         </div>
-                        <div className="grid grid-cols-7 flex-1 auto-rows-fr bg-slate-100 gap-px border-b rounded-b-xl overflow-hidden min-h-[300px]">
-                            {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="bg-white border-r border-slate-50"></div>)}
+                        <div className="grid grid-cols-7 gap-1 h-full">
+                            {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-center text-[10px] font-bold text-gray-400 mb-2">{d}</div>)}
+                            {[...Array(firstDayOfMonth)].map((_, i) => <div key={`e-${i}`}></div>)}
                             {[...Array(daysInMonth)].map((_, i) => {
                                 const day = i + 1;
                                 const evts = eventsByDay[day] || [];
-                                const today = new Date();
-                                const isToday = day === today.getDate() && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear();
-
+                                const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth();
                                 return (
-                                    <div key={day} className={`bg-white p-1 min-h-[80px] hover:bg-blue-50/30 transition relative group border-t border-r border-slate-100 ${isToday ? 'bg-blue-50/10' : ''}`}>
-                                        <div className="flex justify-between items-start">
-                                            <span className={`text-xs font-semibold p-1 ${
-                                                isToday ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md' : evts.length > 0 ? 'text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center' : 'text-slate-400'
-                                            }`}>{day}</span>
-                                        </div>
-                                        <div className="mt-1 space-y-1 px-1">
-                                            {evts.map((evt, idx) => (
-                                                <div key={idx} className={`text-[9px] px-1.5 py-1 rounded truncate font-medium cursor-pointer hover:opacity-80 ${getTypeStyle(evt.type, evt.status)}`} title={evt.title}>
-                                                    {evt.title}
-                                                </div>
+                                    <div key={day} className={`min-h-[60px] border border-gray-100 rounded-lg p-1 relative hover:bg-gray-50 transition ${isToday ? 'bg-yellow-50 border-yellow-200' : 'bg-white'}`}>
+                                        <span className={`text-[10px] font-bold ${isToday ? 'text-yellow-700' : 'text-gray-400'}`}>{day}</span>
+                                        <div className="flex flex-col gap-0.5 mt-1">
+                                            {evts.map((e, idx) => (
+                                                <div key={idx} className={`h-1.5 rounded-full w-full ${e.status === 'urgent' ? 'bg-rose-500' : 'bg-[#a3b18a]'}`} title={e.title}></div>
                                             ))}
                                         </div>
                                     </div>
@@ -454,25 +367,50 @@ const DashboardPage = ({ onEdit }) => {
                             })}
                         </div>
                     </div>
+                </div>
 
-                    <div className="w-full lg:w-80 bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
-                        <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="font-bold text-slate-700 flex items-center">
-                                <AlertCircle size={18} className="mr-2 text-rose-500" /> Alerts
-                            </h3>
+                {/* Right Column: Alerts & Transfers */}
+                <div className="space-y-6">
+                    {/* Card 1: Urgent / Transfer */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 relative">
+                        <div className="mb-4">
+                             <h3 className="text-lg font-bold text-[#1a1c23] mb-1">Transfer</h3>
+                             <p className="text-sm text-gray-500 font-medium">You have {stats.urgent} urgent orders waiting.</p>
                         </div>
-                        <div className="p-4 space-y-4 overflow-y-auto flex-1">
-                            {alerts.length === 0 ? <p className="text-sm text-slate-400 text-center mt-10">No active alerts</p> : alerts.map((alert, idx) => (
-                                <div key={idx} className="bg-rose-50 border border-rose-100 p-3 rounded-lg shadow-sm">
-                                    <span className="text-[10px] font-bold bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">{alert.type}</span>
-                                    <p className="text-sm font-bold text-slate-800 mt-1">{alert.title}</p>
-                                    <p className="text-xs text-slate-600">{alert.desc}</p>
+                        <div className="flex items-center space-x-4 mb-6">
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                <Box size={24} className="text-gray-400"/>
+                            </div>
+                            <div>
+                                <div className="font-bold text-gray-800 text-sm">Urgent Batch</div>
+                                <div className="text-xs text-gray-400">Production &rarr; Delivery</div>
+                            </div>
+                        </div>
+                        <button className="text-[10px] font-bold tracking-wider text-gray-500 hover:text-gray-900 uppercase">VIEW TRANSFER</button>
+                    </div>
+
+                    {/* Card 2: Purchase Orders / Alerts */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                        <div className="mb-4">
+                             <h3 className="text-lg font-bold text-[#1a1c23] mb-1">Alerts</h3>
+                             <p className="text-sm text-gray-500 font-medium">System notifications ({alerts.length})</p>
+                        </div>
+                        <div className="space-y-3 mb-6">
+                            {alerts.slice(0, 3).map((alert, i) => (
+                                <div key={i} className="flex items-start space-x-3">
+                                    <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0"/>
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-800">{alert.title}</p>
+                                        <p className="text-[10px] text-gray-400">{alert.desc}</p>
+                                    </div>
                                 </div>
                             ))}
+                            {alerts.length === 0 && <p className="text-xs text-gray-400 italic">No active alerts.</p>}
                         </div>
+                        <button className="text-[10px] font-bold tracking-wider text-gray-500 hover:text-gray-900 uppercase">VIEW ALL ALERTS</button>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };
@@ -713,7 +651,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   };
 
   return (
-    <div className="p-4 md:p-8 fade-in overflow-y-auto pb-20 md:pb-8">
+    <div className="p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full">
         {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discount, isVatIncluded, vatAmount, grandTotal, deposit, balance, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve, order_no: generateOrderId()}} onClose={() => setShowPreview(false)} />}
         {showSuccess && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
@@ -725,58 +663,54 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
             </div>
         )}
 
-        <header className={`mb-8 p-6 rounded-lg shadow-sm bg-white ${theme[urgencyStatus].border} flex flex-col md:flex-row justify-between items-start gap-4`}>
-            <div>
-                <div className="flex items-center gap-2 mb-2">
-                    <button onClick={() => onNavigate('order_list')} className="p-1 hover:bg-slate-100 rounded-full"><ArrowLeft size={24}/></button>
-                    <h1 className="text-2xl font-bold text-slate-800">{editingOrder ? `แก้ไขออเดอร์: ${editingOrder.order_no}` : "สร้างใบออเดอร์ใหม่"}</h1>
-                </div>
-            </div>
-            <div className={`px-4 py-2 rounded-lg ${theme[urgencyStatus].header}`}><AlertCircle size={20} className="inline mr-2"/>{urgencyStatus.toUpperCase()}</div>
+        <header className={`mb-8 flex items-center gap-4`}>
+             <button onClick={() => onNavigate('order_list')} className="w-10 h-10 bg-white rounded-full flex items-center justify-center border hover:bg-gray-50 shadow-sm"><ArrowLeft size={20}/></button>
+             <h1 className="text-2xl font-black text-[#1a1c23]">{editingOrder ? "Edit Order" : "New Order"}</h1>
+             <div className={`px-4 py-2 rounded-lg ml-auto ${theme[urgencyStatus].header}`}><AlertCircle size={20} className="inline mr-2"/>{urgencyStatus.toUpperCase()}</div>
         </header>
 
         <div className="grid grid-cols-12 gap-8">
             <div className="col-span-12 lg:col-span-8 space-y-6">
-                <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center text-slate-700"><User className="mr-2" size={18}/> ข้อมูลลูกค้า</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" className="border p-2.5 rounded-lg" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-                        <input type="text" className="border p-2.5 rounded-lg" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
-                        <select className="border p-2.5 rounded-lg" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
-                        <input type="date" className="border p-2.5 rounded-lg" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-                        <textarea className="col-span-2 border p-2.5 rounded-lg" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
+                <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><User className="mr-2" size={18}/> Customer Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
+                        <select className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
+                        <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+                        <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
                     </div>
                 </section>
 
-                <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-semibold mb-4 flex items-center text-slate-700"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                    <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                          <div>
-                            <label className="block text-sm mb-1">ชนิดผ้า</label>
-                            <select className="w-full border p-2.5 rounded-lg" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
+                            <label className="block text-sm mb-1 text-gray-500">ชนิดผ้า</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
                                 {fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm mb-1">คอเสื้อ</label>
-                            <select className="w-full border p-2.5 rounded-lg" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
+                            <label className="block text-sm mb-1 text-gray-500">คอเสื้อ</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
                                 {necks.map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm mb-1">แขนเสื้อ</label>
-                            <select className="w-full border p-2.5 rounded-lg" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
+                            <label className="block text-sm mb-1 text-gray-500">แขนเสื้อ</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
                                 {sleeves.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                             </select>
                         </div>
                     </div>
-                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                        <label className="block text-sm font-bold text-slate-700 mb-3">ระบุจำนวน (Size Matrix)</label>
-                        <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                        <label className="block text-sm font-bold text-gray-700 mb-4">ระบุจำนวน (Size Matrix)</label>
+                        <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
                             {SIZES.map((size) => (
                                 <div key={size} className="text-center">
-                                    <label className="text-xs font-semibold text-slate-500 mb-1 block">{size}</label>
-                                    <input type="number" min="0" className="w-full text-center border rounded-md p-1" placeholder="0"
+                                    <label className="text-xs font-bold text-gray-400 mb-1 block">{size}</label>
+                                    <input type="number" min="0" className="w-full text-center border-gray-200 border rounded-lg p-2 focus:ring-2 focus:ring-[#1a1c23]" placeholder="0"
                                         onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})} />
                                 </div>
                             ))}
@@ -786,32 +720,32 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
             </div>
 
             <div className="col-span-12 lg:col-span-4 space-y-6">
-                <div className="bg-white p-6 rounded-xl shadow-lg border border-slate-100 sticky top-6">
-                    <h3 className="text-xl font-bold text-slate-800 mb-4 pb-4 border-b">สรุปยอด</h3>
-                    <div className="space-y-3 mb-6 text-sm">
-                        <div className="flex justify-between"><span>จำนวนรวม</span><span className="font-bold">{totalQty} ตัว</span></div>
-                        <div className="flex justify-between items-center"><span>ราคาขาย/ตัว</span><input type="number" className="w-20 text-right border rounded p-1" value={basePrice} onChange={e => setBasePrice(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center"><span>ค่าบล็อก/Addon</span><input type="number" className="w-20 text-right border rounded p-1" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-20 text-right border rounded p-1" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-20 text-right border border-red-200 rounded p-1" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
+                <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 sticky top-6">
+                    <h3 className="text-xl font-black text-[#1a1c23] mb-6 pb-4 border-b border-gray-100">สรุปยอด</h3>
+                    <div className="space-y-4 mb-8 text-sm text-gray-600">
+                        <div className="flex justify-between"><span>จำนวนรวม</span><span className="font-bold text-gray-800">{totalQty} ตัว</span></div>
+                        <div className="flex justify-between items-center"><span>ราคาขาย/ตัว</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={basePrice} onChange={e => setBasePrice(Number(e.target.value))}/></div>
+                        <div className="flex justify-between items-center"><span>ค่าบล็อก/Addon</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
+                        <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
+                        <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-20 text-right border-rose-200 border rounded p-1 bg-rose-50 text-rose-600" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
                         
                         {/* VAT CONFIGURATION SECTION */}
                         <div className="flex justify-between items-center py-2 border-t border-dashed">
                             <label className="flex items-center text-xs cursor-pointer">
-                                <input type="checkbox" className="mr-2" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
+                                <input type="checkbox" className="mr-2 rounded text-[#1a1c23]" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
                                 ราคารวม VAT ({config.vat_rate*100}%) แล้ว
                             </label>
-                            <span className="text-xs text-slate-500">VAT: {vatAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
+                            <span className="text-xs text-gray-400">VAT: {vatAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
                         </div>
 
-                        <div className="flex justify-between font-bold text-xl text-blue-700 mt-2 p-2 bg-blue-50 rounded"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
+                        <div className="flex justify-between font-black text-2xl text-[#1a1c23] mt-4 pt-4 border-t border-gray-100"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
                     </div>
-                    <button className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg shadow-lg flex justify-center items-center" onClick={handleSaveOrder}>
+                    <button className="w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center transition" onClick={handleSaveOrder}>
                         <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
                     </button>
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button className="border py-2 rounded text-sm hover:bg-slate-50" onClick={() => setShowPreview(true)}>Preview</button>
-                        <button className="border py-2 rounded text-sm hover:bg-slate-50" onClick={handleCopySummary}>Copy</button>
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={() => setShowPreview(true)}>PREVIEW</button>
+                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={handleCopySummary}>COPY</button>
                     </div>
                 </div>
             </div>
@@ -907,11 +841,11 @@ const ProductPage = () => {
   };
 
   const TabButton = ({ id, label }) => (
-    <button onClick={() => setActiveTab(id)} className={`px-6 py-3 font-medium text-sm border-b-2 ${activeTab === id ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500"}`}>{label}</button>
+    <button onClick={() => setActiveTab(id)} className={`px-6 py-3 font-medium text-sm border-b-2 transition ${activeTab === id ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>{label}</button>
   );
 
   return (
-    <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       {/* Add/Edit Modal */}
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -966,7 +900,7 @@ const ProductPage = () => {
                       </button>
                       <button 
                           onClick={handleSave} 
-                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                          className="px-4 py-2 bg-[#1a1c23] text-white rounded hover:bg-slate-800 transition"
                       >
                           {modalMode === "add" ? "บันทึก" : "อัปเดต"}
                       </button>
@@ -1004,35 +938,38 @@ const ProductPage = () => {
           </div>
       )}
 
-      <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการข้อมูลสินค้า</h1>
-        <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700">
-            <Plus size={18} className="mr-2"/> เพิ่มข้อมูล
+      <header className="mb-8 flex justify-between items-end">
+        <div>
+            <h1 className="text-3xl font-black text-[#1a1c23]">Product Catalog</h1>
+            <p className="text-gray-500 font-medium">Manage your fabrics and materials.</p>
+        </div>
+        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg">
+            <Plus size={18} className="mr-2"/> New Item
         </button>
       </header>
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
-        <div className="flex border-b overflow-x-auto">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+        <div className="flex border-b border-gray-100 overflow-x-auto">
             <TabButton id="fabric" label="ชนิดผ้า" />
             <TabButton id="neck" label="รูปแบบคอ" />
             <TabButton id="sleeve" label="รูปแบบแขน" />
         </div>
-        <div className="p-6">
-            {loading ? <p>Loading...</p> : (
+        <div className="p-2 md:p-6">
+            {loading ? <p className="p-10 text-center text-gray-400">Loading...</p> : (
                 <table className="w-full text-left">
                     <thead>
-                        <tr className="border-b text-sm text-slate-500">
-                            <th className="py-3 px-4">ชื่อรายการ</th>
-                            <th className="py-3 px-4 text-center">จำนวน (คงเหลือ)</th>
-                            <th className="py-3 px-4 text-right">ราคาต้นทุน</th>
-                            <th className="py-3 px-4 text-right">จัดการ</th>
+                        <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="py-4 px-6">ชื่อรายการ</th>
+                            <th className="py-4 px-6 text-center">จำนวน (คงเหลือ)</th>
+                            <th className="py-4 px-6 text-right">ราคาต้นทุน</th>
+                            <th className="py-4 px-6 text-right">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-50">
                         {items.map((item) => (
-                            <tr key={item.id} className="border-b hover:bg-slate-50 transition">
-                                <td className="py-3 px-4 font-medium text-slate-800">{item.name}</td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                            <tr key={item.id} className="hover:bg-gray-50 transition group">
+                                <td className="py-4 px-6 font-bold text-gray-700">{item.name}</td>
+                                <td className="py-4 px-6 text-center">
+                                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
                                         (item.quantity || 0) > 50 ? 'bg-emerald-100 text-emerald-700' :
                                         (item.quantity || 0) > 20 ? 'bg-amber-100 text-amber-700' :
                                         'bg-rose-100 text-rose-700'
@@ -1040,21 +977,21 @@ const ProductPage = () => {
                                         {item.quantity || 0}
                                     </span>
                                 </td>
-                                <td className="py-3 px-4 text-right text-slate-600 font-medium">
+                                <td className="py-4 px-6 text-right text-gray-600 font-medium">
                                     {item.cost_price ? `฿${parseFloat(item.cost_price).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
                                 </td>
-                                <td className="py-3 px-4 text-right">
+                                <td className="py-4 px-6 text-right">
                                     <div className="flex justify-end gap-3">
                                         <button 
                                             onClick={() => openEditModal(item)}
-                                            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition"
+                                            className="text-gray-400 hover:text-[#1a1c23] transition"
                                             title="แก้ไข"
                                         >
                                             <Edit size={16} />
                                         </button>
                                         <button 
                                             onClick={() => setDeleteConfirm(item)}
-                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded transition"
+                                            className="text-gray-400 hover:text-rose-500 transition"
                                             title="ลบ"
                                         >
                                             <Trash2 size={16} />
@@ -1083,13 +1020,12 @@ const ProductPage = () => {
   );
 };
 
-// 2.4 CUSTOMER PAGE (NEW: UPDATED with CRUD and Correct UI)
+// 2.4 CUSTOMER PAGE (CRUD Logic Intact)
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState("add"); // "add" or "edit"
-  // แก้ไข: ใช้ contact_channel แทน channel เพื่อให้ตรงกับ Backend
+  const [modalMode, setModalMode] = useState("add"); 
   const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", contact_channel: "LINE OA", address: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
@@ -1112,7 +1048,6 @@ const CustomerPage = () => {
 
   const openEditModal = (cust) => {
       setModalMode("edit");
-      // Map data from table to modal state (Handle both channel and contact_channel keys)
       setCurrentCustomer({ 
           id: cust.id,
           name: cust.name,
@@ -1149,7 +1084,7 @@ const CustomerPage = () => {
   };
 
   return (
-    <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       {/* Add/Edit Modal */}
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1180,7 +1115,7 @@ const CustomerPage = () => {
                   </div>
                   <div className="flex justify-end gap-2 mt-6">
                       <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
-                      <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">บันทึก</button>
+                      <button onClick={handleSave} className="px-4 py-2 bg-[#1a1c23] text-white rounded hover:bg-slate-800 transition">บันทึก</button>
                   </div>
               </div>
           </div>
@@ -1203,37 +1138,40 @@ const CustomerPage = () => {
           </div>
       )}
 
-      <header className="mb-8 flex justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">จัดการลูกค้า</h1>
-        <button onClick={openAddModal} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
+      <header className="mb-8 flex justify-between items-end">
+        <div>
+            <h1 className="text-3xl font-black text-[#1a1c23]">Customers</h1>
+            <p className="text-gray-500 font-medium">Manage customer profiles and details.</p>
+        </div>
+        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg"><Plus size={18} className="mr-2"/> New Customer</button>
       </header>
        
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
-        <div className="p-6">
-            {loading ? <p className="text-center text-slate-500">Loading...</p> : (
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+        <div className="p-2 md:p-6">
+            {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
                 <table className="w-full text-left">
                     <thead>
-                        <tr className="border-b text-sm text-slate-500">
-                            <th className="py-3 px-4">ชื่อลูกค้า</th>
-                            <th className="py-3 px-4">ช่องทาง</th>
-                            <th className="py-3 px-4">เบอร์โทร</th>
-                            <th className="py-3 px-4 text-right">จัดการ</th>
+                        <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="py-4 px-6">ชื่อลูกค้า</th>
+                            <th className="py-4 px-6">ช่องทาง</th>
+                            <th className="py-4 px-6">เบอร์โทร</th>
+                            <th className="py-4 px-6 text-right">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-50">
                         {customers.map((cust) => (
-                            <tr key={cust.id} className="border-b hover:bg-slate-50 transition">
-                                <td className="py-3 px-4 font-medium text-slate-800">{cust.name}</td>
-                                <td className="py-3 px-4 text-sm text-slate-600">
-                                    <span className="bg-slate-100 px-2 py-1 rounded text-xs border">
+                            <tr key={cust.id} className="hover:bg-gray-50 transition group">
+                                <td className="py-4 px-6 font-bold text-gray-700">{cust.name}</td>
+                                <td className="py-4 px-6 text-sm text-gray-600">
+                                    <span className="bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
                                         {cust.contact_channel || cust.channel}
                                     </span>
                                 </td>
-                                <td className="py-3 px-4 text-sm text-slate-600 font-mono">{cust.phone}</td>
-                                <td className="py-3 px-4 text-right">
+                                <td className="py-4 px-6 text-sm text-gray-600 font-mono">{cust.phone}</td>
+                                <td className="py-4 px-6 text-right">
                                     <div className="flex justify-end gap-3">
-                                        <button onClick={() => openEditModal(cust)} className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition" title="แก้ไข"><Edit size={16}/></button>
-                                        <button onClick={() => setDeleteConfirm(cust)} className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded transition" title="ลบ"><Trash2 size={16}/></button>
+                                        <button onClick={() => openEditModal(cust)} className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข"><Edit size={16}/></button>
+                                        <button onClick={() => setDeleteConfirm(cust)} className="text-gray-400 hover:text-rose-500 transition" title="ลบ"><Trash2 size={16}/></button>
                                     </div>
                                 </td>
                             </tr>
@@ -1258,12 +1196,12 @@ const CustomerPage = () => {
   );
 };
 
-// 2.5 ORDER LIST PAGE (UPDATED: With Search & Export CSV)
+// 2.5 ORDER LIST PAGE (UPDATED UI, Logic Intact)
 const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
   const [orders, setOrders] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(""); // State สำหรับคำค้นหา
+  const [searchTerm, setSearchTerm] = useState(""); 
    
   const fetchOrders = useCallback(async () => {
       setLoading(true);
@@ -1288,17 +1226,15 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
 
   const getStatusBadge = (status) => {
     const s = status?.toLowerCase() || 'draft';
-    if(s === 'production') return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">ผลิต</span>;
-    if(s === 'urgent') return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs">ด่วน</span>;
-    if(s === 'delivered') return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs">ส่งแล้ว</span>;
-    return <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs">Draft</span>;
+    if(s === 'production') return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ผลิต</span>;
+    if(s === 'urgent') return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ด่วน</span>;
+    if(s === 'delivered') return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ส่งแล้ว</span>;
+    return <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] font-bold uppercase">Draft</span>;
   };
 
-  // --- FILTER & SEARCH LOGIC ---
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
     
-    // 1. Filter by Type (All, Pending, Revenue, Urgent)
     let data = orders;
     switch (filterType) {
         case 'pending':
@@ -1314,11 +1250,9 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
                 return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
             });
             break;
-        default:
-            break;
+        default: break;
     }
 
-    // 2. Filter by Search Term
     if (searchTerm.trim() !== "") {
         const lowerTerm = searchTerm.toLowerCase();
         data = data.filter(o => 
@@ -1328,32 +1262,14 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
             (o.phone || "").includes(lowerTerm)
         );
     }
-
     return data;
   }, [orders, filterType, searchTerm]);
 
-  const getTitle = () => {
-      switch(filterType) {
-          case 'pending': return 'รายการออเดอร์ (ค้างส่ง)';
-          case 'revenue': return 'รายการออเดอร์ (ส่งแล้ว/รับรู้รายได้)';
-          case 'urgent': return 'รายการออเดอร์ (ด่วน)';
-          default: return 'รายการออเดอร์ทั้งหมด';
-      }
-  };
-
-  // --- EXPORT CSV FUNCTION ---
   const handleExportCSV = () => {
-      if (filteredOrders.length === 0) {
-          alert("ไม่มีข้อมูลสำหรับ Export");
-          return;
-      }
-
-      // 1. Define Headers
+      if (filteredOrders.length === 0) { alert("ไม่มีข้อมูลสำหรับ Export"); return; }
       const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
-      
-      // 2. Map Data to Rows
       const rows = filteredOrders.map(order => [
-          `"${order.order_no}"`, // Wrap in quotes to handle commas in content
+          `"${order.order_no}"`,
           `"${order.customer_name || ''}"`,
           `"${order.contact_channel || ''}"`,
           `"${order.phone || ''}"`,
@@ -1362,11 +1278,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
           `"${order.deposit || 0}"`,
           `"${order.status || 'draft'}"`
       ]);
-
-      // 3. Combine with BOM for Thai support in Excel
       const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-
-      // 4. Create Download Link
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -1378,8 +1290,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
   };
 
   return (
-    <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
-      {/* Delete Confirmation Modal */}
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
@@ -1396,97 +1307,68 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
           </div>
       )}
 
-      {/* HEADER: Title + Search + Actions */}
-      <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-            <h1 className="text-2xl font-bold text-slate-800">{getTitle()}</h1>
-            <p className="text-slate-500 text-sm mt-1">แสดงผล: {filteredOrders.length} รายการ</p>
+            <h1 className="text-3xl font-black text-[#1a1c23]">Orders</h1>
+            <p className="text-gray-500 font-medium">Manage and track your production.</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-            {/* Search Bar */}
             <div className="relative flex-1 md:w-64">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                 <input 
                     type="text" 
-                    placeholder="ค้นหาเลขที่, ชื่อลูกค้า..." 
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Search..." 
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                {searchTerm && (
-                    <button 
-                        onClick={() => setSearchTerm("")}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
-                    >
-                        <XCircle size={16} />
-                    </button>
-                )}
             </div>
 
             <div className="flex gap-2">
-                {/* Export Button */}
-                <button 
-                    onClick={handleExportCSV}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-emerald-700 transition shadow-sm whitespace-nowrap"
-                    title="Download CSV"
-                >
+                <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap">
                     <Download size={18} className="mr-2"/> Export
                 </button>
-
-                {/* Create Button */}
-                <button 
-                    onClick={() => onNavigate('create_order')} 
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center hover:bg-blue-700 transition shadow-sm whitespace-nowrap"
-                >
-                    <Plus size={18} className="mr-2"/> สร้างใหม่
+                <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap">
+                    <Plus size={18} className="mr-2"/> New Order
                 </button>
             </div>
         </div>
       </header>
        
-      {/* TABLE CONTENT */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[500px]">
-        <div className="p-0 md:p-6 overflow-x-auto">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+        <div className="p-0 md:p-2 overflow-x-auto">
             {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
                 <table className="w-full text-left min-w-[800px]">
                     <thead>
-                        <tr className="border-b text-sm text-slate-500 bg-slate-50 md:bg-white">
-                            <th className="py-3 px-4 w-1/6">เลขที่</th>
-                            <th className="py-3 px-4 w-1/6">ลูกค้า</th>
-                            <th className="py-3 px-4 w-1/6">กำหนดส่ง</th>
-                            <th className="py-3 px-4 w-1/6 text-right">ยอดรวม</th>
-                            <th className="py-3 px-4 w-1/6 text-center">สถานะ</th>
-                            <th className="py-3 px-4 w-1/6 text-right">จัดการ</th>
+                        <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="py-4 px-6 w-1/6">เลขที่</th>
+                            <th className="py-4 px-6 w-1/6">ลูกค้า</th>
+                            <th className="py-4 px-6 w-1/6">กำหนดส่ง</th>
+                            <th className="py-4 px-6 w-1/6 text-right">ยอดรวม</th>
+                            <th className="py-4 px-6 w-1/6 text-center">สถานะ</th>
+                            <th className="py-4 px-6 w-1/6 text-right">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-50">
                         {filteredOrders.map((order) => (
-                            <tr key={order.id} className="border-b hover:bg-slate-50 transition">
-                                <td className="py-3 px-4 font-mono font-bold text-slate-800">{order.order_no}</td>
-                                <td className="py-3 px-4 text-slate-700">
+                            <tr key={order.id} className="hover:bg-gray-50 transition group">
+                                <td className="py-4 px-6 font-mono font-bold text-gray-700">{order.order_no}</td>
+                                <td className="py-4 px-6 text-gray-700">
                                     <div className="font-medium">{order.customer_name}</div>
-                                    <div className="text-xs text-slate-400">{order.contact_channel}</div>
+                                    <div className="text-xs text-gray-400">{order.contact_channel}</div>
                                 </td>
-                                <td className="py-3 px-4 text-slate-500 text-sm">
+                                <td className="py-4 px-6 text-gray-500 text-sm">
                                     {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
                                 </td>
-                                <td className="py-3 px-4 text-right font-medium">{order.grand_total?.toLocaleString()}</td>
-                                <td className="py-3 px-4 text-center">{getStatusBadge(order.status)}</td>
-                                <td className="py-3 px-4 text-right">
+                                <td className="py-4 px-6 text-right font-bold text-gray-700">{order.grand_total?.toLocaleString()}</td>
+                                <td className="py-4 px-6 text-center">{getStatusBadge(order.status)}</td>
+                                <td className="py-4 px-6 text-right">
                                     <div className="flex justify-end gap-3">
-                                        <button 
-                                            className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-2 rounded transition" 
-                                            title="แก้ไข"
-                                            onClick={() => onEdit(order)}
-                                        >
+                                        <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}>
                                             <Edit size={16}/>
                                         </button>
-                                        <button 
-                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded transition" 
-                                            title="ลบ"
-                                            onClick={() => setDeleteConfirm(order)}
-                                        >
+                                        <button className="text-gray-400 hover:text-rose-500 transition" title="ลบ" onClick={() => setDeleteConfirm(order)}>
                                             <Trash2 size={16}/>
                                         </button>
                                     </div>
@@ -1497,11 +1379,8 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
                             <tr>
                                 <td colSpan="6" className="py-12 text-center">
                                     <div className="flex flex-col items-center justify-center text-slate-400">
-                                        {searchTerm ? <Search size={48} className="mb-3 opacity-50"/> : <FileText size={48} className="mb-3 opacity-50" />}
-                                        <p className="text-lg font-medium">
-                                            {searchTerm ? `ไม่พบผลลัพธ์สำหรับ "${searchTerm}"` : "ไม่พบรายการออเดอร์ในกลุ่มนี้"}
-                                        </p>
-                                        {!searchTerm && <p className="text-sm mt-1">ลองเปลี่ยนตัวกรองหรือสร้างออเดอร์ใหม่</p>}
+                                        <FileText size={48} className="mb-3 opacity-50" />
+                                        <p className="text-lg font-medium">ไม่พบรายการ</p>
                                     </div>
                                 </td>
                             </tr>
@@ -1516,7 +1395,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
 };
 
 
-// 2.6 SETTINGS PAGE (NEW: Pricing Rules & Global Config)
+// 2.6 SETTINGS PAGE
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState("pricing");
   const [pricingRules, setPricingRules] = useState([]);
@@ -1551,7 +1430,7 @@ const SettingsPage = () => {
           const data = await fetchWithAuth('/company/config');
           if(data) {
               setGlobalConfig({
-                  vat_rate: (data.vat_rate || 0) * 100, // Convert 0.07 -> 7
+                  vat_rate: (data.vat_rate || 0) * 100, 
                   default_shipping_cost: data.default_shipping_cost || 0
               });
           }
@@ -1590,7 +1469,7 @@ const SettingsPage = () => {
           await fetchWithAuth('/company/config', {
               method: 'PUT',
               body: JSON.stringify({
-                  vat_rate: globalConfig.vat_rate / 100, // Convert 7 -> 0.07
+                  vat_rate: globalConfig.vat_rate / 100,
                   default_shipping_cost: globalConfig.default_shipping_cost
               })
           });
@@ -1599,31 +1478,31 @@ const SettingsPage = () => {
   }
 
   return (
-    <div className="p-4 md:p-8 fade-in h-full bg-slate-50">
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center"> การตั้งค่าระบบ
-        </h1>
+        <h1 className="text-3xl font-black text-[#1a1c23]">System Setup</h1>
+        <p className="text-gray-500 font-medium">Configure pricing and global variables.</p>
       </header>
 
-      <div className="flex gap-4 mb-6 border-b border-slate-200">
-          <button onClick={() => setActiveTab("pricing")} className={`pb-3 px-4 font-medium text-sm border-b-2 transition ${activeTab==="pricing" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-             ตั้งราคาขาย
+      <div className="flex gap-6 mb-6 border-b border-gray-200">
+          <button onClick={() => setActiveTab("pricing")} className={`pb-3 font-bold text-sm border-b-2 transition ${activeTab==="pricing" ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
+             Pricing Tiers
           </button>
-          <button onClick={() => setActiveTab("general")} className={`pb-3 px-4 font-medium text-sm border-b-2 transition ${activeTab==="general" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-             VAT and Shipping
+          <button onClick={() => setActiveTab("general")} className={`pb-3 font-bold text-sm border-b-2 transition ${activeTab==="general" ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
+             VAT & Shipping
           </button>
       </div>
 
       {activeTab === "pricing" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Form เพิ่มกฎ */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border h-fit">
-                  <h3 className="font-bold text-lg mb-4 text-slate-700">เพิ่มรายละเอียดราคาใหม่</h3>
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 h-fit">
+                  <h3 className="font-bold text-lg mb-4 text-[#1a1c23]">Add Price Rule</h3>
                   <div className="space-y-4">
                       <div>
                           <label className="block text-sm font-medium mb-1">ชนิดผ้า</label>
                           <select 
-                            className="w-full border p-2 rounded"
+                            className="w-full border p-2 rounded-lg"
                             value={newRule.fabric_type}
                             onChange={e => setNewRule({...newRule, fabric_type: e.target.value})}
                           >
@@ -1637,47 +1516,47 @@ const SettingsPage = () => {
                       <div className="grid grid-cols-2 gap-2">
                           <div>
                               <label className="block text-sm font-medium mb-1">ขั้นต่ำ (ตัว)</label>
-                              <input type="number" className="w-full border p-2 rounded" value={newRule.min_qty} onChange={e => setNewRule({...newRule, min_qty: parseInt(e.target.value)||0})} />
+                              <input type="number" className="w-full border p-2 rounded-lg" value={newRule.min_qty} onChange={e => setNewRule({...newRule, min_qty: parseInt(e.target.value)||0})} />
                           </div>
                           <div>
                               <label className="block text-sm font-medium mb-1">ถึง (ตัว)</label>
-                              <input type="number" className="w-full border p-2 rounded" value={newRule.max_qty} onChange={e => setNewRule({...newRule, max_qty: parseInt(e.target.value)||0})} />
+                              <input type="number" className="w-full border p-2 rounded-lg" value={newRule.max_qty} onChange={e => setNewRule({...newRule, max_qty: parseInt(e.target.value)||0})} />
                           </div>
                       </div>
                       <div>
                           <label className="block text-sm font-medium mb-1">ราคาต่อหน่วย (บาท)</label>
-                          <input type="number" className="w-full border p-2 rounded bg-blue-50 text-blue-800 font-bold" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
+                          <input type="number" className="w-full border p-2 rounded-lg bg-gray-50 text-[#1a1c23] font-bold" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
                       </div>
-                      <button onClick={handleAddRule} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-medium">บันทึกราคา</button>
+                      <button onClick={handleAddRule} className="w-full bg-[#1a1c23] text-white py-3 rounded-xl hover:bg-slate-800 font-bold shadow-lg">Save Rule</button>
                   </div>
               </div>
 
               {/* Table รายการกฎ */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border overflow-hidden">
-                  <div className="p-4 border-b bg-slate-50 font-bold text-slate-700">รายการ Pricing Tiers ปัจจุบัน</div>
+              <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-6 border-b border-gray-100 font-bold text-[#1a1c23]">Current Pricing Tiers</div>
                   <table className="w-full text-left text-sm">
-                      <thead className="bg-white text-slate-500 border-b">
+                      <thead className="bg-gray-50/50 text-gray-400 border-b border-gray-100 uppercase font-bold text-xs">
                           <tr>
-                              <th className="p-4">ชนิดผ้า</th>
+                              <th className="p-4 pl-6">Fabric</th>
                               <th className="p-4">Qty Range</th>
-                              <th className="p-4 text-right">ราคา/ตัว</th>
-                              <th className="p-4 text-right">Action</th>
+                              <th className="p-4 text-right">Unit Price</th>
+                              <th className="p-4 text-right pr-6">Action</th>
                           </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-gray-50">
                           {pricingRules.length === 0 ? (
                               <tr><td colSpan="4" className="p-8 text-center text-slate-400">ยังไม่มีการตั้งราคา</td></tr>
                           ) : pricingRules.map((rule) => (
-                              <tr key={rule.id} className="hover:bg-slate-50">
-                                  <td className="p-4 font-bold text-slate-700">{rule.fabric_type}</td>
+                              <tr key={rule.id} className="hover:bg-gray-50">
+                                  <td className="p-4 pl-6 font-bold text-gray-700">{rule.fabric_type}</td>
                                   <td className="p-4">
-                                      <span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">
-                                          {rule.min_qty} - {rule.max_qty > 9999 ? 'ขึ้นไป' : rule.max_qty}
+                                      <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono font-bold text-gray-600">
+                                          {rule.min_qty} - {rule.max_qty > 9999 ? 'MAX' : rule.max_qty}
                                       </span>
                                   </td>
-                                  <td className="p-4 text-right font-bold text-blue-600">{rule.unit_price} ฿</td>
-                                  <td className="p-4 text-right">
-                                      <button onClick={() => handleDeleteRule(rule.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded"><Trash2 size={16}/></button>
+                                  <td className="p-4 text-right font-bold text-[#1a1c23]">{rule.unit_price} ฿</td>
+                                  <td className="p-4 text-right pr-6">
+                                      <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-rose-500 transition"><Trash2 size={16}/></button>
                                   </td>
                               </tr>
                           ))}
@@ -1688,51 +1567,49 @@ const SettingsPage = () => {
       )}
 
       {activeTab === "general" && (
-          <div className="bg-white p-8 rounded-xl shadow-sm border max-w-lg mx-auto">
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 max-w-lg mx-auto mt-10">
               <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Calculator size={32} className="text-slate-400"/>
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Calculator size={32} className="text-gray-400"/>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800">Global Configuration</h3>
-                  <p className="text-slate-500">ตั้งค่าตัวแปรกลางของระบบ</p>
+                  <h3 className="text-xl font-bold text-[#1a1c23]">Global Configuration</h3>
+                  <p className="text-gray-500 text-sm">Set system-wide defaults.</p>
               </div>
               
               <div className="space-y-4">
                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">อัตราภาษีมูลค่าเพิ่ม (VAT %)</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">VAT Rate (%)</label>
                       <div className="relative">
                           <input 
                               type="number" 
-                              className="w-full border p-3 rounded-lg pl-10" 
+                              className="w-full border border-gray-200 p-3 rounded-xl pl-10" 
                               placeholder="7" 
                               value={globalConfig.vat_rate}
                               onChange={e => setGlobalConfig({...globalConfig, vat_rate: parseFloat(e.target.value)})}
                           />
                           <span className="absolute left-3 top-3 text-slate-400">%</span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">ค่ามาตรฐานประเทศไทยคือ 7%</p>
                   </div>
 
                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">ค่าขนส่งเริ่มต้น (บาท)</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Default Shipping Cost</label>
                       <div className="relative">
                           <input 
                               type="number" 
-                              className="w-full border p-3 rounded-lg pl-10" 
+                              className="w-full border border-gray-200 p-3 rounded-xl pl-10" 
                               placeholder="0" 
                               value={globalConfig.default_shipping_cost}
                               onChange={e => setGlobalConfig({...globalConfig, default_shipping_cost: parseFloat(e.target.value)})}
                           />
                           <DollarSign className="absolute left-3 top-3 text-slate-400" size={18} />
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">ค่านี้จะถูกใส่ให้ในช่อง "ค่าขนส่ง" โดยอัตโนมัติเมื่อสร้างออเดอร์ใหม่</p>
                   </div>
 
                   <button 
                       onClick={handleSaveConfig}
-                      className="w-full bg-slate-900 text-white font-bold py-3 rounded-lg hover:bg-slate-800 transition mt-4"
+                      className="w-full bg-[#1a1c23] text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition mt-4 shadow-lg"
                   >
-                      บันทึกการตั้งค่า
+                      Save Configuration
                   </button>
               </div>
           </div>
@@ -1741,7 +1618,7 @@ const SettingsPage = () => {
   );
 };
 
-// --- 3. MAIN APP ---
+// --- 3. MAIN APP (Revised Sidebar to Match Image) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -1775,33 +1652,64 @@ const App = () => {
     }
   };
 
+  const NavItem = ({ id, icon: Icon, label, active }) => (
+      <button 
+        onClick={() => handleNavigate(id)} 
+        className={`w-full flex items-center space-x-4 p-3 rounded-xl transition duration-200 group relative ${active ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+      >
+          {active && <div className="absolute left-0 w-1 h-8 bg-[#d4e157] rounded-r-full shadow-[0_0_10px_rgba(212,225,87,0.5)]"></div>}
+          <Icon size={20} className={`transition ${active ? 'text-[#d4e157]' : 'text-gray-500 group-hover:text-white'}`}/>
+          <span className="font-medium text-sm tracking-wide">{label}</span>
+      </button>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-slate-800 flex flex-col md:flex-row relative">
-       <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-30">
-           <span className="font-bold text-lg">B-LOOK ADMIN</span>
+    <div className="min-h-screen bg-[#f0f2f5] font-sans text-slate-800 flex flex-col md:flex-row relative">
+       {/* Mobile Header */}
+       <div className="md:hidden bg-[#1a1c23] text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-lg">
+           <span className="font-bold text-lg tracking-tight">INVENTORY360</span>
            <button onClick={() => setIsSidebarOpen(true)}><Menu size={24} /></button>
        </div>
        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
 
-       <aside className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-6 text-xl font-bold tracking-wider border-b border-slate-800 flex justify-between items-center">
-            <span>B-LOOK ADMIN</span>
-            <button className="md:hidden text-slate-400 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={24}/></button>
-        </div>
-        <nav className="flex-1 px-4 space-y-2 mt-6">
-        
-          <button onClick={() => handleNavigate('dashboard')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'dashboard' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><LayoutDashboard size={20} /> <span>Dashboard</span></button>
-          <button onClick={() => handleNavigate('order_list')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${['order_list', 'create_order'].includes(currentPage) ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><FileText size={20} /> <span>Orders</span></button>
-          <button onClick={() => handleNavigate('product')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'product' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><Box size={20} /> <span>จัดการข้อมูลสินค้า</span></button>
-          <button onClick={() => handleNavigate('customer')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'customer' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}><User size={20} /> <span>ข้อมูลลูกค้า</span></button>
-          <button onClick={() => handleNavigate('settings')} className={`w-full flex items-center space-x-3 p-3 rounded-lg transition ${currentPage === 'settings' ? 'bg-blue-600' : 'hover:bg-slate-800 text-slate-400'}`}> <Settings size={20} /><span>ตั้งค่าระบบ</span></button>
-        </nav>
-        <div className="p-4 border-t border-slate-800">
-            <button onClick={() => { localStorage.removeItem('access_token'); setIsLoggedIn(false); }} className="w-full flex items-center text-slate-400 hover:text-white transition text-sm p-2 hover:bg-slate-800 rounded"><LogOut size={16} className="mr-2"/> Sign Out</button>
-        </div>
+       {/* Sidebar (Dark Theme) */}
+       <aside className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-[#1a1c23] text-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col shadow-2xl border-r border-gray-800 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+            <div className="p-8 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="font-black text-xl tracking-tight text-white">INVENTORY360</span>
+                </div>
+                <button className="md:hidden text-gray-500 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={24}/></button>
+                <MoreHorizontal className="hidden md:block text-gray-500 cursor-pointer hover:text-white transition" size={20}/>
+            </div>
+            
+            <nav className="flex-1 px-4 space-y-2 mt-4">
+                <NavItem id="dashboard" icon={LayoutDashboard} label="Home" active={currentPage === 'dashboard'} />
+                <NavItem id="create_order" icon={DollarSign} label="Sell" active={currentPage === 'create_order'} />
+                <NavItem id="order_list" icon={FileText} label="Reporting" active={currentPage === 'order_list'} />
+                <NavItem id="product" icon={ShoppingCart} label="Catalog" active={currentPage === 'product'} />
+                <NavItem id="product_inventory" icon={Box} label="Inventory" active={false} />
+                <NavItem id="customer" icon={User} label="Customers" active={currentPage === 'customer'} />
+                <NavItem id="settings" icon={Settings} label="Setup" active={currentPage === 'settings'} />
+            </nav>
+
+            {/* Profile Section */}
+            <div className="p-6 border-t border-gray-800">
+                <div className="flex items-center justify-between cursor-pointer group" onClick={() => { localStorage.removeItem('access_token'); setIsLoggedIn(false); }}>
+                    <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-[#d4e157] rounded-full flex items-center justify-center text-[#1a1c23] font-bold text-sm shadow-md group-hover:scale-105 transition">
+                            S
+                        </div>
+                        <div>
+                            <div className="text-sm font-bold text-white group-hover:text-[#d4e157] transition">Sasha Merkel</div>
+                            <div className="text-[10px] text-gray-500">Sign Out</div>
+                        </div>
+                    </div>
+                    <ChevronDown size={16} className="text-gray-500"/>
+                </div>
+            </div>
       </aside>
 
-      <main className="flex-1 overflow-auto h-[calc(100vh-60px)] md:h-screen w-full">{renderContent()}</main>
+      <main className="flex-1 overflow-auto h-[calc(100vh-60px)] md:h-screen w-full relative">{renderContent()}</main>
     </div>
   );
 };
