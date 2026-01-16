@@ -30,14 +30,16 @@ def read_orders(
     
     results = []
     for o in orders:
+        # แปลง SQLAlchemy Model เป็น Dictionary เพื่อ Map ข้อมูล
         o_dict = o.__dict__.copy()
         if o.customer:
             o_dict['customer_name'] = o.customer.name
             o_dict['phone'] = o.customer.phone
             o_dict['contact_channel'] = o.customer.channel
         
+        # Map fields manual
         o_dict['deposit'] = o.deposit_amount
-        o_dict['deadline'] = o.deadline 
+        o_dict['deadline'] = o.deadline
         
         results.append(o_dict)
 
@@ -49,7 +51,7 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
     """
     สร้างออเดอร์ใหม่ + คำนวณราคา/กำไรอัตโนมัติ
     """
-    # 1. จัดการลูกค้า
+    # 1. จัดการลูกค้า (Customer Handling)
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
         customer = Customer(
@@ -62,7 +64,6 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
         db.flush()
 
     # 2. คำนวณยอดเงินและต้นทุน (Calculation Logic)
-    # (Extract เป็น function แยกได้ แต่เพื่อความรวดเร็วขอเขียนรวมไว้ก่อน)
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []
@@ -98,6 +99,7 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
     
     if order_in.is_vat_included:
         grand_total = total_before_vat
+        # ถอด VAT: Price / 1.07 * 0.07
         vat_amount = (total_before_vat * 7) / 107
     else:
         vat_amount = total_before_vat * Decimal('0.07')
@@ -174,7 +176,7 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
         
     return order_dict
 
-# --- 4. UPDATE ORDER (NEW!) ---
+# --- 4. UPDATE ORDER (ส่วนที่เพิ่มใหม่เพื่อแก้ 405) ---
 @router.put("/{order_id}", response_model=OrderSchema)
 def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get_db)):
     """
@@ -185,7 +187,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # 2. จัดการลูกค้า (เผื่อเปลี่ยนชื่อ)
+    # 2. จัดการลูกค้า (Find or Create)
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
         customer = Customer(
@@ -197,7 +199,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
         db.add(customer)
         db.flush()
 
-    # 3. คำนวณยอดเงินและต้นทุนใหม่ (Re-calculate)
+    # 3. คำนวณยอดเงินและต้นทุนใหม่ (Re-calculate Logic)
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []
@@ -220,6 +222,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
             "total_cost": line_cost
         })
 
+    # Financials Calculation
     shipping = Decimal(str(order_in.shipping_cost))
     addon = Decimal(str(order_in.add_on_cost))
     discount = Decimal(str(order_in.discount_amount))
@@ -241,7 +244,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
     estimated_profit = revenue_ex_vat - items_total_cost
     balance = grand_total - deposit
 
-    # 4. อัปเดตข้อมูล Header
+    # 4. อัปเดตข้อมูล Header (Update Order Object)
     order.customer_id = customer.id
     order.deadline = order_in.deadline
     order.urgency_level = order_in.urgency_level
@@ -256,7 +259,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
     order.total_cost = items_total_cost
     order.estimated_profit = estimated_profit
 
-    # 5. อัปเดต Items (ลบของเก่าทิ้ง สร้างใหม่)
+    # 5. อัปเดต Items (ลบของเก่าทั้งหมดแล้วสร้างใหม่)
     db.query(OrderItemModel).filter(OrderItemModel.order_id == order.id).delete()
     
     for item_data in order_items_data:
