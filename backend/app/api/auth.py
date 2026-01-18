@@ -93,7 +93,6 @@ def google_login(
         logger.error(f"❌ Unexpected Error during token verification: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal authentication error")
 
-    # [Step 2] User Management (Check or Create)
     try:
         user = db.query(User).filter(User.username == email).first()
         
@@ -107,7 +106,7 @@ def google_login(
                 full_name=name,
                 password_hash=hashed_pw,
                 is_active=True,
-                role="owner" # Default role
+                role="owner"
             )
             db.add(user)
             db.commit()

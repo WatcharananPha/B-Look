@@ -28,7 +28,7 @@ class PricingRuleOut(PricingRuleBase):
 @router.get("/", response_model=List[PricingRuleOut])
 def read_pricing_rules(
     db: Session = Depends(get_db),
-    # ลบ current_user ออกแล้ว เพื่อให้ Frontend ดึงข้อมูลได้
+
 ):
     rules = db.query(PricingRule).order_by(PricingRule.fabric_type, PricingRule.min_qty).all()
     return rules
