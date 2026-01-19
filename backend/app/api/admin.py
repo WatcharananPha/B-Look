@@ -1,57 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from pydantic import BaseModel
+
 from app.db.session import get_db
-from app.models.company import CompanyInfo
-from app.models.pricing_rule import ShippingRate
-from app.schemas.admin import (
-    CompanyInfoResponse, CompanyInfoCreate,
-    ShippingRateResponse, ShippingRateCreate
-)
+from app.models.user import User
+from app.api import deps
 
 router = APIRouter()
 
-# --- Company Info ---
-@router.post("/company", response_model=CompanyInfoResponse)
-def create_or_update_company(item: CompanyInfoCreate, db: Session = Depends(get_db)):
-    # มีได้แค่ 1 บริษัท -> เช็คก่อนว่ามีไหม
-    company = db.query(CompanyInfo).first()
-    if company:
-        for key, value in item.dict().items():
-            setattr(company, key, value)
-    else:
-        company = CompanyInfo(**item.dict())
-        db.add(company)
-    
+# Schema สำหรับรับค่า Update
+class UserUpdate(BaseModel):
+    role: str
+    is_active: Optional[bool] = True
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    role: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+# 1. ดูรายชื่อ User ทั้งหมด
+@router.get("/users", response_model=List[UserOut])
+def read_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    # เช็คสิทธิ์: เฉพาะ Admin หรือ Owner เท่านั้น
+    if current_user.role not in ["admin", "owner"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    users = db.query(User).all()
+    return users
+
+# 2. เปลี่ยน Role / Approve User
+@router.put("/users/{user_id}", response_model=UserOut)
+def update_user_role(
+    user_id: int,
+    user_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    if current_user.role not in ["admin", "owner"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.role = user_in.role
+    if user_in.is_active is not None:
+        user.is_active = user_in.is_active
+        
     db.commit()
-    db.refresh(company)
-    return company
-
-@router.get("/company", response_model=CompanyInfoResponse)
-def get_company(db: Session = Depends(get_db)):
-    company = db.query(CompanyInfo).first()
-    if not company:
-        raise HTTPException(status_code=404, detail="Company info not set")
-    return company
-
-# --- Shipping Rates ---
-@router.post("/shipping-rates", response_model=ShippingRateResponse)
-def create_shipping_rate(item: ShippingRateCreate, db: Session = Depends(get_db)):
-    rate = ShippingRate(**item.dict())
-    db.add(rate)
-    db.commit()
-    db.refresh(rate)
-    return rate
-
-@router.get("/shipping-rates", response_model=List[ShippingRateResponse])
-def get_shipping_rates(db: Session = Depends(get_db)):
-    return db.query(ShippingRate).filter(ShippingRate.is_active == True).all()
-
-@router.delete("/shipping-rates/{rate_id}")
-def delete_shipping_rate(rate_id: int, db: Session = Depends(get_db)):
-    rate = db.query(ShippingRate).filter(ShippingRate.id == rate_id).first()
-    if not rate:
-        raise HTTPException(status_code=404, detail="Rate not found")
-    db.delete(rate)
-    db.commit()
-    return {"status": "deleted"}
+    db.refresh(user)
+    return user

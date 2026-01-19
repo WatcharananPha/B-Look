@@ -3,11 +3,11 @@ import {
   Calendar, Save, Calculator, AlertCircle, User, Box, FileText, 
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
-  LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
+  LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
   Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info
 } from 'lucide-react';
-import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import LoginPage from './Login'; // <--- Import ไฟล์ใหม่เข้ามาใช้งาน
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const LOGO_URL = "/logo.jpg"; 
@@ -45,135 +45,7 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
 // --- COMPONENTS ---
 
-// 2.0 LOGIN PAGE
-const LoginPage = ({ onLogin }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setIsLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_URL}/auth/login/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: credentialResponse.credential })
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Google Login Failed');
-      }
-
-      const data = await res.json();
-      localStorage.setItem('access_token', data.access_token || data.token);
-      localStorage.setItem('user_role', data.role || 'user'); 
-      onLogin(data.role || 'user');
-    } catch (err) {
-      console.error(err);
-      setError("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google Login");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const formData = new URLSearchParams();
-      formData.append('username', username);
-      formData.append('password', password);
-
-      const response = await fetch(`${API_URL}/auth/login/access-token`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
-      });
-
-      if (!response.ok) throw new Error('Username หรือ Password ไม่ถูกต้อง');
-
-      const data = await response.json();
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user_role', data.role || 'owner');
-        
-      onLogin(data.role || 'owner');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans text-slate-800 p-4">
-      <div className="bg-white p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-        <div className="text-center mb-8 flex flex-col items-center">
-          <div className="w-24 h-24 mb-4 rounded-full shadow-lg overflow-hidden border-4 border-white bg-slate-50 flex items-center justify-center">
-             <img src={LOGO_URL} alt="B-LOOK Logo" className="w-full h-full object-cover" onError={(e)=>{e.target.onerror=null; e.target.src="https://via.placeholder.com/150?text=B-LOOK"}}/>
-          </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">B-LOOK</h1>
-          <p className="text-slate-500 mt-2 text-sm">ระบบจัดการออเดอร์และคำนวณราคา</p>
-        </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center">
-              <AlertCircle size={16} className="mr-2"/> {error}
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">ชื่อผู้ใช้</label>
-            <div className="relative">
-              <User className="absolute left-3 top-3 text-slate-400" size={20} />
-              <input type="text" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
-                placeholder="admin" value={username} onChange={(e) => setUsername(e.target.value)} required />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">รหัสผ่าน</label>
-            <div className="relative">
-              <Key className="absolute left-3 top-3 text-slate-400" size={20} />
-              <input type="password" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
-                placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-          </div>
-          
-          <button type="submit" disabled={isLoading} className={`w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-3 rounded-lg shadow-md transition transform hover:scale-[1.02] flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}>
-            {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-          </button>
-        </form>
-
-        <div className="relative mt-8 mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-slate-200"></span>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-slate-400">หรือเข้าสู่ระบบด้วย</span>
-          </div>
-        </div>
-
-        <div className="flex justify-center w-full">
-            <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => {
-                    console.error('Google Login Failed');
-                    setError("Google Login ไม่สำเร็จ");
-                }}
-                theme="outline"
-                size="large"
-                width="100%" 
-                text="continue_with"
-            />
-        </div>
-      </div>
-    </div>
-  );
-};
+// (ลบส่วน LoginPage เดิมออกทั้งหมด)
 
 // 2.1 DASHBOARD
 const DashboardPage = ({ onEdit }) => {
@@ -189,6 +61,7 @@ const DashboardPage = ({ onEdit }) => {
     });
     const [events, setEvents] = useState([]);
     const [alerts, setAlerts] = useState([]);
+    const [showQueueModal, setShowQueueModal] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -267,8 +140,63 @@ const DashboardPage = ({ onEdit }) => {
         </div>
     );
 
+    // Filter production orders for modal
+    const productionOrders = allOrders.filter(o => o.status === 'production');
+
     return (
         <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
+            {/* Queue Modal */}
+            {showQueueModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div className="flex items-center gap-3">
+                                <Box className="text-[#1a1c23]" />
+                                <h3 className="text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3>
+                            </div>
+                            <button onClick={() => setShowQueueModal(false)} className="bg-white p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={24} className="text-slate-500"/></button>
+                        </div>
+                        <div className="p-0 overflow-y-auto flex-1">
+                            <table className="w-full text-left">
+                                <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
+                                    <tr>
+                                        <th className="p-4 w-1/4">เลขที่ออเดอร์</th>
+                                        <th className="p-4 w-1/4">ลูกค้า</th>
+                                        <th className="p-4 w-1/4">กำหนดส่ง</th>
+                                        <th className="p-4 w-1/4 text-right">สถานะ</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {productionOrders.map(o => (
+                                        <tr key={o.id} className="hover:bg-blue-50/50 transition">
+                                            <td className="p-4 font-mono font-bold text-sm text-[#1a1c23]">{o.order_no}</td>
+                                            <td className="p-4 text-sm text-gray-700">{o.customer_name}</td>
+                                            <td className="p-4 text-sm text-gray-500">{o.deadline ? new Date(o.deadline).toLocaleDateString('th-TH') : '-'}</td>
+                                            <td className="p-4 text-right">
+                                                <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm border border-amber-200">
+                                                    กำลังผลิต/รอส่ง
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {productionOrders.length === 0 && (
+                                        <tr>
+                                            <td colSpan="4" className="p-12 text-center text-gray-400 flex flex-col items-center justify-center">
+                                                <CheckCircle size={48} className="mb-2 opacity-20"/>
+                                                ไม่มีรายการที่รอจัดส่ง
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 text-right">
+                            <button onClick={() => setShowQueueModal(false)} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg">ปิดหน้าต่าง</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <header className="mb-8">
                 <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
                     สวัสดี, ภาพรวมร้านค้าของคุณ
@@ -367,9 +295,12 @@ const DashboardPage = ({ onEdit }) => {
                                     <Box size={20} className="text-blue-400"/>
                                     <span className="text-sm font-medium">รอจัดส่ง</span>
                                 </div>
-                                <span className="text-xl font-bold">{allOrders.filter(o=>o.status==='production').length}</span>
+                                <span className="text-xl font-bold">{productionOrders.length}</span>
                             </div>
-                            <button className="w-full bg-white text-[#1a1c23] py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition">
+                            <button 
+                                onClick={() => setShowQueueModal(true)}
+                                className="w-full bg-white text-[#1a1c23] py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition shadow-md"
+                            >
                                 ดูรายละเอียด
                             </button>
                         </div>
@@ -474,7 +405,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [isVatIncluded, setIsVatIncluded] = useState(false);
   const [deposit, setDeposit] = useState(0);
   const [costPerUnit, setCostPerUnit] = useState(80);
-   
+    
   const [fabrics, setFabrics] = useState([]);
   const [necks, setNecks] = useState([]);
   const [sleeves, setSleeves] = useState([]);
@@ -482,7 +413,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [selectedNeck, setSelectedNeck] = useState("");
   const [selectedSleeve, setSelectedSleeve] = useState("");
   const [pricingRules, setPricingRules] = useState([]);
-  
+   
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
   const [showPreview, setShowPreview] = useState(false);
@@ -515,7 +446,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
               setNecks(nData || []);
               setSleeves(sData || []);
               setPricingRules(pData || []);
-              
+               
               if (cData) {
                   setConfig({ 
                       vat_rate: cData.vat_rate || 0.07, 
@@ -549,7 +480,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
   const productSubtotal = totalQty * basePrice;
   const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
-   
+    
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
     grandTotal = totalBeforeCalc;
@@ -1101,7 +1032,7 @@ const CustomerPage = () => {
         </div>
         <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
       </header>
-       
+        
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
         <div className="p-2 md:p-6">
             {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
@@ -1190,7 +1121,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
-    
+     
     let data = orders;
     switch (filterType) {
         case 'pending':
@@ -1294,7 +1225,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
             </div>
         </div>
       </header>
-       
+        
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
         <div className="p-0 md:p-2 overflow-x-auto">
             {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
@@ -1354,15 +1285,16 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 };
 
 
-// 2.6 SETTINGS PAGE
-const SettingsPage = () => {
+// 2.6 SETTINGS PAGE (UPDATED: Delete Modal & Save Notify)
+const SettingsPage = ({ onNotify }) => {
   const [activeTab, setActiveTab] = useState("pricing");
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+   
   // Pricing Rule State
   const [newRule, setNewRule] = useState({ min_qty: 0, max_qty: 0, fabric_type: "", unit_price: 0 });
   const [fabrics, setFabrics] = useState([]); 
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // State for delete modal
 
   // Global Config State
   const [globalConfig, setGlobalConfig] = useState({ vat_rate: 7, default_shipping_cost: 0 });
@@ -1411,16 +1343,19 @@ const SettingsPage = () => {
         // Re-fetch
         const rules = await fetchWithAuth('/pricing-rules/');
         setPricingRules(rules || []);
-    } catch (e) { alert("Failed to add rule: " + e.message); }
+        onNotify("เพิ่มเงื่อนไขราคาสำเร็จ", "success");
+    } catch (e) { onNotify("เพิ่มเงื่อนไขราคาไม่สำเร็จ: " + e.message, "error"); }
   };
 
-  const handleDeleteRule = async (id) => {
-    if(!confirm("ยืนยันการลบ?")) return;
+  const confirmDeleteRule = async () => {
+    if (!deleteConfirm) return;
     try {
-        await fetchWithAuth(`/pricing-rules/${id}`, { method: 'DELETE' });
+        await fetchWithAuth(`/pricing-rules/${deleteConfirm.id}`, { method: 'DELETE' });
         const rules = await fetchWithAuth('/pricing-rules/');
         setPricingRules(rules || []);
-    } catch (e) { alert("Failed"); }
+        onNotify("ลบข้อมูลเรียบร้อยแล้ว", "success");
+    } catch (e) { onNotify("ลบข้อมูลไม่สำเร็จ", "error"); }
+    finally { setDeleteConfirm(null); }
   };
 
   const handleSaveConfig = async () => {
@@ -1432,12 +1367,29 @@ const SettingsPage = () => {
                   default_shipping_cost: globalConfig.default_shipping_cost
               })
           });
-          alert("บันทึกการตั้งค่าเรียบร้อยแล้ว");
-      } catch(e) { alert("Error saving config: " + e.message); }
+          onNotify("บันทึกการตั้งค่าเรียบร้อยแล้ว", "success");
+      } catch(e) { onNotify("บันทึกการตั้งค่าไม่สำเร็จ: " + e.message, "error"); }
   }
 
   return (
     <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+      {/* Delete Modal */}
+      {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
+                  <div className="flex items-center mb-4">
+                      <AlertCircle className="text-rose-500 mr-3" size={24} />
+                      <h3 className="text-lg font-bold">ยืนยันการลบ?</h3>
+                  </div>
+                  <p className="text-slate-600 mb-6">คุณต้องการลบเงื่อนไขราคานี้ใช่หรือไม่?</p>
+                  <div className="flex justify-end gap-2">
+                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                      <button onClick={confirmDeleteRule} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <header className="mb-8">
         <h1 className="text-3xl font-black text-[#1a1c23]">ตั้งค่าระบบ</h1>
         <p className="text-gray-500 font-medium">กำหนดราคาและค่าเริ่มต้นของระบบ</p>
@@ -1515,7 +1467,7 @@ const SettingsPage = () => {
                                   </td>
                                   <td className="p-4 text-right font-bold text-[#1a1c23]">{rule.unit_price} ฿</td>
                                   <td className="p-4 text-right pr-6">
-                                      <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-rose-500 transition"><Trash2 size={16}/></button>
+                                      <button onClick={() => setDeleteConfirm(rule)} className="text-gray-400 hover:text-rose-500 transition"><Trash2 size={16}/></button>
                                   </td>
                               </tr>
                           ))}
@@ -1534,7 +1486,7 @@ const SettingsPage = () => {
                   <h3 className="text-xl font-bold text-[#1a1c23]">ตั้งค่าทั่วไป</h3>
                   <p className="text-gray-500 text-sm">กำหนดค่าเริ่มต้นสำหรับทั้งระบบ</p>
               </div>
-              
+               
               <div className="space-y-4">
                   <div>
                       <label className="block text-sm font-bold text-slate-700 mb-2">อัตรา VAT (%)</label>
@@ -1577,13 +1529,110 @@ const SettingsPage = () => {
   );
 };
 
+// 2.7 USER MANAGEMENT PAGE (NEW)
+const UserManagementPage = ({ onNotify }) => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/admin/users'); // เรียก API ที่สร้างไว้
+            if (data) setUsers(data);
+        } catch (error) {
+            onNotify("โหลดข้อมูลผู้ใช้ไม่สำเร็จ: " + error.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const handleUpdateRole = async (userId, newRole) => {
+        try {
+            await fetchWithAuth(`/admin/users/${userId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ role: newRole, is_active: true })
+            });
+            onNotify("อัปเดตสิทธิ์เรียบร้อยแล้ว", "success");
+            fetchUsers(); // Refresh list
+        } catch (error) {
+            onNotify("อัปเดตไม่สำเร็จ", "error");
+        }
+    };
+
+    const getRoleBadge = (role) => {
+        switch(role) {
+            case 'owner': return <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold">Owner</span>;
+            case 'admin': return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Admin</span>;
+            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-bold">General User</span>;
+            case 'pending': return <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold animate-pulse">Pending Approval</span>;
+            default: return <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs">Unknown</span>;
+        }
+    };
+
+    return (
+        <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+            <header className="mb-8">
+                <h1 className="text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
+                <p className="text-gray-500 font-medium">อนุมัติและกำหนดสิทธิ์การเข้าถึง</p>
+            </header>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-0 md:p-2 overflow-x-auto">
+                    {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
+                        <table className="w-full text-left">
+                            <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                                <tr>
+                                    <th className="py-4 px-6">ชื่อผู้ใช้ / Email</th>
+                                    <th className="py-4 px-6">ชื่อ-นามสกุล</th>
+                                    <th className="py-4 px-6 text-center">สถานะปัจจุบัน</th>
+                                    <th className="py-4 px-6 text-right">เปลี่ยนสิทธิ์</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {users.map(u => (
+                                    <tr key={u.id} className="hover:bg-gray-50 transition">
+                                        <td className="py-4 px-6 font-bold text-gray-700">{u.username}</td>
+                                        <td className="py-4 px-6 text-sm text-gray-600">{u.full_name || "-"}</td>
+                                        <td className="py-4 px-6 text-center">{getRoleBadge(u.role)}</td>
+                                        <td className="py-4 px-6 text-right">
+                                            <select 
+                                                className="border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition"
+                                                value={u.role}
+                                                onChange={(e) => {
+                                                    if (window.confirm(`ยืนยันการเปลี่ยนสิทธิ์เป็น ${e.target.value}?`)) {
+                                                        handleUpdateRole(u.id, e.target.value);
+                                                    }
+                                                }}
+                                                disabled={u.role === 'owner'} // ป้องกันแก้ Owner
+                                            >
+                                                <option value="pending">Pending (รออนุมัติ)</option>
+                                                <option value="user">General User</option>
+                                                <option value="admin">Admin</option>
+                                                <option value="owner" disabled>Owner</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
-  
+   
   // Notification State
   const [notification, setNotification] = useState(null);
 
@@ -1624,10 +1673,11 @@ const App = () => {
     switch(currentPage) {
         case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
         case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
-        case 'settings': return <SettingsPage />;
+        case 'settings': return <SettingsPage onNotify={handleNotify} />;
         case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleNotify} />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage />;
+        case 'users': return <UserManagementPage onNotify={handleNotify} />;
         default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
     }
   };
@@ -1697,9 +1747,9 @@ const App = () => {
                     <ChevronDown size={16} className="text-gray-500"/>
                 </div>
             </div>
-      </aside>
+       </aside>
 
-      <main className="flex-1 overflow-auto h-[calc(100vh-60px)] md:h-screen w-full relative">{renderContent()}</main>
+       <main className="flex-1 overflow-auto h-[calc(100vh-60px)] md:h-screen w-full relative">{renderContent()}</main>
     </div>
   );
 };
