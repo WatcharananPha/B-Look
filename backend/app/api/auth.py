@@ -7,17 +7,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-# --- Google Libraries ---
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from google.auth.exceptions import GoogleAuthError
-# ------------------------
 
 from app.db.session import get_db
 from app.core import security
 from app.models.user import User
 
-# ตั้งค่า Logging เพื่อให้เห็น Error ใน Terminal (สำคัญมากสำหรับการ Debug)
+# ตั้งค่า Logging เพื่อให้เห็น Error ใน Terminal
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -63,7 +61,7 @@ def google_login(
     db: Session = Depends(get_db)
 ) -> Any:
     try:
-        # [Step 1] Verify Google Token
+        # Verify Google Token
         # clock_skew_in_seconds=10 ช่วยแก้ปัญหา "Token used too early"
         id_info = id_token.verify_oauth2_token(
             payload.token, 
@@ -81,15 +79,12 @@ def google_login(
             raise HTTPException(status_code=400, detail="Invalid Google Token: Email missing")
 
     except ValueError as e:
-        # Error นี้มักเกิดจาก Token ผิดฟอร์แมต หรือหมดอายุ
         logger.error(f"❌ Google Token Validation Error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Token validation failed: {str(e)}")
     except GoogleAuthError as e:
-        # Error จาก Google Auth Library โดยตรง
         logger.error(f"❌ Google Auth Error: {str(e)}")
         raise HTTPException(status_code=400, detail="Google authentication failed")
     except Exception as e:
-        # Error อื่นๆ
         logger.error(f"❌ Unexpected Error during token verification: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal authentication error")
 
@@ -115,7 +110,7 @@ def google_login(
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
 
-        # สร้าง Access Token ของระบบเราเอง ส่งกลับไปให้ Frontend
+        # สร้าง Access Token ของระบบ ส่งกลับไปให้ Frontend
         return {
             "access_token": security.create_access_token({"sub": str(user.id)}),
             "token_type": "bearer",
@@ -125,5 +120,5 @@ def google_login(
 
     except Exception as e:
         logger.error(f"❌ Database Error: {str(e)}")
-        # สำคัญ: ถ้า DB Error ต้องแจ้ง 500 แต่บอกรายละเอียดใน Log
+        # ถ้า DB Error ต้องแจ้ง 500 แต่บอกรายละเอียดใน Log
         raise HTTPException(status_code=500, detail=f"Database operation failed: {str(e)}")

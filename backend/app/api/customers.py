@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# Schema สำหรับรับข้อมูล (Pydantic)
+# Schema ของ Pydantic
 class CustomerSchema(BaseModel):
     id: int
     name: str

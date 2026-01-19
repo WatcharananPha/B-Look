@@ -18,9 +18,7 @@ def read_orders(
     limit: int = 100, 
     db: Session = Depends(get_db)
 ):
-    """
-    ดึงรายการออเดอร์ทั้งหมด พร้อมข้อมูลลูกค้าและสินค้า
-    """
+    
     orders = db.query(OrderModel)\
         .options(joinedload(OrderModel.customer), joinedload(OrderModel.items))\
         .order_by(OrderModel.id.desc())\
@@ -48,9 +46,6 @@ def read_orders(
 # --- 2. CREATE ORDER ---
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
-    """
-    สร้างออเดอร์ใหม่ + คำนวณราคา/กำไรอัตโนมัติ
-    """
     # 1. จัดการลูกค้า (Customer Handling)
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
@@ -176,12 +171,9 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
         
     return order_dict
 
-# --- 4. UPDATE ORDER (ส่วนที่เพิ่มใหม่เพื่อแก้ 405) ---
+# --- 4. UPDATE ORDER ---
 @router.put("/{order_id}", response_model=OrderSchema)
 def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get_db)):
-    """
-    แก้ไขออเดอร์: คำนวณยอดใหม่ และ Replace Items ทั้งหมด
-    """
     # 1. หา Order เดิม
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
@@ -199,7 +191,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
         db.add(customer)
         db.flush()
 
-    # 3. คำนวณยอดเงินและต้นทุนใหม่ (Re-calculate Logic)
+    # 3. Re-calculate Logic
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []

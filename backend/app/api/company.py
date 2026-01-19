@@ -12,7 +12,7 @@ def get_company_config(
     db: Session = Depends(get_db),
     # ลบ current_user ออกเพื่อให้ Frontend ดึงค่าไปคำนวณราคาได้โดยไม่ต้อง Login
 ):
-    # ดึงแถวแรกเสมอ ถ้าไม่มีให้สร้างใหม่ (Singleton Pattern)
+    # Singleton Pattern
     company = db.query(CompanyInfo).first()
     if not company:
         company = CompanyInfo(vat_rate=0.07, default_shipping_cost=0.0)
