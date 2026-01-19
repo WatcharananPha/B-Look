@@ -4,14 +4,15 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, Key, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal
+  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info
 } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+const LOGO_URL = "/logo.jpg"; 
 
-// --- CONSTANTS (Configuration) ---
+// --- CONSTANTS ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
 const SIZES = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
@@ -111,11 +112,11 @@ const LoginPage = ({ onLogin }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans text-slate-800 p-4">
       <div className="bg-white p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
-        <div className="text-center mb-8">
-          <div className="bg-[#1a1c23] text-white w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Lock size={32} />
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="w-24 h-24 mb-4 rounded-full shadow-lg overflow-hidden border-4 border-white bg-slate-50 flex items-center justify-center">
+             <img src={LOGO_URL} alt="B-LOOK Logo" className="w-full h-full object-cover" onError={(e)=>{e.target.onerror=null; e.target.src="https://via.placeholder.com/150?text=B-LOOK"}}/>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">INVENTORY360</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">B-LOOK</h1>
           <p className="text-slate-500 mt-2 text-sm">ระบบจัดการออเดอร์และคำนวณราคา</p>
         </div>
         
@@ -126,7 +127,7 @@ const LoginPage = ({ onLogin }) => {
             </div>
           )}
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">Username</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">ชื่อผู้ใช้</label>
             <div className="relative">
               <User className="absolute left-3 top-3 text-slate-400" size={20} />
               <input type="text" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
@@ -134,7 +135,7 @@ const LoginPage = ({ onLogin }) => {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">Password</label>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">รหัสผ่าน</label>
             <div className="relative">
               <Key className="absolute left-3 top-3 text-slate-400" size={20} />
               <input type="password" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
@@ -143,7 +144,7 @@ const LoginPage = ({ onLogin }) => {
           </div>
           
           <button type="submit" disabled={isLoading} className={`w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-3 rounded-lg shadow-md transition transform hover:scale-[1.02] flex justify-center items-center ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}>
-            {isLoading ? "Signing In..." : "เข้าสู่ระบบ"}
+            {isLoading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
           </button>
         </form>
 
@@ -174,40 +175,56 @@ const LoginPage = ({ onLogin }) => {
   );
 };
 
-// 2.1 DASHBOARD (Redesigned UI, Logic Intact)
+// 2.1 DASHBOARD
 const DashboardPage = ({ onEdit }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const userRole = useMemo(() => localStorage.getItem('user_role') || 'owner', []);
     
     // Data States
     const [allOrders, setAllOrders] = useState([]);
-    const [stats, setStats] = useState({ newOrders: 0, pendingDelivery: 0, revenue: 0, urgent: 0 });
+    const [stats, setStats] = useState({ 
+        newOrdersToday: 0, 
+        inProduction: 0, 
+        deliveryIn3Days: 0, 
+        deliveredThisMonth: 0 
+    });
     const [events, setEvents] = useState([]);
     const [alerts, setAlerts] = useState([]);
-
-    // View State
-    const [viewMode, setViewMode] = useState('calendar');
-    const [filterType, setFilterType] = useState('all');
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const orders = await fetchWithAuth('/orders/');
-                setAllOrders(orders || []);
+                const data = orders || [];
+                setAllOrders(data);
                 
-                const newOrders = orders?.length || 0; 
-                const pendingDelivery = orders?.filter(o => o.status !== 'delivered').length || 0;
-                const revenue = orders?.reduce((sum, o) => sum + (o.grand_total || 0), 0) || 0;
-                const urgent = orders?.filter(o => {
-                    if (!o.deadline) return false;
-                    const diff = new Date(o.deadline) - new Date();
-                    return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
-                }).length || 0;
+                const today = new Date();
+                
+                const newOrdersToday = data.filter(o => {
+                    const created = o.created_at ? new Date(o.created_at) : new Date(o.updated_at); 
+                    return created.getDate() === today.getDate() && 
+                           created.getMonth() === today.getMonth() && 
+                           created.getFullYear() === today.getFullYear();
+                }).length;
 
-                setStats({ newOrders, pendingDelivery, revenue, urgent });
+                const inProduction = data.filter(o => o.status === 'production').length;
 
-                // Map Orders to Calendar Events
-                const mappedEvents = (orders || []).map(o => {
+                const deliveryIn3Days = data.filter(o => {
+                    if (!o.deadline || o.status === 'delivered') return false;
+                    const deadline = new Date(o.deadline);
+                    const diffTime = deadline - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    return diffDays >= 0 && diffDays <= 3;
+                }).length;
+
+                const deliveredThisMonth = data.filter(o => {
+                    if (o.status !== 'delivered') return false;
+                    const date = o.deadline ? new Date(o.deadline) : new Date(); 
+                    return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+                }).length;
+
+                setStats({ newOrdersToday, inProduction, deliveryIn3Days, deliveredThisMonth });
+
+                const mappedEvents = data.map(o => {
                     if (!o.deadline) return null;
                     const d = new Date(o.deadline);
                     return {
@@ -215,21 +232,16 @@ const DashboardPage = ({ onEdit }) => {
                         day: d.getDate(),
                         month: d.getMonth(),
                         year: d.getFullYear(),
-                        title: `${o.customer_name}`,
+                        title: o.customer_name,
                         type: 'delivery',
                         status: o.status || 'pending',
                         order_no: o.order_no
                     };
                 }).filter(e => e !== null);
 
-                const currentMonthEvents = mappedEvents.filter(e => 
-                    e.month === currentDate.getMonth() && 
-                    e.year === currentDate.getFullYear()
-                );
-                setEvents(currentMonthEvents);
+                setEvents(mappedEvents.filter(e => e.month === currentDate.getMonth() && e.year === currentDate.getFullYear()));
 
-                // Generate Alerts
-                const urgencyAlerts = (orders || []).filter(o => o.status === 'urgent').map(o => ({
+                const urgencyAlerts = data.filter(o => o.status === 'urgent').map(o => ({
                     type: 'CRITICAL', title: `งานด่วน: ${o.order_no}`, desc: `ส่ง: ${o.customer_name}`
                 }));
                 setAlerts(urgencyAlerts);
@@ -241,7 +253,6 @@ const DashboardPage = ({ onEdit }) => {
         fetchData();
     }, [currentDate]);
 
-    // Calendar Helper Logic
     const eventsByDay = events.reduce((acc, evt) => {
         acc[evt.day] = [...(acc[evt.day] || []), evt];
         return acc;
@@ -249,165 +260,121 @@ const DashboardPage = ({ onEdit }) => {
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
 
-    // Visual Chart Component
-    const SimpleLineChart = () => (
-      <svg viewBox="0 0 500 100" className="w-full h-24 stroke-[#a3b18a] fill-none stroke-[3px]" style={{filter: 'drop-shadow(0px 4px 6px rgba(163,177,138,0.3))'}}>
-        <path d="M0,80 Q50,70 100,60 T200,50 T300,30 T400,40 T500,10" />
-        <linearGradient id="gradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a3b18a" stopOpacity="0.2"/>
-          <stop offset="100%" stopColor="#a3b18a" stopOpacity="0"/>
-        </linearGradient>
-        <path d="M0,80 Q50,70 100,60 T200,50 T300,30 T400,40 T500,10 V100 H0 Z" fill="url(#gradient)" stroke="none" />
-      </svg>
+    const MetricCard = ({ title, value, color }) => (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 hover:shadow-md transition">
+            <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
+            <div className={`text-4xl font-black ${color}`}>{value}</div>
+        </div>
     );
 
     return (
         <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
-            {/* Header Section */}
-            <header className="mb-8 flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6">
-                <div>
-                    <h1 className="text-4xl font-black text-[#1a1c23] tracking-tight leading-tight">
-                        Hi, here's what's happening <br/> in your stores
-                    </h1>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="bg-white border border-gray-200 rounded-lg p-1 flex shadow-sm">
-                        <button className="px-4 py-1.5 text-sm font-semibold text-gray-800 bg-gray-100 rounded-md shadow-sm">Today</button>
-                        <button className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-md transition">This Week</button>
-                        <button className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-md transition">This Month</button>
-                    </div>
-                    <div className="relative">
-                        <button className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm flex items-center">
-                            All Outlets <ChevronDown size={16} className="ml-2 text-gray-400"/>
-                        </button>
-                    </div>
-                </div>
+            <header className="mb-8">
+                <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
+                    สวัสดี, ภาพรวมร้านค้าของคุณ
+                </h1>
+                <p className="text-gray-500">ยินดีต้อนรับสู่ระบบจัดการ B-LOOK</p>
             </header>
 
-            {/* Top Main Card (Revenue & Stats) */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-6 flex flex-col lg:flex-row relative overflow-hidden">
-                <div className="flex-1 z-10">
-                    <h3 className="text-lg font-bold text-gray-800 mb-1">This month your stores have sold</h3>
-                    <div className="text-5xl font-black text-[#1a1c23] mb-2 tracking-tight">
-                        ฿{stats.revenue.toLocaleString()}
-                    </div>
-                    <p className="text-gray-500 text-sm mb-8 font-medium">
-                        Based on delivered orders in current period.
-                    </p>
-                    {/* Visual Chart Area */}
-                    <div className="w-full h-32 relative">
-                         <div className="absolute top-0 left-0 text-xs font-bold text-gray-400">All Outlets</div>
-                         <div className="absolute bottom-0 right-0 text-xs font-bold text-gray-400">30 Apr</div>
-                         <div className="mt-6">
-                             <SimpleLineChart />
-                         </div>
-                    </div>
-                </div>
-
-                <div className="w-px bg-gray-100 mx-8 hidden lg:block"></div>
-
-                <div className="lg:w-72 flex flex-col justify-center space-y-8 z-10 mt-6 lg:mt-0">
-                    <div>
-                        <div className="text-sm font-bold text-gray-800 mb-1">Total Orders</div>
-                        <div className="text-3xl font-black text-[#1a1c23]">{stats.newOrders}</div>
-                    </div>
-                    <div>
-                        <div className="text-sm font-bold text-gray-800 mb-1">Avg Items per Sale</div>
-                        <div className="text-3xl font-black text-[#1a1c23]">
-                            {stats.newOrders > 0 ? (stats.revenue / stats.newOrders / 100).toFixed(1) : '0'}
-                        </div>
-                    </div>
-                    <div>
-                         <div className="text-sm font-bold text-gray-800 mb-1">Avg Value</div>
-                         <div className="text-3xl font-black text-[#1a1c23]">
-                            ${stats.newOrders > 0 ? (stats.revenue / stats.newOrders).toFixed(0) : '0'}
-                         </div>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <MetricCard title="ออเดอร์ใหม่ (วันนี้)" value={stats.newOrdersToday} color="text-blue-600" />
+                <MetricCard title="กำลังผลิต" value={stats.inProduction} color="text-amber-500" />
+                <MetricCard title="ต้องส่งภายใน 3 วัน" value={stats.deliveryIn3Days} color="text-rose-600" />
+                <MetricCard title="ส่งมอบแล้ว (เดือนนี้)" value={stats.deliveredThisMonth} color="text-emerald-600" />
             </div>
 
-            {/* Bottom Grid Section */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                {/* Left Column: Calendar (Functionality) */}
-                <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col min-h-[400px]">
+                <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-[#1a1c23]">Production Schedule</h3>
-                            <p className="text-xs text-gray-400">Monitor upcoming deadlines</p>
+                            <h3 className="text-xl font-bold text-[#1a1c23]">ตารางการผลิต</h3>
+                            <p className="text-xs text-gray-400">ติดตามกำหนดส่งสินค้า</p>
                         </div>
-                        <div className="flex space-x-2">
-                             <div className="flex space-x-1">
-                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-gray-100 rounded"><ChevronLeft size={16}/></button>
-                                <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-gray-100 rounded"><ChevronRight size={16}/></button>
-                            </div>
+                        <div className="flex items-center space-x-2 bg-gray-50 rounded-lg p-1">
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronLeft size={16}/></button>
+                            <span className="text-sm font-bold text-gray-700 min-w-[100px] text-center">
+                                {currentDate.toLocaleString('th-TH', { month: 'long', year: 'numeric' })}
+                            </span>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronRight size={16}/></button>
                         </div>
                     </div>
 
-                    <div className="flex-1">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="font-bold text-gray-800">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 h-full">
-                            {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-center text-[10px] font-bold text-gray-400 mb-2">{d}</div>)}
-                            {[...Array(firstDayOfMonth)].map((_, i) => <div key={`e-${i}`}></div>)}
-                            {[...Array(daysInMonth)].map((_, i) => {
-                                const day = i + 1;
-                                const evts = eventsByDay[day] || [];
-                                const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth();
-                                return (
-                                    <div key={day} className={`min-h-[60px] border border-gray-100 rounded-lg p-1 relative hover:bg-gray-50 transition ${isToday ? 'bg-yellow-50 border-yellow-200' : 'bg-white'}`}>
-                                        <span className={`text-[10px] font-bold ${isToday ? 'text-yellow-700' : 'text-gray-400'}`}>{day}</span>
-                                        <div className="flex flex-col gap-0.5 mt-1">
-                                            {evts.map((e, idx) => (
-                                                <div key={idx} className={`h-1.5 rounded-full w-full ${e.status === 'urgent' ? 'bg-rose-500' : 'bg-[#a3b18a]'}`} title={e.title}></div>
-                                            ))}
+                    <div className="flex-1 overflow-x-auto">
+                        <div className="min-w-[600px]">
+                            <div className="grid grid-cols-7 mb-2">
+                                {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => (
+                                    <div key={d} className="text-center text-xs font-bold text-gray-400 uppercase">{d}</div>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-7 gap-2">
+                                {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="h-24"></div>)}
+                                {[...Array(daysInMonth)].map((_, i) => {
+                                    const day = i + 1;
+                                    const evts = eventsByDay[day] || [];
+                                    const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth();
+                                    return (
+                                        <div key={day} className={`h-24 border border-gray-100 rounded-xl p-2 relative hover:border-blue-200 transition group flex flex-col ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white'}`}>
+                                            <span className={`text-sm font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}>{day}</span>
+                                            <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
+                                                {evts.map((e, idx) => (
+                                                    <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium ${
+                                                        e.status === 'urgent' ? 'bg-rose-100 text-rose-700' : 
+                                                        e.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
+                                                        'bg-blue-100 text-blue-700'
+                                                    }`} title={e.title}>
+                                                        {e.title}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Column: Alerts & Transfers */}
                 <div className="space-y-6">
-                    {/* Card 1: Urgent / Transfer */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 relative">
-                        <div className="mb-4">
-                             <h3 className="text-lg font-bold text-[#1a1c23] mb-1">Transfer</h3>
-                             <p className="text-sm text-gray-500 font-medium">You have {stats.urgent} urgent orders waiting.</p>
-                        </div>
-                        <div className="flex items-center space-x-4 mb-6">
-                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                                <Box size={24} className="text-gray-400"/>
-                            </div>
-                            <div>
-                                <div className="font-bold text-gray-800 text-sm">Urgent Batch</div>
-                                <div className="text-xs text-gray-400">Production &rarr; Delivery</div>
-                            </div>
-                        </div>
-                        <button className="text-[10px] font-bold tracking-wider text-gray-500 hover:text-gray-900 uppercase">VIEW TRANSFER</button>
-                    </div>
-
-                    {/* Card 2: Purchase Orders / Alerts */}
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
-                        <div className="mb-4">
-                             <h3 className="text-lg font-bold text-[#1a1c23] mb-1">Alerts</h3>
-                             <p className="text-sm text-gray-500 font-medium">System notifications ({alerts.length})</p>
+                        <div className="mb-4 flex items-center justify-between">
+                             <h3 className="text-lg font-bold text-[#1a1c23]">แจ้งเตือน</h3>
+                             <span className="bg-rose-100 text-rose-600 text-xs px-2 py-1 rounded-full font-bold">{alerts.length}</span>
                         </div>
-                        <div className="space-y-3 mb-6">
-                            {alerts.slice(0, 3).map((alert, i) => (
-                                <div key={i} className="flex items-start space-x-3">
-                                    <AlertCircle size={16} className="text-rose-500 mt-0.5 shrink-0"/>
+                        <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto">
+                            {alerts.length > 0 ? alerts.map((alert, i) => (
+                                <div key={i} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="bg-rose-100 p-2 rounded-full text-rose-500 shrink-0">
+                                        <AlertCircle size={16} />
+                                    </div>
                                     <div>
-                                        <p className="text-xs font-bold text-gray-800">{alert.title}</p>
-                                        <p className="text-[10px] text-gray-400">{alert.desc}</p>
+                                        <p className="text-sm font-bold text-gray-800">{alert.title}</p>
+                                        <p className="text-xs text-gray-500">{alert.desc}</p>
                                     </div>
                                 </div>
-                            ))}
-                            {alerts.length === 0 && <p className="text-xs text-gray-400 italic">No active alerts.</p>}
+                            )) : (
+                                <div className="text-center py-8 text-gray-400 text-sm">ไม่มีการแจ้งเตือนด่วน</div>
+                            )}
                         </div>
-                        <button className="text-[10px] font-bold tracking-wider text-gray-500 hover:text-gray-900 uppercase">VIEW ALL ALERTS</button>
+                        <button className="w-full py-2 text-xs font-bold text-gray-500 hover:text-gray-900 border rounded-lg hover:bg-gray-50 transition">ดูทั้งหมด</button>
+                    </div>
+
+                    <div className="bg-[#1a1c23] rounded-3xl shadow-lg p-6 text-white relative overflow-hidden">
+                        <div className="relative z-10">
+                            <h3 className="text-lg font-bold mb-1">จัดการคิวงาน</h3>
+                            <p className="text-xs text-gray-400 mb-4">ตรวจสอบงานที่พร้อมส่งมอบ</p>
+                            <div className="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-sm mb-4">
+                                <div className="flex items-center space-x-3">
+                                    <Box size={20} className="text-blue-400"/>
+                                    <span className="text-sm font-medium">รอจัดส่ง</span>
+                                </div>
+                                <span className="text-xl font-bold">{allOrders.filter(o=>o.status==='production').length}</span>
+                            </div>
+                            <button className="w-full bg-white text-[#1a1c23] py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition">
+                                ดูรายละเอียด
+                            </button>
+                        </div>
+                        <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-blue-500/20 rounded-full blur-2xl"></div>
+                        <div className="absolute bottom-[-10%] left-[-10%] w-24 h-24 bg-purple-500/20 rounded-full blur-2xl"></div>
                     </div>
                 </div>
             </div>
@@ -429,7 +396,7 @@ const InvoiceModal = ({ data, onClose }) => {
       <style>{`@media print { body * { visibility: hidden; } #invoice-content, #invoice-content * { visibility: visible; } #invoice-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #no-print-btn { display: none !important; } }`}</style>
       <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
           <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
-              <Printer size={18} className="mr-2"/> Print / Save PDF
+              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
           </button>
           <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close (Esc)">
               <XCircle size={24} />
@@ -489,8 +456,8 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// 2.2 ORDER CREATION PAGE (With Edit Support & Auto Pricing & Global Config)
-const OrderCreationPage = ({ onNavigate, editingOrder }) => {
+// 2.2 ORDER CREATION PAGE
+const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
@@ -508,7 +475,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   const [deposit, setDeposit] = useState(0);
   const [costPerUnit, setCostPerUnit] = useState(80);
    
-  // Master Data State
   const [fabrics, setFabrics] = useState([]);
   const [necks, setNecks] = useState([]);
   const [sleeves, setSleeves] = useState([]);
@@ -517,13 +483,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   const [selectedSleeve, setSelectedSleeve] = useState("");
   const [pricingRules, setPricingRules] = useState([]);
   
-  // Global Config
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Auto-fill Data when editingOrder is present
   useEffect(() => {
     if (editingOrder) {
         setCustomerName(editingOrder.customer_name || "");
@@ -537,7 +501,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
     }
   }, [editingOrder]);
 
-  // Fetch Master Data, Pricing Rules & Global Config
   useEffect(() => {
       const fetchMasters = async () => {
           try {
@@ -558,7 +521,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
                       vat_rate: cData.vat_rate || 0.07, 
                       default_shipping_cost: cData.default_shipping_cost || 0 
                   });
-                  // Set initial shipping cost only for new orders
                   if (!editingOrder) setShippingCost(cData.default_shipping_cost || 0);
               }
 
@@ -574,7 +536,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
-  // --- AUTOMATIC PRICING ENGINE LOGIC ---
   useEffect(() => {
       if (totalQty > 0 && selectedFabric && pricingRules.length > 0) {
           const matchedRule = pricingRules.find(rule => 
@@ -585,7 +546,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
           if (matchedRule) setBasePrice(matchedRule.unit_price);
       }
   }, [totalQty, selectedFabric, pricingRules]);
-  // -------------------------------------
 
   const productSubtotal = totalQty * basePrice;
   const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
@@ -593,10 +553,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
     grandTotal = totalBeforeCalc;
-    // Formula: Total * (7 / 107) for Included VAT
     vatAmount = (totalBeforeCalc * (config.vat_rate * 100)) / (100 + (config.vat_rate * 100));
   } else {
-    // Formula: Total * 0.07 for Excluded VAT
     vatAmount = totalBeforeCalc * config.vat_rate;
     grandTotal = totalBeforeCalc + vatAmount;
   }
@@ -628,14 +586,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
         });
         setShowSuccess(true);
     } catch (e) {
-        alert("Failed to save order: " + e.message);
+        onNotify("บันทึกไม่สำเร็จ: " + e.message, "error");
     }
   };
 
   const handleCopySummary = () => {
     const text = `📋 Order Summary\nCustomer: ${customerName}\nTotal: ${totalQty} pcs\nGrand Total: ${grandTotal.toLocaleString()} THB`;
     navigator.clipboard.writeText(text);
-    alert("Copied!");
+    onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
   useEffect(() => {
@@ -665,14 +623,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
 
         <header className={`mb-8 flex items-center gap-4`}>
              <button onClick={() => onNavigate('order_list')} className="w-10 h-10 bg-white rounded-full flex items-center justify-center border hover:bg-gray-50 shadow-sm"><ArrowLeft size={20}/></button>
-             <h1 className="text-2xl font-black text-[#1a1c23]">{editingOrder ? "Edit Order" : "New Order"}</h1>
+             <h1 className="text-2xl font-black text-[#1a1c23]">{editingOrder ? "แก้ไขออเดอร์" : "สร้างออเดอร์ใหม่"}</h1>
              <div className={`px-4 py-2 rounded-lg ml-auto ${theme[urgencyStatus].header}`}><AlertCircle size={20} className="inline mr-2"/>{urgencyStatus.toUpperCase()}</div>
         </header>
 
         <div className="grid grid-cols-12 gap-8">
             <div className="col-span-12 lg:col-span-8 space-y-6">
                 <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><User className="mr-2" size={18}/> Customer Information</h3>
+                    <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><User className="mr-2" size={18}/> ข้อมูลลูกค้า</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
                         <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
@@ -744,8 +702,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
                         <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
                     </button>
                     <div className="grid grid-cols-2 gap-3 mt-4">
-                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={() => setShowPreview(true)}>PREVIEW</button>
-                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={handleCopySummary}>COPY</button>
+                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={() => setShowPreview(true)}>ดูตัวอย่าง</button>
+                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={handleCopySummary}>คัดลอก</button>
                     </div>
                 </div>
             </div>
@@ -756,11 +714,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder }) => {
 
 // 2.3 PRODUCT PAGE
 const ProductPage = () => {
-  const [activeTab, setActiveTab] = useState("fabric"); 
+  const [activeTab, setActiveTab] = useState("ชนิดผ้า"); 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState("add"); // "add" or "edit"
+  const [modalMode, setModalMode] = useState("add"); 
   const [editingItem, setEditingItem] = useState(null);
   const [newItem, setNewItem] = useState({ name: "", quantity: 0, cost_price: 0 });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -768,7 +726,7 @@ const ProductPage = () => {
   const fetchItems = useCallback(async () => {
       setLoading(true);
       try {
-          const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
+          const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
           const data = await fetchWithAuth(endpoint);
           setItems(data || []);
       } catch (e) { console.error(e); }
@@ -796,7 +754,7 @@ const ProductPage = () => {
 
   const handleAdd = async () => {
       try {
-          const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
+          const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
           await fetchWithAuth(endpoint, {
               method: 'POST',
               body: JSON.stringify(newItem)
@@ -809,7 +767,7 @@ const ProductPage = () => {
 
   const handleEdit = async () => {
       try {
-          const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
+          const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
           await fetchWithAuth(`${endpoint}/${editingItem.id}`, {
               method: 'PUT',
               body: JSON.stringify(newItem)
@@ -823,7 +781,7 @@ const ProductPage = () => {
 
   const handleDelete = async (itemId) => {
       try {
-          const endpoint = activeTab === 'fabric' ? '/products/fabrics' : activeTab === 'neck' ? '/products/necks' : '/products/sleeves';
+          const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
           await fetchWithAuth(`${endpoint}/${itemId}`, {
               method: 'DELETE'
           });
@@ -940,18 +898,18 @@ const ProductPage = () => {
 
       <header className="mb-8 flex justify-between items-end">
         <div>
-            <h1 className="text-3xl font-black text-[#1a1c23]">Product Catalog</h1>
-            <p className="text-gray-500 font-medium">Manage your fabrics and materials.</p>
+            <h1 className="text-3xl font-black text-[#1a1c23]">สินค้า</h1>
+            <p className="text-gray-500 font-medium">จัดการผ้าและวัตถุดิบ</p>
         </div>
         <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg">
-            <Plus size={18} className="mr-2"/> New Item
+            <Plus size={18} className="mr-2"/> เพิ่มสินค้า
         </button>
       </header>
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
         <div className="flex border-b border-gray-100 overflow-x-auto">
-            <TabButton id="fabric" label="ชนิดผ้า" />
-            <TabButton id="neck" label="รูปแบบคอ" />
-            <TabButton id="sleeve" label="รูปแบบแขน" />
+            <TabButton id="ชนิดผ้า" label="ชนิดผ้า" />
+            <TabButton id="รูปแบบคอ" label="รูปแบบคอ" />
+            <TabButton id="รูปแบบแขน" label="รูปแบบแขน" />
         </div>
         <div className="p-2 md:p-6">
             {loading ? <p className="p-10 text-center text-gray-400">Loading...</p> : (
@@ -1020,7 +978,7 @@ const ProductPage = () => {
   );
 };
 
-// 2.4 CUSTOMER PAGE (CRUD Logic Intact)
+// 2.4 CUSTOMER PAGE
 const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1085,7 +1043,6 @@ const CustomerPage = () => {
 
   return (
     <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
-      {/* Add/Edit Modal */}
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
@@ -1121,7 +1078,6 @@ const CustomerPage = () => {
           </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
@@ -1140,10 +1096,10 @@ const CustomerPage = () => {
 
       <header className="mb-8 flex justify-between items-end">
         <div>
-            <h1 className="text-3xl font-black text-[#1a1c23]">Customers</h1>
-            <p className="text-gray-500 font-medium">Manage customer profiles and details.</p>
+            <h1 className="text-3xl font-black text-[#1a1c23]">ลูกค้า</h1>
+            <p className="text-gray-500 font-medium">จัดการข้อมูลลูกค้า</p>
         </div>
-        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg"><Plus size={18} className="mr-2"/> New Customer</button>
+        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
       </header>
        
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
@@ -1196,8 +1152,8 @@ const CustomerPage = () => {
   );
 };
 
-// 2.5 ORDER LIST PAGE (UPDATED UI, Logic Intact)
-const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
+// 2.5 ORDER LIST PAGE (UPDATED: Toast & Table Layout)
+const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => {
   const [orders, setOrders] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1229,7 +1185,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
     if(s === 'production') return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ผลิต</span>;
     if(s === 'urgent') return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ด่วน</span>;
     if(s === 'delivered') return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ส่งแล้ว</span>;
-    return <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] font-bold uppercase">Draft</span>;
+    return <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] font-bold uppercase">ร่าง</span>;
   };
 
   const filteredOrders = useMemo(() => {
@@ -1266,7 +1222,10 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
   }, [orders, filterType, searchTerm]);
 
   const handleExportCSV = () => {
-      if (filteredOrders.length === 0) { alert("ไม่มีข้อมูลสำหรับ Export"); return; }
+      if (filteredOrders.length === 0) { 
+          onNotify("ไม่มีข้อมูลสำหรับ Export", "error"); 
+          return; 
+      }
       const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
       const rows = filteredOrders.map(order => [
           `"${order.order_no}"`,
@@ -1309,8 +1268,8 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
 
       <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-            <h1 className="text-3xl font-black text-[#1a1c23]">Orders</h1>
-            <p className="text-gray-500 font-medium">Manage and track your production.</p>
+            <h1 className="text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
+            <p className="text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
@@ -1318,7 +1277,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
                 <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                 <input 
                     type="text" 
-                    placeholder="Search..." 
+                    placeholder="ค้นหา..." 
                     className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -1330,7 +1289,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
                     <Download size={18} className="mr-2"/> Export
                 </button>
                 <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap">
-                    <Plus size={18} className="mr-2"/> New Order
+                    <Plus size={18} className="mr-2"/> สร้างใหม่
                 </button>
             </div>
         </div>
@@ -1339,7 +1298,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
         <div className="p-0 md:p-2 overflow-x-auto">
             {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
-                <table className="w-full text-left min-w-[800px]">
+                <table className="w-full text-left min-w-[800px] table-fixed">
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <th className="py-4 px-6 w-1/6">เลขที่</th>
@@ -1353,9 +1312,9 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all' }) => {
                     <tbody className="divide-y divide-gray-50">
                         {filteredOrders.map((order) => (
                             <tr key={order.id} className="hover:bg-gray-50 transition group">
-                                <td className="py-4 px-6 font-mono font-bold text-gray-700">{order.order_no}</td>
-                                <td className="py-4 px-6 text-gray-700">
-                                    <div className="font-medium">{order.customer_name}</div>
+                                <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate">{order.order_no}</td>
+                                <td className="py-4 px-6 text-gray-700 truncate">
+                                    <div className="font-medium truncate">{order.customer_name}</div>
                                     <div className="text-xs text-gray-400">{order.contact_channel}</div>
                                 </td>
                                 <td className="py-4 px-6 text-gray-500 text-sm">
@@ -1480,16 +1439,16 @@ const SettingsPage = () => {
   return (
     <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       <header className="mb-8">
-        <h1 className="text-3xl font-black text-[#1a1c23]">System Setup</h1>
-        <p className="text-gray-500 font-medium">Configure pricing and global variables.</p>
+        <h1 className="text-3xl font-black text-[#1a1c23]">ตั้งค่าระบบ</h1>
+        <p className="text-gray-500 font-medium">กำหนดราคาและค่าเริ่มต้นของระบบ</p>
       </header>
 
       <div className="flex gap-6 mb-6 border-b border-gray-200">
           <button onClick={() => setActiveTab("pricing")} className={`pb-3 font-bold text-sm border-b-2 transition ${activeTab==="pricing" ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
-             Pricing Tiers
+             ตั้งราคาขาย
           </button>
           <button onClick={() => setActiveTab("general")} className={`pb-3 font-bold text-sm border-b-2 transition ${activeTab==="general" ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
-             VAT & Shipping
+             VAT & ค่าส่ง
           </button>
       </div>
 
@@ -1497,7 +1456,7 @@ const SettingsPage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Form เพิ่มกฎ */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 h-fit">
-                  <h3 className="font-bold text-lg mb-4 text-[#1a1c23]">Add Price Rule</h3>
+                  <h3 className="font-bold text-lg mb-4 text-[#1a1c23]">เพิ่มเงื่อนไขราคา</h3>
                   <div className="space-y-4">
                       <div>
                           <label className="block text-sm font-medium mb-1">ชนิดผ้า</label>
@@ -1527,20 +1486,20 @@ const SettingsPage = () => {
                           <label className="block text-sm font-medium mb-1">ราคาต่อหน่วย (บาท)</label>
                           <input type="number" className="w-full border p-2 rounded-lg bg-gray-50 text-[#1a1c23] font-bold" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
                       </div>
-                      <button onClick={handleAddRule} className="w-full bg-[#1a1c23] text-white py-3 rounded-xl hover:bg-slate-800 font-bold shadow-lg">Save Rule</button>
+                      <button onClick={handleAddRule} className="w-full bg-[#1a1c23] text-white py-3 rounded-xl hover:bg-slate-800 font-bold shadow-lg">บันทึก</button>
                   </div>
               </div>
 
               {/* Table รายการกฎ */}
               <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 font-bold text-[#1a1c23]">Current Pricing Tiers</div>
+                  <div className="p-6 border-b border-gray-100 font-bold text-[#1a1c23]">ตารางราคาปัจจุบัน</div>
                   <table className="w-full text-left text-sm">
                       <thead className="bg-gray-50/50 text-gray-400 border-b border-gray-100 uppercase font-bold text-xs">
                           <tr>
-                              <th className="p-4 pl-6">Fabric</th>
-                              <th className="p-4">Qty Range</th>
-                              <th className="p-4 text-right">Unit Price</th>
-                              <th className="p-4 text-right pr-6">Action</th>
+                              <th className="p-4 pl-6">ชนิดผ้า</th>
+                              <th className="p-4">จำนวน (ตัว)</th>
+                              <th className="p-4 text-right">ราคา/ตัว</th>
+                              <th className="p-4 text-right pr-6">จัดการ</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -1551,7 +1510,7 @@ const SettingsPage = () => {
                                   <td className="p-4 pl-6 font-bold text-gray-700">{rule.fabric_type}</td>
                                   <td className="p-4">
                                       <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono font-bold text-gray-600">
-                                          {rule.min_qty} - {rule.max_qty > 9999 ? 'MAX' : rule.max_qty}
+                                          {rule.min_qty} - {rule.max_qty > 9999 ? 'ขึ้นไป' : rule.max_qty}
                                       </span>
                                   </td>
                                   <td className="p-4 text-right font-bold text-[#1a1c23]">{rule.unit_price} ฿</td>
@@ -1572,13 +1531,13 @@ const SettingsPage = () => {
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Calculator size={32} className="text-gray-400"/>
                   </div>
-                  <h3 className="text-xl font-bold text-[#1a1c23]">Global Configuration</h3>
-                  <p className="text-gray-500 text-sm">Set system-wide defaults.</p>
+                  <h3 className="text-xl font-bold text-[#1a1c23]">ตั้งค่าทั่วไป</h3>
+                  <p className="text-gray-500 text-sm">กำหนดค่าเริ่มต้นสำหรับทั้งระบบ</p>
               </div>
               
               <div className="space-y-4">
                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">VAT Rate (%)</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">อัตรา VAT (%)</label>
                       <div className="relative">
                           <input 
                               type="number" 
@@ -1592,7 +1551,7 @@ const SettingsPage = () => {
                   </div>
 
                   <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Default Shipping Cost</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">ค่าส่งเริ่มต้น (บาท)</label>
                       <div className="relative">
                           <input 
                               type="number" 
@@ -1609,7 +1568,7 @@ const SettingsPage = () => {
                       onClick={handleSaveConfig}
                       className="w-full bg-[#1a1c23] text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition mt-4 shadow-lg"
                   >
-                      Save Configuration
+                      บันทึกการตั้งค่า
                   </button>
               </div>
           </div>
@@ -1618,12 +1577,28 @@ const SettingsPage = () => {
   );
 };
 
-// --- 3. MAIN APP (Revised Sidebar to Match Image) ---
+// --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  
+  // Notification State
+  const [notification, setNotification] = useState(null);
+
+  useEffect(() => {
+        const link = document.querySelector("link[rel~='icon']");
+        if (!link) {
+            const newLink = document.createElement('link');
+            newLink.rel = 'icon';
+            newLink.href = LOGO_URL;
+            document.head.appendChild(newLink);
+        } else {
+            link.href = LOGO_URL;
+        }
+        document.title = "B-LOOK Admin";
+  }, []);
 
   if (!isLoggedIn) return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
 
@@ -1640,15 +1615,20 @@ const App = () => {
       setIsSidebarOpen(false);
   };
 
+  const handleNotify = (message, type = 'success') => {
+      setNotification({ message, type });
+      setTimeout(() => setNotification(null), 3000);
+  };
+
   const renderContent = () => {
     switch(currentPage) {
         case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
-        case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} />;
+        case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
         case 'settings': return <SettingsPage />;
-        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} />;
+        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleNotify} />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage />;
-        default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} />;
+        default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
     }
   };
 
@@ -1665,9 +1645,20 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] font-sans text-slate-800 flex flex-col md:flex-row relative">
+       {/* Toast Notification */}
+       {notification && (
+           <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-5 ${notification.type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white'}`}>
+               {notification.type === 'success' ? <CheckCircle size={24} className="text-emerald-400" /> : <AlertCircle size={24} className="text-white" />}
+               <span className="font-medium text-lg">{notification.message}</span>
+           </div>
+       )}
+
        {/* Mobile Header */}
        <div className="md:hidden bg-[#1a1c23] text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-lg">
-           <span className="font-bold text-lg tracking-tight">INVENTORY360</span>
+           <div className="flex items-center gap-2">
+                <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-full"/>
+                <span className="font-bold text-lg tracking-tight">B-LOOK</span>
+           </div>
            <button onClick={() => setIsSidebarOpen(true)}><Menu size={24} /></button>
        </div>
        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
@@ -1675,21 +1666,20 @@ const App = () => {
        {/* Sidebar (Dark Theme) */}
        <aside className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-[#1a1c23] text-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col shadow-2xl border-r border-gray-800 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
             <div className="p-8 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span className="font-black text-xl tracking-tight text-white">INVENTORY360</span>
+                <div className="flex items-center gap-3">
+                    <img src={LOGO_URL} alt="Logo" className="w-10 h-10 rounded-full border-2 border-white/20"/>
+                    <span className="font-black text-xl tracking-tight text-white">B-LOOK</span>
                 </div>
                 <button className="md:hidden text-gray-500 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={24}/></button>
-                <MoreHorizontal className="hidden md:block text-gray-500 cursor-pointer hover:text-white transition" size={20}/>
             </div>
             
             <nav className="flex-1 px-4 space-y-2 mt-4">
-                <NavItem id="dashboard" icon={LayoutDashboard} label="Home" active={currentPage === 'dashboard'} />
-                <NavItem id="create_order" icon={DollarSign} label="Sell" active={currentPage === 'create_order'} />
-                <NavItem id="order_list" icon={FileText} label="Reporting" active={currentPage === 'order_list'} />
-                <NavItem id="product" icon={ShoppingCart} label="Catalog" active={currentPage === 'product'} />
-                <NavItem id="product_inventory" icon={Box} label="Inventory" active={false} />
-                <NavItem id="customer" icon={User} label="Customers" active={currentPage === 'customer'} />
-                <NavItem id="settings" icon={Settings} label="Setup" active={currentPage === 'settings'} />
+                <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} />
+                <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} />
+                <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} />
+                <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} />
+                <NavItem id="customer" icon={User} label="ลูกค้า" active={currentPage === 'customer'} />
+                <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} />
             </nav>
 
             {/* Profile Section */}
@@ -1701,7 +1691,7 @@ const App = () => {
                         </div>
                         <div>
                             <div className="text-sm font-bold text-white group-hover:text-[#d4e157] transition">Sasha Merkel</div>
-                            <div className="text-[10px] text-gray-500">Sign Out</div>
+                            <div className="text-[10px] text-gray-500">ออกจากระบบ</div>
                         </div>
                     </div>
                     <ChevronDown size={16} className="text-gray-500"/>
