@@ -1,1 +1,1 @@
-from . import auth, orders, products
+from . import auth, orders, products, pricing_rules

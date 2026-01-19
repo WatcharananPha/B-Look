@@ -4,8 +4,15 @@ from app.db.session import engine
 from app.db.base import Base
 
 # --- 1. CRITICAL: Import Models FIRST ---
-# ต้องโหลด Models ทั้งหมดก่อน Create Tables และก่อน Load API Routes
-from app.models import User, Customer, Order, OrderItem, FabricType, Supplier
+from app.models import (
+    User, 
+    Customer, 
+    Order, 
+    OrderItem, 
+    FabricType, 
+    Supplier,
+    PricingRule
+)
 
 # --- 2. Create Tables ---
 Base.metadata.create_all(bind=engine)
@@ -18,7 +25,7 @@ from app.api import (
     suppliers, 
     admin, 
     customers, 
-    pricing_rules, 
+    pricing_rules,
     company        
 )
 
@@ -40,12 +47,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- 4. Register Routers ---
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products & Config"])
 app.include_router(suppliers.router, prefix="/api/v1/suppliers", tags=["Suppliers"])
 app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
-app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
+app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"]) # <--- 3. บรรทัดนี้ต้องมี
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin & Settings"])
 
