@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, User, Key } from 'lucide-react';
+import { AlertCircle, User, Key, Lock } from 'lucide-react'; // เพิ่ม Lock icon
 import { GoogleLogin } from '@react-oauth/google';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
@@ -21,18 +21,22 @@ const LoginPage = ({ onLogin }) => {
         body: JSON.stringify({ token: credentialResponse.credential })
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Google Login Failed');
+        // --- ดักจับ Case Pending (403) ---
+        if (res.status === 403) {
+            throw new Error("บัญชีของคุณอยู่ระหว่างรออนุมัติ กรุณาติดต่อ Admin");
+        }
+        throw new Error(data.detail || 'Google Login Failed');
       }
 
-      const data = await res.json();
       localStorage.setItem('access_token', data.access_token || data.token);
       localStorage.setItem('user_role', data.role || 'user'); 
       onLogin(data.role || 'user');
     } catch (err) {
       console.error(err);
-      setError("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google Login");
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -54,13 +58,23 @@ const LoginPage = ({ onLogin }) => {
         body: formData
       });
 
-      if (!response.ok) throw new Error('Username หรือ Password ไม่ถูกต้อง');
-
       const data = await response.json();
+
+      if (!response.ok) {
+          // --- ดักจับ Case Pending (403) ---
+          if (response.status === 403) {
+              throw new Error("บัญชีของคุณอยู่ระหว่างรออนุมัติ กรุณาติดต่อ Admin");
+          }
+          if (response.status === 401) {
+              throw new Error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+          }
+          throw new Error(data.detail || 'เข้าสู่ระบบไม่สำเร็จ');
+      }
+
       localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user_role', data.role || 'owner');
+      localStorage.setItem('user_role', data.role || 'user'); // Default user role logic
         
-      onLogin(data.role || 'owner');
+      onLogin(data.role || 'user');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -81,8 +95,9 @@ const LoginPage = ({ onLogin }) => {
         
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
-            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-lg flex items-center">
-              <AlertCircle size={16} className="mr-2"/> {error}
+            <div className={`text-sm p-3 rounded-lg flex items-center ${error.includes("รออนุมัติ") ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+              {error.includes("รออนุมัติ") ? <Lock size={16} className="mr-2"/> : <AlertCircle size={16} className="mr-2"/>} 
+              {error}
             </div>
           )}
           <div>
@@ -90,7 +105,7 @@ const LoginPage = ({ onLogin }) => {
             <div className="relative">
               <User className="absolute left-3 top-3 text-slate-400" size={20} />
               <input type="text" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
-                placeholder="admin" value={username} onChange={(e) => setUsername(e.target.value)} required />
+                placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required />
             </div>
           </div>
           <div>
@@ -98,7 +113,7 @@ const LoginPage = ({ onLogin }) => {
             <div className="relative">
               <Key className="absolute left-3 top-3 text-slate-400" size={20} />
               <input type="password" className="w-full pl-10 border border-slate-300 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 transition"
-                placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
           </div>
           

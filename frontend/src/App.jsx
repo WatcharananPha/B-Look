@@ -4,10 +4,10 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info
+  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
-import LoginPage from './Login'; // <--- Import ไฟล์ใหม่เข้ามาใช้งาน
+import LoginPage from './Login';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const LOGO_URL = "/logo.jpg"; 
@@ -1529,7 +1529,7 @@ const SettingsPage = ({ onNotify }) => {
   );
 };
 
-// 2.7 USER MANAGEMENT PAGE (NEW)
+// 2.7 USER MANAGEMENT PAGE
 const UserManagementPage = ({ onNotify }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -1537,7 +1537,7 @@ const UserManagementPage = ({ onNotify }) => {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const data = await fetchWithAuth('/admin/users'); // เรียก API ที่สร้างไว้
+            const data = await fetchWithAuth('/admin/users');
             if (data) setUsers(data);
         } catch (error) {
             onNotify("โหลดข้อมูลผู้ใช้ไม่สำเร็จ: " + error.message, "error");
@@ -1557,18 +1557,18 @@ const UserManagementPage = ({ onNotify }) => {
                 body: JSON.stringify({ role: newRole, is_active: true })
             });
             onNotify("อัปเดตสิทธิ์เรียบร้อยแล้ว", "success");
-            fetchUsers(); // Refresh list
+            fetchUsers();
         } catch (error) {
-            onNotify("อัปเดตไม่สำเร็จ", "error");
+            onNotify("อัปเดตไม่สำเร็จ: " + error.message, "error");
         }
     };
 
     const getRoleBadge = (role) => {
         switch(role) {
-            case 'owner': return <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold">Owner</span>;
-            case 'admin': return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Admin</span>;
-            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-bold">General User</span>;
-            case 'pending': return <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-xs font-bold animate-pulse">Pending Approval</span>;
+            case 'owner': return <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-bold border border-purple-200">Owner</span>;
+            case 'admin': return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-bold border border-blue-200">Admin</span>;
+            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold border border-emerald-200">General User</span>;
+            case 'pending': return <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto"><Lock size={10} className="mr-1"/> รออนุมัติ</span>;
             default: return <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs">Unknown</span>;
         }
     };
@@ -1580,10 +1580,10 @@ const UserManagementPage = ({ onNotify }) => {
                 <p className="text-gray-500 font-medium">อนุมัติและกำหนดสิทธิ์การเข้าถึง</p>
             </header>
 
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-0 md:p-2 overflow-x-auto">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+                <div className="p-2 md:p-6 overflow-x-auto">
                     {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
-                        <table className="w-full text-left">
+                        <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
                                 <tr>
                                     <th className="py-4 px-6">ชื่อผู้ใช้ / Email</th>
@@ -1600,14 +1600,14 @@ const UserManagementPage = ({ onNotify }) => {
                                         <td className="py-4 px-6 text-center">{getRoleBadge(u.role)}</td>
                                         <td className="py-4 px-6 text-right">
                                             <select 
-                                                className="border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition"
+                                                className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${u.role === 'pending' ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}
                                                 value={u.role}
                                                 onChange={(e) => {
                                                     if (window.confirm(`ยืนยันการเปลี่ยนสิทธิ์เป็น ${e.target.value}?`)) {
                                                         handleUpdateRole(u.id, e.target.value);
                                                     }
                                                 }}
-                                                disabled={u.role === 'owner'} // ป้องกันแก้ Owner
+                                                disabled={u.role === 'owner'} 
                                             >
                                                 <option value="pending">Pending (รออนุมัติ)</option>
                                                 <option value="user">General User</option>
@@ -1629,11 +1629,11 @@ const UserManagementPage = ({ onNotify }) => {
 // --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
+  const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'user'); // Add State for Role
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
    
-  // Notification State
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
@@ -1647,9 +1647,15 @@ const App = () => {
             link.href = LOGO_URL;
         }
         document.title = "B-LOOK Admin";
-  }, []);
+        
+        // Check Role on Load
+        setUserRole(localStorage.getItem('user_role') || 'user');
+  }, [isLoggedIn]);
 
-  if (!isLoggedIn) return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
+  if (!isLoggedIn) return <LoginPage onLogin={(role) => {
+      setIsLoggedIn(true);
+      setUserRole(role);
+  }} />;
 
   const handleEditOrder = (order) => {
       setEditingOrder(order);
@@ -1677,7 +1683,7 @@ const App = () => {
         case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleNotify} />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage />;
-        case 'users': return <UserManagementPage onNotify={handleNotify} />;
+        case 'users': return <UserManagementPage onNotify={handleNotify} />; // <--- เพิ่ม Route นี้
         default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
     }
   };
@@ -1729,18 +1735,24 @@ const App = () => {
                 <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} />
                 <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} />
                 <NavItem id="customer" icon={User} label="ลูกค้า" active={currentPage === 'customer'} />
+                
+                {/* --- แสดงเฉพาะ Admin หรือ Owner --- */}
+                {(userRole === 'admin' || userRole === 'owner') && (
+                    <NavItem id="users" icon={Users} label="จัดการผู้ใช้" active={currentPage === 'users'} />
+                )}
+                
                 <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} />
             </nav>
 
             {/* Profile Section */}
             <div className="p-6 border-t border-gray-800">
-                <div className="flex items-center justify-between cursor-pointer group" onClick={() => { localStorage.removeItem('access_token'); setIsLoggedIn(false); }}>
+                <div className="flex items-center justify-between cursor-pointer group" onClick={() => { localStorage.removeItem('access_token'); localStorage.removeItem('user_role'); setIsLoggedIn(false); }}>
                     <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-[#d4e157] rounded-full flex items-center justify-center text-[#1a1c23] font-bold text-sm shadow-md group-hover:scale-105 transition">
-                            S
+                            {userRole.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <div className="text-sm font-bold text-white group-hover:text-[#d4e157] transition">Sasha Merkel</div>
+                            <div className="text-sm font-bold text-white group-hover:text-[#d4e157] transition capitalize">{userRole}</div>
                             <div className="text-[10px] text-gray-500">ออกจากระบบ</div>
                         </div>
                     </div>
