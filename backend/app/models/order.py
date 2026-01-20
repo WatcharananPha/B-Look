@@ -13,6 +13,7 @@ class Order(Base):
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     status = Column(String, default="draft")
     deadline = Column(Date)
+    usage_date = Column(Date)
     urgency_level = Column(String, default="normal")
 
     # --- Financials ---

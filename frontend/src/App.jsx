@@ -45,9 +45,113 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
 // --- COMPONENTS ---
 
-// (ลบส่วน LoginPage เดิมออกทั้งหมด)
+// 2.7 USER MANAGEMENT PAGE
+const UserManagementPage = ({ onNotify }) => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const currentUserRole = localStorage.getItem('user_role'); // ดึงสิทธิ์ของคนปัจจุบัน
 
-// 2.1 DASHBOARD
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/admin/users'); 
+            if (data) setUsers(data);
+        } catch (error) {
+            onNotify("โหลดข้อมูลผู้ใช้ไม่สำเร็จ: " + error.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const handleUpdateRole = async (userId, newRole) => {
+        try {
+            await fetchWithAuth(`/admin/users/${userId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ role: newRole, is_active: true })
+            });
+            onNotify(`เปลี่ยนสิทธิ์เป็น ${newRole} เรียบร้อยแล้ว`, "success");
+            fetchUsers(); 
+        } catch (error) {
+            onNotify("อัปเดตไม่สำเร็จ: " + error.message, "error");
+        }
+    };
+
+    const getRoleBadge = (role) => {
+        switch(role) {
+            case 'owner': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner</span>;
+            case 'admin': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin</span>;
+            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">User</span>;
+            case 'pending': return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto animate-pulse"><Lock size={12} className="mr-1"/> รออนุมัติ</span>;
+            default: return <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs">Unknown</span>;
+        }
+    };
+
+    return (
+        <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+            <header className="mb-8">
+                <h1 className="text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
+                <p className="text-gray-500 font-medium">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
+            </header>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+                <div className="p-2 md:p-6 overflow-x-auto">
+                    {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
+                        <table className="w-full text-left min-w-[800px]">
+                            <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                                <tr>
+                                    <th className="py-4 px-6">ชื่อผู้ใช้ / Email</th>
+                                    <th className="py-4 px-6">ชื่อ-นามสกุล</th>
+                                    <th className="py-4 px-6 text-center">สถานะปัจจุบัน</th>
+                                    <th className="py-4 px-6 text-right">เปลี่ยนสิทธิ์</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {users.map(u => (
+                                    <tr key={u.id} className="hover:bg-gray-50 transition">
+                                        <td className="py-4 px-6 font-bold text-gray-700">{u.username}</td>
+                                        <td className="py-4 px-6 text-sm text-gray-600">{u.full_name || "-"}</td>
+                                        <td className="py-4 px-6 text-center">{getRoleBadge(u.role)}</td>
+                                        <td className="py-4 px-6 text-right">
+                                            <select 
+                                                className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${u.role === 'pending' ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200'}`}
+                                                value={u.role}
+                                                onChange={(e) => {
+                                                    if (window.confirm(`ยืนยันการเปลี่ยนสิทธิ์ของ ${u.username} เป็น "${e.target.value}"?`)) {
+                                                        handleUpdateRole(u.id, e.target.value);
+                                                    }
+                                                }}
+                                                // ป้องกันการเปลี่ยนสิทธิ์ตัวเอง หรือ ถ้าไม่ใช่ Owner ห้ามเปลี่ยนคนอื่นเป็น Owner
+                                                disabled={
+                                                    (currentUserRole !== 'owner' && u.role === 'owner') || // Admin ทั่วไปห้ามแก้ Owner
+                                                    (currentUserRole !== 'owner' && currentUserRole !== 'admin') // User ห้ามแก้ใครเลย
+                                                }
+                                            >
+                                                <option value="pending">Pending</option>
+                                                <option value="user">General User</option>
+                                                <option value="admin">Admin</option>
+
+                                                {/* แสดงตัวเลือก Owner เฉพาะถ้าคน Login เป็น Owner */}
+                                                {currentUserRole === 'owner' && (
+                                                    <option value="owner">Owner</option>
+                                                )}
+                                            </select>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// 2.1 DASHBOARD (Updated Logic)
 const DashboardPage = ({ onEdit }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     
@@ -97,27 +201,69 @@ const DashboardPage = ({ onEdit }) => {
 
                 setStats({ newOrdersToday, inProduction, deliveryIn3Days, deliveredThisMonth });
 
+                // --- NEW: Logic แจ้งเตือนตาม Cycle ---
+                const smartAlerts = [];
+
+                data.forEach(o => {
+                    const deadline = o.deadline ? new Date(o.deadline) : null;
+                    const usageDate = o.usage_date ? new Date(o.usage_date) : null;
+                    const updatedAt = o.updated_at ? new Date(o.updated_at) : new Date(o.created_at);
+                    const diffUpdate = Math.ceil((today - updatedAt) / (1000 * 60 * 60 * 24));
+
+                    // 1. แจ้งเตือน: รอแบบอนุมัติ นานเกิน 1 วัน (ต้องตามลูกค้า)
+                    if (o.status === 'waiting_approval' && diffUpdate >= 1) {
+                        smartAlerts.push({
+                            type: 'WARNING', 
+                            title: `ตามผลแบบ: ${o.customer_name}`, 
+                            desc: `ส่งแบบไปแล้ว ${diffUpdate} วัน ยังไม่ตอบรับ`
+                        });
+                    }
+
+                    // 2. แจ้งเตือน: ใกล้วันใช้งานจริง 2 วัน (ต้องถึงมือลูกค้าแล้ว)
+                    if (usageDate) {
+                        const diffUsage = Math.ceil((usageDate - today) / (1000 * 60 * 60 * 24));
+                        if (diffUsage > 0 && diffUsage <= 2 && o.status !== 'delivered') {
+                            smartAlerts.push({
+                                type: 'CRITICAL', 
+                                title: `ลูกค้าจะใช้งานใน ${diffUsage} วัน!`, 
+                                desc: `ออเดอร์ ${o.order_no} ต้องส่งของทันที`
+                            });
+                        }
+                    }
+
+                    // 3. แจ้งเตือน: กำหนดส่งผลิต (Deadline)
+                    if (deadline && o.status === 'production') {
+                        const diffDead = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+                        if (diffDead <= 1 && diffDead >= 0) {
+                            smartAlerts.push({
+                                type: 'URGENT', 
+                                title: `ครบกำหนดผลิต: ${o.order_no}`, 
+                                desc: `ต้องเสร็จภายในวันนี้หรือพรุ่งนี้`
+                            });
+                        }
+                    }
+                });
+                setAlerts(smartAlerts); // Set alerts เข้า State
+
+                // --- NEW: Map Event สำหรับปฏิทิน แยกสี ---
                 const mappedEvents = data.map(o => {
-                    if (!o.deadline) return null;
-                    const d = new Date(o.deadline);
+                    // เลือกใช้วันที่สำคัญที่สุด (ถ้ามีวันใช้งาน ให้โชว์วันใช้งานด้วย)
+                    const targetDate = o.usage_date ? new Date(o.usage_date) : (o.deadline ? new Date(o.deadline) : null);
+                    if (!targetDate) return null;
+
                     return {
                         id: o.id,
-                        day: d.getDate(),
-                        month: d.getMonth(),
-                        year: d.getFullYear(),
+                        day: targetDate.getDate(),
+                        month: targetDate.getMonth(),
+                        year: targetDate.getFullYear(),
                         title: o.customer_name,
-                        type: 'delivery',
                         status: o.status || 'pending',
-                        order_no: o.order_no
+                        order_no: o.order_no,
+                        isUsageDate: !!o.usage_date // flag บอกว่าเป็นวันใช้งาน
                     };
                 }).filter(e => e !== null);
 
                 setEvents(mappedEvents.filter(e => e.month === currentDate.getMonth() && e.year === currentDate.getFullYear()));
-
-                const urgencyAlerts = data.filter(o => o.status === 'urgent').map(o => ({
-                    type: 'CRITICAL', title: `งานด่วน: ${o.order_no}`, desc: `ส่ง: ${o.customer_name}`
-                }));
-                setAlerts(urgencyAlerts);
 
             } catch (err) {
                 console.error("Dashboard Fetch Error", err);
@@ -244,15 +390,24 @@ const DashboardPage = ({ onEdit }) => {
                                         <div key={day} className={`h-24 border border-gray-100 rounded-xl p-2 relative hover:border-blue-200 transition group flex flex-col ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white'}`}>
                                             <span className={`text-sm font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}>{day}</span>
                                             <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
-                                                {evts.map((e, idx) => (
-                                                    <div key={idx} className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium ${
-                                                        e.status === 'urgent' ? 'bg-rose-100 text-rose-700' : 
-                                                        e.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' :
-                                                        'bg-blue-100 text-blue-700'
-                                                    }`} title={e.title}>
-                                                        {e.title}
-                                                    </div>
-                                                ))}
+                                                {evts.map((e, idx) => {
+                                                    // กำหนดสีตามสถานะ
+                                                    let bgClass = "bg-gray-100 text-gray-600"; // Default
+                                                    if (e.status === 'designing') bgClass = "bg-purple-100 text-purple-700 border-purple-200";
+                                                    if (e.status === 'waiting_approval') bgClass = "bg-yellow-100 text-yellow-700 border-yellow-200";
+                                                    if (e.status === 'production') bgClass = "bg-blue-100 text-blue-700 border-blue-200";
+                                                    if (e.status === 'shipping') bgClass = "bg-orange-100 text-orange-700 border-orange-200";
+                                                    if (e.status === 'delivered') bgClass = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                                                    
+                                                    // ถ้าเป็นวันใช้งานจริง ให้เป็นสีแดงเด่นๆ
+                                                    if (e.isUsageDate && e.status !== 'delivered') bgClass = "bg-rose-500 text-white font-bold shadow-md";
+
+                                                    return (
+                                                        <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate mb-1 border ${bgClass}`} title={e.title}>
+                                                            {e.isUsageDate ? "🚩 " : ""}{e.title}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );
@@ -387,7 +542,7 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// 2.2 ORDER CREATION PAGE
+// 2.2 ORDER CREATION PAGE (Updated: usageDate & Status)
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
@@ -416,6 +571,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
    
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
+  // --- NEW: เพิ่ม State สำหรับวันใช้งานและสถานะ ---
+  const [usageDate, setUsageDate] = useState(""); 
+  const [status, setStatus] = useState("draft");
+  // ------------------------------------------
+
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -424,11 +584,17 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setCustomerName(editingOrder.customer_name || "");
         setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
         setDeposit(editingOrder.deposit || 0);
+        // --- NEW: Load State ---
+        setUsageDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
+        setStatus(editingOrder.status || "draft");
+        // -----------------------
     } else {
         setCustomerName("");
         setDeadline("");
         setDeposit(0);
         setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
+        setUsageDate("");
+        setStatus("draft");
     }
   }, [editingOrder]);
 
@@ -503,8 +669,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             contact_channel: contactChannel,
             total_amount: grandTotal,
             deposit: deposit,
-            status: editingOrder ? editingOrder.status : "draft",
+            // --- NEW: Send new fields ---
+            status: status,
             deadline: deadline ? new Date(deadline).toISOString() : null,
+            usage_date: usageDate ? new Date(usageDate).toISOString() : null,
+            // ---------------------------
             items: []
         };
         
@@ -568,6 +737,25 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <select className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
                         <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
                         <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
+                    
+                        {/* --- NEW: ช่องกรอกวันใช้งาน & สถานะ --- */}
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Event Date</label>
+                            <input type="date" className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-white focus:ring-2 focus:ring-[#1a1c23]" value={status} onChange={(e) => setStatus(e.target.value)}>
+                                <option value="draft">แบบร่าง</option>
+                                <option value="designing">กำลังออกแบบ</option>
+                                <option value="waiting_approval">รอแบบอนุมัติ</option>
+                                <option value="production">กำลังผลิต</option>
+                                <option value="shipping">เตรียมจัดส่ง</option>
+                                <option value="delivered">ส่งมอบแล้ว</option>
+                            </select>
+                        </div>
+                        {/* ------------------------------------- */}
                     </div>
                 </section>
 
@@ -594,7 +782,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </div>
                     </div>
                     <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                        <label className="block text-sm font-bold text-gray-700 mb-4">ระบุจำนวน (Size Matrix)</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-4">ระบุจำนวน</label>
                         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
                             {SIZES.map((size) => (
                                 <div key={size} className="text-center">
@@ -1529,103 +1717,6 @@ const SettingsPage = ({ onNotify }) => {
   );
 };
 
-// 2.7 USER MANAGEMENT PAGE
-const UserManagementPage = ({ onNotify }) => {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(false);
-
-    const fetchUsers = async () => {
-        setLoading(true);
-        try {
-            const data = await fetchWithAuth('/admin/users');
-            if (data) setUsers(data);
-        } catch (error) {
-            onNotify("โหลดข้อมูลผู้ใช้ไม่สำเร็จ: " + error.message, "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    const handleUpdateRole = async (userId, newRole) => {
-        try {
-            await fetchWithAuth(`/admin/users/${userId}`, {
-                method: 'PUT',
-                body: JSON.stringify({ role: newRole, is_active: true })
-            });
-            onNotify("อัปเดตสิทธิ์เรียบร้อยแล้ว", "success");
-            fetchUsers();
-        } catch (error) {
-            onNotify("อัปเดตไม่สำเร็จ: " + error.message, "error");
-        }
-    };
-
-    const getRoleBadge = (role) => {
-        switch(role) {
-            case 'owner': return <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-bold border border-purple-200">Owner</span>;
-            case 'admin': return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-bold border border-blue-200">Admin</span>;
-            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold border border-emerald-200">General User</span>;
-            case 'pending': return <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto"><Lock size={10} className="mr-1"/> รออนุมัติ</span>;
-            default: return <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-xs">Unknown</span>;
-        }
-    };
-
-    return (
-        <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
-            <header className="mb-8">
-                <h1 className="text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
-                <p className="text-gray-500 font-medium">อนุมัติและกำหนดสิทธิ์การเข้าถึง</p>
-            </header>
-
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
-                <div className="p-2 md:p-6 overflow-x-auto">
-                    {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
-                        <table className="w-full text-left min-w-[800px]">
-                            <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                                <tr>
-                                    <th className="py-4 px-6">ชื่อผู้ใช้ / Email</th>
-                                    <th className="py-4 px-6">ชื่อ-นามสกุล</th>
-                                    <th className="py-4 px-6 text-center">สถานะปัจจุบัน</th>
-                                    <th className="py-4 px-6 text-right">เปลี่ยนสิทธิ์</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {users.map(u => (
-                                    <tr key={u.id} className="hover:bg-gray-50 transition">
-                                        <td className="py-4 px-6 font-bold text-gray-700">{u.username}</td>
-                                        <td className="py-4 px-6 text-sm text-gray-600">{u.full_name || "-"}</td>
-                                        <td className="py-4 px-6 text-center">{getRoleBadge(u.role)}</td>
-                                        <td className="py-4 px-6 text-right">
-                                            <select 
-                                                className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${u.role === 'pending' ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}
-                                                value={u.role}
-                                                onChange={(e) => {
-                                                    if (window.confirm(`ยืนยันการเปลี่ยนสิทธิ์เป็น ${e.target.value}?`)) {
-                                                        handleUpdateRole(u.id, e.target.value);
-                                                    }
-                                                }}
-                                                disabled={u.role === 'owner'} 
-                                            >
-                                                <option value="pending">Pending (รออนุมัติ)</option>
-                                                <option value="user">General User</option>
-                                                <option value="admin">Admin</option>
-                                                <option value="owner" disabled>Owner</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
@@ -1634,6 +1725,7 @@ const App = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
    
+  // Notification State
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
@@ -1683,7 +1775,7 @@ const App = () => {
         case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleNotify} />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage />;
-        case 'users': return <UserManagementPage onNotify={handleNotify} />; // <--- เพิ่ม Route นี้
+        case 'users': return <UserManagementPage onNotify={handleNotify} />;
         default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
     }
   };

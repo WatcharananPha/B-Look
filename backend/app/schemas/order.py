@@ -38,6 +38,7 @@ class OrderBase(BaseModel):
     contact_channel: Optional[str] = Field(None, alias="channel") # รองรับทั้ง channel และ contact_channel
     address: Optional[str] = None
     deadline: Optional[datetime] = None
+    usage_date: Optional[datetime] = None
     urgency_level: str = "normal"
     
     is_vat_included: bool = False
