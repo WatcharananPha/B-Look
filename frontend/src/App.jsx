@@ -518,11 +518,11 @@ const DashboardPage = ({ onEdit }) => {
                             <table className="w-full text-left table-fixed">
                                 <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                                     <tr>
-                                        <th className="p-4 w-[15%] bg-gray-50">Order No</th>
-                                        <th className="p-4 w-[25%] bg-gray-50">ลูกค้า</th>
-                                        <th className="p-4 w-[20%] bg-gray-50">กำหนดส่ง</th>
-                                        <th className="p-4 w-[20%] bg-gray-50">สถานะ</th>
-                                        <th className="p-4 w-[20%] bg-gray-50 text-right">Action</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-center">Order No</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-center">ลูกค้า</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-center">กำหนดส่ง</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-center">สถานะ</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-center">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -1577,10 +1577,10 @@ const CustomerPage = () => {
                 <table className="w-full text-left">
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6">ชื่อลูกค้า</th>
-                            <th className="py-4 px-6">ช่องทาง</th>
-                            <th className="py-4 px-6">เบอร์โทร</th>
-                            <th className="py-4 px-6 text-right">จัดการ</th>
+                            <th className="py-4 px-6 text-center">ชื่อลูกค้า</th>
+                            <th className="py-4 px-6 text-center">ช่องทาง</th>
+                            <th className="py-4 px-6 text-center">เบอร์โทร</th>
+                            <th className="py-4 px-6 text-center">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -1770,12 +1770,12 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                 <table className="w-full text-left min-w-[800px] table-fixed">
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 w-1/6">เลขที่</th>
-                            <th className="py-4 px-6 w-1/6">ลูกค้า</th>
-                            <th className="py-4 px-6 w-1/6">กำหนดส่ง</th>
-                            <th className="py-4 px-6 w-1/6 text-right">ยอดรวม</th>
+                            <th className="py-4 px-6 w-1/6 text-center">เลขที่</th>
+                            <th className="py-4 px-6 w-1/6 text-center">ลูกค้า</th>
+                            <th className="py-4 px-6 w-1/6 text-center">กำหนดส่ง</th>
+                            <th className="py-4 px-6 w-1/6 text-center">ยอดรวม</th>
                             <th className="py-4 px-6 w-1/6 text-center">สถานะ</th>
-                            <th className="py-4 px-6 w-1/6 text-right">จัดการ</th>
+                            <th className="py-4 px-6 w-1/6 text-center">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">

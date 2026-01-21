@@ -8,11 +8,10 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
-# --- Common Schema for Create/Update (Simple Version) ---
 class MasterCreate(BaseModel):
     name: str
     price_adjustment: float = 0
-    quantity: int = 0 # Optional support for frontend compatibility
+    quantity: int = 0 
     cost_price: float = 0 
 
 # --- FABRICS ---
@@ -22,7 +21,12 @@ def get_fabrics(db: Session = Depends(get_db)):
 
 @router.post("/fabrics")
 def create_fabric(item: MasterCreate, db: Session = Depends(get_db)):
-    new_item = FabricType(name=item.name, price_adjustment=item.price_adjustment)
+    new_item = FabricType(
+        name=item.name, 
+        price_adjustment=item.price_adjustment,
+        quantity=item.quantity,
+        cost_price=item.cost_price
+    )
     db.add(new_item)
     db.commit()
     return new_item
@@ -33,6 +37,9 @@ def update_fabric(item_id: int, item: MasterCreate, db: Session = Depends(get_db
     if not db_item: raise HTTPException(status_code=404, detail="Not found")
     db_item.name = item.name
     db_item.price_adjustment = item.price_adjustment
+    db_item.quantity = item.quantity
+    db_item.cost_price = item.cost_price
+    
     db.commit()
     return db_item
 
@@ -40,7 +47,7 @@ def update_fabric(item_id: int, item: MasterCreate, db: Session = Depends(get_db
 def delete_fabric(item_id: int, db: Session = Depends(get_db)):
     db_item = db.query(FabricType).filter(FabricType.id == item_id).first()
     if db_item:
-        db.delete(db_item) # หรือใช้ is_active = False
+        db.delete(db_item)
         db.commit()
     return {"message": "Deleted"}
 
@@ -51,7 +58,12 @@ def get_necks(db: Session = Depends(get_db)):
 
 @router.post("/necks")
 def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
-    new_item = NeckType(name=item.name, price_adjustment=item.price_adjustment)
+    new_item = NeckType(
+        name=item.name, 
+        price_adjustment=item.price_adjustment,
+        quantity=item.quantity,
+        cost_price=item.cost_price
+    )
     db.add(new_item)
     db.commit()
     return new_item
@@ -60,8 +72,12 @@ def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
 def update_neck(item_id: int, item: MasterCreate, db: Session = Depends(get_db)):
     db_item = db.query(NeckType).filter(NeckType.id == item_id).first()
     if not db_item: raise HTTPException(status_code=404, detail="Not found")
+    
     db_item.name = item.name
     db_item.price_adjustment = item.price_adjustment
+    db_item.quantity = item.quantity
+    db_item.cost_price = item.cost_price
+    
     db.commit()
     return db_item
 
@@ -73,14 +89,19 @@ def delete_neck(item_id: int, db: Session = Depends(get_db)):
         db.commit()
     return {"message": "Deleted"}
 
-# --- SLEEVES ---
+#SLEEVES
 @router.get("/sleeves", response_model=List[SleeveTypeResponse])
 def get_sleeves(db: Session = Depends(get_db)):
     return db.query(SleeveType).filter(SleeveType.is_active == True).all()
 
 @router.post("/sleeves")
 def create_sleeve(item: MasterCreate, db: Session = Depends(get_db)):
-    new_item = SleeveType(name=item.name, price_adjustment=item.price_adjustment)
+    new_item = SleeveType(
+        name=item.name, 
+        price_adjustment=item.price_adjustment,
+        quantity=item.quantity,
+        cost_price=item.cost_price
+    )
     db.add(new_item)
     db.commit()
     return new_item
@@ -91,6 +112,9 @@ def update_sleeve(item_id: int, item: MasterCreate, db: Session = Depends(get_db
     if not db_item: raise HTTPException(status_code=404, detail="Not found")
     db_item.name = item.name
     db_item.price_adjustment = item.price_adjustment
+    db_item.quantity = item.quantity
+    db_item.cost_price = item.cost_price
+    
     db.commit()
     return db_item
 
