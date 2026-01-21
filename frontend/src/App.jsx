@@ -835,20 +835,51 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     </div>
                 </section>
                 
+                {/* --- FIX: Added Product Dropdowns Section --- */}
                 <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">แบรนด์</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={brand} onChange={e => setBrand(e.target.value)}>
+                                {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">ชนิดผ้า</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
+                                {fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">รูปแบบคอ</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
+                                {necks.map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">รูปแบบแขน</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
+                                {sleeves.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
                         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
                             {SIZES.map((size) => (
                                 <div key={size} className="text-center">
                                     <label className="text-xs font-bold text-gray-400 mb-1 block">{size}</label>
-                                    <input type="number" min="0" className="w-full text-center border-gray-200 border rounded-lg p-2" placeholder="0"
+                                    <input type="number" min="0" className="w-full text-center border-gray-200 border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0"
+                                        value={quantities[size] > 0 ? quantities[size] : ""}
                                         onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})} />
                                 </div>
                             ))}
                         </div>
                     </div>
                 </section>
+                {/* ------------------------------------------- */}
             </div>
 
             <div className="col-span-12 lg:col-span-4 space-y-6">
