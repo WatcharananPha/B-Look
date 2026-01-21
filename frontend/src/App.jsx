@@ -4,7 +4,7 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, FileClock
+  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import LoginPage from './Login';
@@ -44,8 +44,7 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 };
 
 // --- COMPONENTS ---
-
-// 1. History Log Modal
+// 1. History Log Modal (NEW)
 const HistoryLogModal = ({ orderId, onClose }) => {
     const [logs, setLogs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -101,71 +100,7 @@ const HistoryLogModal = ({ orderId, onClose }) => {
     );
 };
 
-// 2. Detail List Modal (For Dashboard)
-const DetailListModal = ({ title, items, onClose, onEdit }) => (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                <h3 className="text-xl font-bold text-[#1a1c23]">{title}</h3>
-                <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={24} className="text-slate-500"/></button>
-            </div>
-            <div className="p-0 overflow-y-auto flex-1">
-                {items && items.length > 0 ? (
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
-                            <tr>
-                                <th className="p-4 bg-gray-50 text-gray-600">Order No</th>
-                                <th className="p-4 bg-gray-50 text-gray-600">ลูกค้า</th>
-                                <th className="p-4 bg-gray-50 text-gray-600">สถานะ</th>
-                                <th className="p-4 bg-gray-50 text-gray-600">รายละเอียด</th>
-                                <th className="p-4 bg-gray-50 text-gray-600 text-right">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {items.map((item, idx) => (
-                                <tr key={item.id || idx} className="hover:bg-blue-50/50 transition">
-                                    <td className="p-4 font-mono font-bold text-sm text-[#1a1c23]">{item.order_no}</td>
-                                    <td className="p-4 text-sm">
-                                        <div className="font-bold text-gray-700">{item.customer_name}</div>
-                                        <div className="text-xs text-gray-400">{item.contact_channel}</div>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-                                            item.status === 'production' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                                            item.status === 'urgent' ? 'bg-rose-100 text-rose-700 border-rose-200' :
-                                            item.status === 'delivered' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-                                            'bg-gray-100 text-gray-600 border-gray-200'
-                                        }`}>
-                                            {item.status || 'Draft'}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-sm text-gray-600">
-                                        {item.desc || (item.deadline ? `ส่ง: ${new Date(item.deadline).toLocaleDateString('th-TH')}` : '-')}
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <button 
-                                            onClick={() => { onClose(); if(onEdit && item.id) onEdit(item); }}
-                                            className="text-xs bg-[#1a1c23] text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition"
-                                        >
-                                            ดูข้อมูล
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                ) : (
-                    <div className="p-12 text-center text-gray-400 flex flex-col items-center justify-center h-64">
-                        <FileText size={48} className="mb-2 opacity-20"/>
-                        <p>ไม่มีรายการข้อมูล</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    </div>
-);
-
-// 3. Invoice Modal
+// 2. Invoice Modal
 const InvoiceModal = ({ data, onClose }) => {
   const handlePrint = () => window.print();
   return (
@@ -252,11 +187,11 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// 4. USER MANAGEMENT PAGE
+// 2.7 USER MANAGEMENT PAGE
 const UserManagementPage = ({ onNotify }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
-    const currentUserRole = localStorage.getItem('user_role');
+    const currentUserRole = localStorage.getItem('user_role'); // ดึงสิทธิ์ของคนปัจจุบัน
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -289,9 +224,9 @@ const UserManagementPage = ({ onNotify }) => {
 
     const getRoleBadge = (role) => {
         switch(role) {
-            case 'owner': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner (เจ้าของ)</span>;
-            case 'admin': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin (ผู้ดูแล)</span>;
-            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">User (พนักงาน)</span>;
+            case 'owner': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner</span>;
+            case 'admin': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin</span>;
+            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">User</span>;
             case 'pending': return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto animate-pulse"><Lock size={12} className="mr-1"/> รออนุมัติ</span>;
             default: return <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs">Unknown</span>;
         }
@@ -301,7 +236,7 @@ const UserManagementPage = ({ onNotify }) => {
         <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
             <header className="mb-8">
                 <h1 className="text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
-                <p className="text-gray-500 font-medium">อนุมัติการสมัครและกำหนดสิทธิ์ (Role)</p>
+                <p className="text-gray-500 font-medium">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
             </header>
 
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
@@ -331,15 +266,20 @@ const UserManagementPage = ({ onNotify }) => {
                                                         handleUpdateRole(u.id, e.target.value);
                                                     }
                                                 }}
+                                                // ป้องกันการเปลี่ยนสิทธิ์ตัวเอง หรือ ถ้าไม่ใช่ Owner ห้ามเปลี่ยนคนอื่นเป็น Owner
                                                 disabled={
-                                                    (currentUserRole !== 'owner' && u.role === 'owner') ||
-                                                    (currentUserRole !== 'owner' && currentUserRole !== 'admin')
+                                                    (currentUserRole !== 'owner' && u.role === 'owner') || // Admin ทั่วไปห้ามแก้ Owner
+                                                    (currentUserRole !== 'owner' && currentUserRole !== 'admin') // User ห้ามแก้ใครเลย
                                                 }
                                             >
-                                                <option value="pending">Pending (รออนุมัติ)</option>
-                                                <option value="user">General User (พนักงาน)</option>
-                                                <option value="admin">Admin (ผู้ดูแลระบบ)</option>
-                                                {currentUserRole === 'owner' && <option value="owner">Owner (เจ้าของร้าน)</option>}
+                                                <option value="pending">Pending</option>
+                                                <option value="user">General User</option>
+                                                <option value="admin">Admin</option>
+
+                                                {/* แสดงตัวเลือก Owner เฉพาะถ้าคน Login เป็น Owner */}
+                                                {currentUserRole === 'owner' && (
+                                                    <option value="owner">Owner</option>
+                                                )}
                                             </select>
                                         </td>
                                     </tr>
@@ -353,29 +293,104 @@ const UserManagementPage = ({ onNotify }) => {
     );
 };
 
-// 2.1 DASHBOARD
+// -----------------------------------------------------------------------------
+// HELPER COMPONENT: DETAIL LIST MODAL
+// -----------------------------------------------------------------------------
+const DetailListModal = ({ title, items, onClose, onEdit }) => (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 className="text-xl font-bold text-[#1a1c23]">{title}</h3>
+                <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={24} className="text-slate-500"/></button>
+            </div>
+            <div className="p-0 overflow-y-auto flex-1">
+                {items && items.length > 0 ? (
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
+                            <tr>
+                                <th className="p-4 bg-gray-50 text-gray-600">Order No</th>
+                                <th className="p-4 bg-gray-50 text-gray-600">ลูกค้า</th>
+                                <th className="p-4 bg-gray-50 text-gray-600">สถานะ</th>
+                                <th className="p-4 bg-gray-50 text-gray-600">รายละเอียด</th>
+                                <th className="p-4 bg-gray-50 text-gray-600 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {items.map((item, idx) => (
+                                <tr key={item.id || idx} className="hover:bg-blue-50/50 transition">
+                                    <td className="p-4 font-mono font-bold text-sm text-[#1a1c23]">{item.order_no}</td>
+                                    <td className="p-4 text-sm">
+                                        <div className="font-bold text-gray-700">{item.customer_name}</div>
+                                        <div className="text-xs text-gray-400">{item.contact_channel}</div>
+                                    </td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
+                                            item.status === 'production' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                            item.status === 'urgent' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                                            item.status === 'delivered' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                            'bg-gray-100 text-gray-600 border-gray-200'
+                                        }`}>
+                                            {item.status || 'Draft'}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-sm text-gray-600">
+                                        {item.desc || (item.deadline ? `ส่ง: ${new Date(item.deadline).toLocaleDateString('th-TH')}` : '-')}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        <button 
+                                            onClick={() => { onClose(); if(onEdit && item.id) onEdit(item); }}
+                                            className="text-xs bg-[#1a1c23] text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition"
+                                        >
+                                            ดูข้อมูล
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <div className="p-12 text-center text-gray-400 flex flex-col items-center justify-center h-64">
+                        <FileText size={48} className="mb-2 opacity-20"/>
+                        <p>ไม่มีรายการข้อมูล</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+);
+
+// -----------------------------------------------------------------------------
+// 2.1 DASHBOARD (FULL UPDATED CODE)
+// -----------------------------------------------------------------------------
 const DashboardPage = ({ onEdit }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     
     // Global Filter States
     const [timeRange, setTimeRange] = useState('today'); // 'today', 'week', 'month'
-    const [brandFilter, setBrandFilter] = useState('All Outlets');
+    const [brandFilter, setBrandFilter] = useState('All Outlets'); // 'All Outlets', 'BG', 'Jersey'
 
     // Data States
     const [allOrders, setAllOrders] = useState([]);
+    
+    // Metric Lists (Filtered)
     const [metricLists, setMetricLists] = useState({
-        newOrders: [], inProduction: [], deliveryIn3Days: [], delivered: []
+        newOrders: [],
+        inProduction: [],
+        deliveryIn3Days: [],
+        delivered: []
     });
+
     const [events, setEvents] = useState([]);
     
-    // Today's List
+    // Today's List Data & Filter
     const [todaysList, setTodaysList] = useState([]);
-    const [todayFilter, setTodayFilter] = useState('all');
+    const [todayFilter, setTodayFilter] = useState('all'); 
 
     // Modals
     const [showQueueModal, setShowQueueModal] = useState(false);
     const [detailModal, setDetailModal] = useState(null); 
 
+    // --- Helper: Date Range Checker ---
     const isInTimeRange = (dateStr, range) => {
         if (!dateStr) return false;
         const date = new Date(dateStr);
@@ -385,11 +400,11 @@ const DashboardPage = ({ onEdit }) => {
         if (range === 'today') {
             return date >= startOfDay && date < new Date(startOfDay.getTime() + 86400000);
         } else if (range === 'week') {
-            const day = startOfDay.getDay() || 7; 
-            const startOfWeek = new Date(startOfDay);
-            if (day !== 1) startOfWeek.setHours(-24 * (day - 1));
-            const endOfWeek = new Date(startOfWeek.getTime() + 7 * 24 * 60 * 60 * 1000);
-            return date >= startOfWeek && date < endOfWeek;
+            const day = startOfDay.getDay() || 7; // Get current day (1-7)
+            if (day !== 1) startOfDay.setHours(-24 * (day - 1)); // Go back to Monday
+            const endOfWeek = new Date(startOfDay.getTime() + 6 * 24 * 60 * 60 * 1000);
+            endOfWeek.setHours(23, 59, 59, 999);
+            return date >= startOfDay && date <= endOfWeek;
         } else if (range === 'month') {
             return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
         }
@@ -403,13 +418,27 @@ const DashboardPage = ({ onEdit }) => {
                 const data = orders || [];
                 setAllOrders(data);
                 
-                // 1. Filter Logic (Apply Brand Filter if exists in future)
-                let filteredData = data; 
+                // --- 1. Apply Brand Filter First ---
+                let filteredData = data;
+                if (brandFilter !== 'All Outlets') {
+                    // สมมติว่ามี field brand หรือเดาจากสินค้า (ในที่นี้ถ้าไม่มี field brand ชัดเจน อาจต้องข้ามไปก่อน หรือใช้ logic อื่น)
+                    // *หมายเหตุ: ใน Requirement 5.2 มี "เลือกแบรนด์: BG หรือ Jersey" แต่ใน Model ปัจจุบันยังไม่มี column brand ชัดเจน
+                    // ผมจะ assume ว่าถ้ามีการเก็บข้อมูล brand จะ filter ตรงนี้
+                    // filteredData = data.filter(o => o.brand === brandFilter);
+                }
 
-                // 2. Calculate Metrics
-                const newOrders = filteredData.filter(o => isInTimeRange(o.created_at || o.updated_at, timeRange));
-                const inProduction = filteredData.filter(o => ['production', 'designing', 'waiting_approval'].includes(o.status));
+                // --- 2. Calculate Metrics based on Time Range ---
                 
+                // 2.1 New Orders (Created Date matches Time Range)
+                const newOrders = filteredData.filter(o => {
+                    const created = o.created_at ? new Date(o.created_at) : new Date(o.updated_at);
+                    return isInTimeRange(created, timeRange);
+                });
+
+                // 2.2 In Production (Snapshot - No Time Range, just Status)
+                const inProduction = filteredData.filter(o => ['production', 'designing', 'waiting_approval'].includes(o.status));
+
+                // 2.3 Delivery in 3 Days (Snapshot - Pending & Deadline approaching)
                 const today = new Date();
                 const deliveryIn3Days = filteredData.filter(o => {
                     if (!o.deadline || o.status === 'delivered') return false;
@@ -419,14 +448,25 @@ const DashboardPage = ({ onEdit }) => {
                     return diffDays >= 0 && diffDays <= 3;
                 });
 
-                const delivered = filteredData.filter(o => o.status === 'delivered' && isInTimeRange(o.updated_at, timeRange));
+                // 2.4 Delivered (Delivered Date/Update Date matches Time Range)
+                const delivered = filteredData.filter(o => {
+                    if (o.status !== 'delivered') return false;
+                    const completedDate = o.updated_at ? new Date(o.updated_at) : new Date(); // Use updated_at as completion date proxy
+                    return isInTimeRange(completedDate, timeRange);
+                });
 
-                setMetricLists({ newOrders, inProduction, deliveryIn3Days, delivered });
+                setMetricLists({
+                    newOrders,
+                    inProduction,
+                    deliveryIn3Days,
+                    delivered
+                });
 
-                // 3. Calendar Events
+                // --- 3. Calendar Events (Show All for the selected month view) ---
                 const mappedEvents = filteredData.map(o => {
                     const targetDate = o.usage_date ? new Date(o.usage_date) : (o.deadline ? new Date(o.deadline) : null);
                     if (!targetDate) return null;
+
                     return {
                         ...o, 
                         day: targetDate.getDate(),
@@ -439,15 +479,17 @@ const DashboardPage = ({ onEdit }) => {
 
                 setEvents(mappedEvents.filter(e => e.month === currentDate.getMonth() && e.year === currentDate.getFullYear()));
 
-                // 4. Today's List
+                // --- 4. Today's Activity List (Fix list generation) ---
                 const todayItems = [];
                 const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
                 
+                // New Today
                 filteredData.filter(o => {
                     const d = o.created_at ? new Date(o.created_at) : new Date();
-                    return d.getDate() === startOfToday.getDate() && d.getMonth() === startOfToday.getMonth() && d.getFullYear() === startOfToday.getFullYear();
+                    return d.getDate() === startOfToday.getDate() && d.getMonth() === startOfToday.getMonth();
                 }).forEach(o => todayItems.push({...o, type: 'new', desc: 'สร้างวันนี้'}));
 
+                // Deadline Today
                 filteredData.forEach(o => {
                     if(o.deadline) {
                         const d = new Date(o.deadline); d.setHours(0,0,0,0);
@@ -460,10 +502,12 @@ const DashboardPage = ({ onEdit }) => {
                 });
                 setTodaysList(todayItems);
 
-            } catch (err) { console.error("Dashboard Fetch Error", err); }
+            } catch (err) {
+                console.error("Dashboard Fetch Error", err);
+            }
         };
         fetchData();
-    }, [currentDate, timeRange, brandFilter]);
+    }, [currentDate, timeRange, brandFilter]); // Re-run when filters change
 
     const eventsByDay = events.reduce((acc, evt) => {
         acc[evt.day] = [...(acc[evt.day] || []), evt];
@@ -473,29 +517,59 @@ const DashboardPage = ({ onEdit }) => {
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
 
     const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
-        <div onClick={onClick} className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}>
+        <div 
+            onClick={onClick}
+            className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
+        >
             <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
             <div className={`text-4xl font-black ${color}`}>{value}</div>
         </div>
     );
 
+    // Filter Today List for UI
     const filteredTodayList = todayFilter === 'all' ? todaysList : todaysList.filter(i => i.type === todayFilter);
-    const timeRangeLabels = { 'today': 'วันนี้', 'week': 'สัปดาห์นี้', 'month': 'เดือนนี้' };
+
+    // Labels for Time Range
+    const timeRangeLabels = {
+        'today': 'วันนี้',
+        'week': 'สัปดาห์นี้',
+        'month': 'เดือนนี้'
+    };
 
     return (
         <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
-            {detailModal && <DetailListModal title={detailModal.title} items={detailModal.items} onClose={() => setDetailModal(null)} onEdit={onEdit} />}
+            
+            {/* Modal for Details */}
+            {detailModal && (
+                <DetailListModal 
+                    title={detailModal.title} 
+                    items={detailModal.items} 
+                    onClose={() => setDetailModal(null)} 
+                    onEdit={onEdit}
+                />
+            )}
+
+            {/* Queue Modal (Fixed Layout) */}
             {showQueueModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <div className="flex items-center gap-3"><Box className="text-[#1a1c23]" /><h3 className="text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3></div>
+                            <div className="flex items-center gap-3">
+                                <Box className="text-[#1a1c23]" />
+                                <h3 className="text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3>
+                            </div>
                             <button onClick={() => setShowQueueModal(false)} className="bg-white p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={24} className="text-slate-500"/></button>
                         </div>
                         <div className="p-0 overflow-y-auto flex-1">
                             <table className="w-full text-left table-fixed">
                                 <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
-                                    <tr><th className="p-4 w-[15%] bg-gray-50">Order No</th><th className="p-4 w-[25%] bg-gray-50">ลูกค้า</th><th className="p-4 w-[20%] bg-gray-50">กำหนดส่ง</th><th className="p-4 w-[20%] bg-gray-50">สถานะ</th><th className="p-4 w-[20%] bg-gray-50 text-right">Action</th></tr>
+                                    <tr>
+                                        <th className="p-4 w-[15%] bg-gray-50">Order No</th>
+                                        <th className="p-4 w-[25%] bg-gray-50">ลูกค้า</th>
+                                        <th className="p-4 w-[20%] bg-gray-50">กำหนดส่ง</th>
+                                        <th className="p-4 w-[20%] bg-gray-50">สถานะ</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-right">Action</th>
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {metricLists.inProduction.map(o => (
@@ -503,11 +577,24 @@ const DashboardPage = ({ onEdit }) => {
                                             <td className="p-4 font-mono font-bold text-sm text-[#1a1c23] truncate">{o.order_no}</td>
                                             <td className="p-4 text-sm text-gray-700 truncate" title={o.customer_name}>{o.customer_name}</td>
                                             <td className="p-4 text-sm text-gray-500">{o.deadline ? new Date(o.deadline).toLocaleDateString('th-TH') : '-'}</td>
-                                            <td className="p-4"><span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${o.status === 'production' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>{o.status}</span></td>
-                                            <td className="p-4 text-right"><button onClick={() => { setShowQueueModal(false); onEdit(o); }} className="text-xs underline text-slate-500 hover:text-[#1a1c23]">แก้ไข</button></td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${
+                                                    o.status === 'production' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                    'bg-blue-100 text-blue-700 border-blue-200'
+                                                }`}>
+                                                    {o.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <button onClick={() => { setShowQueueModal(false); onEdit(o); }} className="text-xs underline text-slate-500 hover:text-[#1a1c23]">แก้ไข</button>
+                                            </td>
                                         </tr>
                                     ))}
-                                    {metricLists.inProduction.length === 0 && <tr><td colSpan="5" className="p-12 text-center text-gray-400">ไม่มีรายการที่รอจัดส่ง</td></tr>}
+                                    {metricLists.inProduction.length === 0 && (
+                                        <tr>
+                                            <td colSpan="5" className="p-12 text-center text-gray-400">ไม่มีรายการที่รอจัดส่ง</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -517,45 +604,116 @@ const DashboardPage = ({ onEdit }) => {
 
             <header className="mb-8">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div><h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">Overview</h1><p className="text-gray-500">ภาพรวมร้านค้าของคุณ</p></div>
-                    <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 gap-1 overflow-x-auto">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
+                            Overview
+                        </h1>
+                        <p className="text-gray-500">ภาพรวมร้านค้าของคุณ</p>
+                    </div>
+                    
+                    {/* --- GLOBAL FILTER BAR --- */}
+                    <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 gap-1">
                         {['today', 'week', 'month'].map(range => (
-                            <button key={range} onClick={() => setTimeRange(range)} className={`px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap ${timeRange === range ? 'bg-[#1a1c23] text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>{range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}</button>
+                            <button
+                                key={range}
+                                onClick={() => setTimeRange(range)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                                    timeRange === range 
+                                    ? 'bg-[#1a1c23] text-white shadow-md' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                            >
+                                {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
+                            </button>
                         ))}
                         <div className="w-px bg-gray-200 mx-1"></div>
-                        <select className="bg-transparent text-xs font-bold text-gray-700 outline-none px-2 cursor-pointer hover:bg-gray-50 rounded-lg border-none" value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}><option>All Outlets</option><option>BG</option><option>Jersey</option></select>
+                        <select 
+                            className="bg-transparent text-xs font-bold text-gray-700 outline-none px-2 cursor-pointer hover:bg-gray-50 rounded-lg"
+                            value={brandFilter}
+                            onChange={(e) => setBrandFilter(e.target.value)}
+                        >
+                            <option>All Outlets</option>
+                            <option>BG</option>
+                            <option>Jersey</option>
+                        </select>
                     </div>
                 </div>
             </header>
 
+            {/* Metrics Grid (Dynamic based on Filter) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <MetricCard title={`ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`} value={metricLists.newOrders.length} color="text-blue-600" onClick={() => setDetailModal({ title: `ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`, items: metricLists.newOrders })} />
-                <MetricCard title="กำลังดำเนินการ (Active)" value={metricLists.inProduction.length} color="text-amber-500" onClick={() => setDetailModal({ title: "รายการกำลังดำเนินการทั้งหมด", items: metricLists.inProduction })} />
-                <MetricCard title="ต้องส่งใน 3 วัน" value={metricLists.deliveryIn3Days.length} color="text-rose-600" onClick={() => setDetailModal({ title: "รายการด่วน (ส่งภายใน 3 วัน)", items: metricLists.deliveryIn3Days })} />
-                <MetricCard title={`ส่งมอบแล้ว (${timeRangeLabels[timeRange]})`} value={metricLists.delivered.length} color="text-emerald-600" onClick={() => setDetailModal({ title: `รายการส่งมอบแล้ว (${timeRangeLabels[timeRange]})`, items: metricLists.delivered })} />
+                <MetricCard 
+                    title={`ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`}
+                    value={metricLists.newOrders.length} 
+                    color="text-blue-600" 
+                    onClick={() => setDetailModal({ title: `ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`, items: metricLists.newOrders })}
+                />
+                <MetricCard 
+                    title="กำลังดำเนินการ" 
+                    value={metricLists.inProduction.length} 
+                    color="text-amber-500" 
+                    onClick={() => setDetailModal({ title: "รายการกำลังดำเนินการทั้งหมด", items: metricLists.inProduction })}
+                />
+                <MetricCard 
+                    title="ต้องส่งใน 3 วัน" 
+                    value={metricLists.deliveryIn3Days.length} 
+                    color="text-rose-600" 
+                    onClick={() => setDetailModal({ title: "รายการด่วน (ส่งภายใน 3 วัน)", items: metricLists.deliveryIn3Days })}
+                />
+                <MetricCard 
+                    title={`ส่งมอบแล้ว (${timeRangeLabels[timeRange]})`}
+                    value={metricLists.delivered.length} 
+                    color="text-emerald-600" 
+                    onClick={() => setDetailModal({ title: `รายการส่งมอบแล้ว (${timeRangeLabels[timeRange]})`, items: metricLists.delivered })}
+                />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* Calendar Panel */}
                 <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-6">
-                        <div><h3 className="text-xl font-bold text-[#1a1c23]">ตารางงาน (Calendar)</h3><p className="text-xs text-gray-400">คลิกที่วันเพื่อดูรายละเอียด</p></div>
+                        <div>
+                            <h3 className="text-xl font-bold text-[#1a1c23]">ตารางงาน</h3>
+                            <p className="text-xs text-gray-400">คลิกที่วันเพื่อดูรายละเอียด</p>
+                        </div>
                         <div className="flex items-center space-x-2 bg-gray-50 rounded-lg p-1">
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronLeft size={16}/></button>
-                            <span className="text-sm font-bold text-gray-700 min-w-[100px] text-center">{currentDate.toLocaleString('th-TH', { month: 'long', year: 'numeric' })}</span>
+                            <span className="text-sm font-bold text-gray-700 min-w-[100px] text-center">
+                                {currentDate.toLocaleString('th-TH', { month: 'long', year: 'numeric' })}
+                            </span>
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronRight size={16}/></button>
                         </div>
                     </div>
+
                     <div className="flex-1 overflow-x-auto">
                         <div className="min-w-[600px]">
-                            <div className="grid grid-cols-7 mb-2">{['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => <div key={d} className="text-center text-xs font-bold text-gray-400 uppercase">{d}</div>)}</div>
+                            <div className="grid grid-cols-7 mb-2">
+                                {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => (
+                                    <div key={d} className="text-center text-xs font-bold text-gray-400 uppercase">{d}</div>
+                                ))}
+                            </div>
                             <div className="grid grid-cols-7 gap-2">
                                 {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="h-24"></div>)}
                                 {[...Array(daysInMonth)].map((_, i) => {
                                     const day = i + 1;
                                     const evts = eventsByDay[day] || [];
                                     const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth();
+                                    
                                     return (
-                                        <div key={day} onClick={() => { if (evts.length > 0) setDetailModal({ title: `รายละเอียดวันที่ ${day} ${currentDate.toLocaleString('th-TH', { month: 'long' })}`, items: evts }); }} className={`h-24 border border-gray-100 rounded-xl p-2 relative transition group flex flex-col ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white hover:border-blue-300 cursor-pointer'}`}>
+                                        <div 
+                                            key={day} 
+                                            onClick={() => {
+                                                if (evts.length > 0) {
+                                                    setDetailModal({ 
+                                                        title: `รายละเอียดวันที่ ${day} ${currentDate.toLocaleString('th-TH', { month: 'long' })}`, 
+                                                        items: evts 
+                                                    });
+                                                }
+                                            }}
+                                            className={`h-24 border border-gray-100 rounded-xl p-2 relative transition group flex flex-col 
+                                                ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white hover:border-blue-300 cursor-pointer'}
+                                            `}
+                                        >
                                             <span className={`text-sm font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}>{day}</span>
                                             <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
                                                 {evts.map((e, idx) => {
@@ -566,7 +724,12 @@ const DashboardPage = ({ onEdit }) => {
                                                     if (e.status === 'shipping') bgClass = "bg-orange-100 text-orange-700 border-orange-200";
                                                     if (e.status === 'delivered') bgClass = "bg-emerald-100 text-emerald-700 border-emerald-200";
                                                     if (e.isUsageDate && e.status !== 'delivered') bgClass = "bg-rose-500 text-white font-bold shadow-md";
-                                                    return <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate mb-1 border ${bgClass}`} title={e.title}>{e.isUsageDate ? "🚩 " : ""}{e.title}</div>;
+
+                                                    return (
+                                                        <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate mb-1 border ${bgClass}`} title={e.title}>
+                                                            {e.isUsageDate ? "🚩 " : ""}{e.title}
+                                                        </div>
+                                                    );
                                                 })}
                                             </div>
                                         </div>
@@ -576,30 +739,74 @@ const DashboardPage = ({ onEdit }) => {
                         </div>
                     </div>
                 </div>
+
                 <div className="space-y-6">
+                    {/* Today's List Panel with Summary/Detail Filter */}
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[400px]">
                         <div className="mb-4 flex items-center justify-between">
-                             <div><h3 className="text-lg font-bold text-[#1a1c23]">รายการวันนี้</h3><p className="text-xs text-gray-400">{new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long'})}</p></div>
-                             <select className="text-xs border rounded-lg p-1.5 bg-gray-50 focus:ring-1 focus:ring-[#1a1c23] outline-none" value={todayFilter} onChange={(e) => setTodayFilter(e.target.value)}>
-                                 <option value="all">ทั้งหมด</option><option value="new">ออเดอร์ใหม่</option><option value="deadline">ครบกำหนด</option><option value="usage">วันใช้งาน</option>
+                             <div>
+                                 <h3 className="text-lg font-bold text-[#1a1c23]">รายการวันนี้</h3>
+                                 <p className="text-xs text-gray-400">{new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long'})}</p>
+                             </div>
+                             {/* Filter Summary / Detail (Simulated by Type Filter) */}
+                             <select 
+                                className="text-xs border rounded-lg p-1.5 bg-gray-50 focus:ring-1 focus:ring-[#1a1c23] outline-none"
+                                value={todayFilter}
+                                onChange={(e) => setTodayFilter(e.target.value)}
+                             >
+                                 <option value="all">ทั้งหมด (All)</option>
+                                 <option value="new">ออเดอร์ใหม่</option>
+                                 <option value="deadline">ครบกำหนด</option>
+                                 <option value="usage">วันใช้งาน</option>
                              </select>
                         </div>
+                        
                         <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                             {filteredTodayList.length > 0 ? filteredTodayList.map((item, i) => (
                                 <div key={i} onClick={() => onEdit(item)} className="flex items-start space-x-3 p-3 bg-gray-50 hover:bg-blue-50 cursor-pointer rounded-xl border border-gray-100 transition group">
-                                    <div className={`p-2 rounded-full shrink-0 ${item.type === 'new' ? 'bg-blue-100 text-blue-500' : item.type === 'usage' ? 'bg-rose-100 text-rose-500' : 'bg-amber-100 text-amber-500'}`}>{item.type === 'new' ? <Plus size={16}/> : <AlertCircle size={16} />}</div>
-                                    <div className="flex-1 min-w-0"><div className="flex justify-between"><p className="text-sm font-bold text-gray-800 truncate">{item.customer_name}</p><span className="text-[10px] bg-white px-1.5 rounded border text-gray-500">{item.order_no}</span></div><p className="text-xs text-gray-500 truncate">{item.desc}</p></div>
+                                    <div className={`p-2 rounded-full shrink-0 ${
+                                        item.type === 'new' ? 'bg-blue-100 text-blue-500' : 
+                                        item.type === 'usage' ? 'bg-rose-100 text-rose-500' : 'bg-amber-100 text-amber-500'
+                                    }`}>
+                                        {item.type === 'new' ? <Plus size={16}/> : <AlertCircle size={16} />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between">
+                                            <p className="text-sm font-bold text-gray-800 truncate">{item.customer_name}</p>
+                                            <span className="text-[10px] bg-white px-1.5 rounded border text-gray-500">{item.order_no}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 truncate">{item.desc}</p>
+                                    </div>
                                 </div>
-                            )) : <div className="text-center py-12 text-gray-300 text-sm flex flex-col items-center"><CheckCircle size={32} className="mb-2 opacity-30"/>ไม่มีรายการในช่วงนี้</div>}
+                            )) : (
+                                <div className="text-center py-12 text-gray-300 text-sm flex flex-col items-center">
+                                    <CheckCircle size={32} className="mb-2 opacity-30"/>
+                                    ไม่มีรายการในช่วงนี้
+                                </div>
+                            )}
                         </div>
                     </div>
+
                     <div className="bg-[#1a1c23] rounded-3xl shadow-lg p-6 text-white relative overflow-hidden">
                         <div className="relative z-10">
-                            <h3 className="text-lg font-bold mb-1">จัดการคิวงาน</h3><p className="text-xs text-gray-400 mb-4">ตรวจสอบงานที่พร้อมส่งมอบ</p>
-                            <div className="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-sm mb-4"><div className="flex items-center space-x-3"><Box size={20} className="text-blue-400"/><span className="text-sm font-medium">รอจัดส่ง</span></div><span className="text-xl font-bold">{metricLists.inProduction.length}</span></div>
-                            <button onClick={() => setShowQueueModal(true)} className="w-full bg-white text-[#1a1c23] py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition shadow-md">ดูรายละเอียด</button>
+                            <h3 className="text-lg font-bold mb-1">จัดการคิวงาน</h3>
+                            <p className="text-xs text-gray-400 mb-4">ตรวจสอบงานที่พร้อมส่งมอบ</p>
+                            <div className="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-sm mb-4">
+                                <div className="flex items-center space-x-3">
+                                    <Box size={20} className="text-blue-400"/>
+                                    <span className="text-sm font-medium">รอจัดส่ง</span>
+                                </div>
+                                <span className="text-xl font-bold">{metricLists.inProduction.length}</span>
+                            </div>
+                            <button 
+                                onClick={() => setShowQueueModal(true)}
+                                className="w-full bg-white text-[#1a1c23] py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition shadow-md"
+                            >
+                                ดูรายละเอียด
+                            </button>
                         </div>
-                        <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-blue-500/20 rounded-full blur-2xl"></div><div className="absolute bottom-[-10%] left-[-10%] w-24 h-24 bg-purple-500/20 rounded-full blur-2xl"></div>
+                        <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-blue-500/20 rounded-full blur-2xl"></div>
+                        <div className="absolute bottom-[-10%] left-[-10%] w-24 h-24 bg-purple-500/20 rounded-full blur-2xl"></div>
                     </div>
                 </div>
             </div>
@@ -607,36 +814,98 @@ const DashboardPage = ({ onEdit }) => {
     );
 };
 
-// 2.2 ORDER CREATION PAGE (UPDATED)
+// --- COMPONENT: INVOICE PREVIEW MODAL ---
+const InvoiceModal = ({ data, onClose }) => {
+  const handlePrint = () => window.print();
+  useEffect(() => {
+    const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
+      <style>{`@media print { body * { visibility: hidden; } #invoice-content, #invoice-content * { visibility: visible; } #invoice-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #no-print-btn { display: none !important; } }`}</style>
+      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
+          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
+              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
+          </button>
+          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close (Esc)">
+              <XCircle size={24} />
+          </button>
+      </div>
+      <div id="invoice-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
+            <div>
+                <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
+                <p className="text-slate-600 font-semibold">บริษัท บี-ลุค จำกัด</p>
+                <p className="text-sm text-slate-500">123 ถนนตัวอย่าง กทม.</p>
+            </div>
+            <div className="text-right">
+                <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
+                <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
+                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
+            </div>
+        </div>
+        {/* Customer Info */}
+        <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
+            <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
+            <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
+            <p className="text-sm text-slate-500">{data.phoneNumber} | {data.contactChannel}</p>
+            <p className="text-sm text-slate-500 mt-1">{data.address}</p>
+        </div>
+        {/* Table */}
+        <table className="w-full text-sm mb-8">
+            <thead>
+                <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td className="py-4 px-4">
+                        <p className="font-bold">{data.brand}</p>
+                        <p className="text-xs text-slate-500">ผ้า: {data.fabric} | คอ: {data.neck} | แขน: {data.sleeve}</p>
+                    </td>
+                    <td className="py-4 px-4 text-right">{data.totalQty}</td>
+                    <td className="py-4 px-4 text-right">{data.basePrice.toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right">{(data.totalQty * data.basePrice).toLocaleString()}</td>
+                </tr>
+            </tbody>
+        </table>
+        {/* Totals */}
+        <div className="flex justify-end">
+            <div className="w-1/2 space-y-2 text-sm">
+                <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{(data.addOnCost + data.shippingCost).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>ส่วนลด</span><span>-{data.discount.toLocaleString()}</span></div>
+                {/* เพิ่มบรรทัด VAT */}
+                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{data.vatAmount.toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{data.grandTotal.toLocaleString()}</span></div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 2.2 ORDER CREATION PAGE (Updated: usageDate & Status)
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
-  const [usageDate, setUsageDate] = useState("");
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
   const [customerName, setCustomerName] = useState("");
   const [contactChannel, setContactChannel] = useState("LINE OA");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
-  const [note, setNote] = useState(""); // NEW: Note
-  const [status, setStatus] = useState("draft");
-
   const [quantities, setQuantities] = useState(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
-  
-  // Financials
   const [basePrice, setBasePrice] = useState(150);
   const [addOnCost, setAddOnCost] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
-  
-  // Discount (NEW Logic)
-  const [discountType, setDiscountType] = useState("THB"); // 'THB' or 'PERCENT'
-  const [discountValue, setDiscountValue] = useState(0); 
-
+  const [discount, setDiscount] = useState(0);
   const [isVatIncluded, setIsVatIncluded] = useState(false);
-  
-  // Deposits (NEW: 2 Installments)
-  const [deposit1, setDeposit1] = useState(0);
-  const [deposit2, setDeposit2] = useState(0);
+  const [deposit, setDeposit] = useState(0);
+  const [costPerUnit, setCostPerUnit] = useState(80);
     
   const [fabrics, setFabrics] = useState([]);
   const [necks, setNecks] = useState([]);
@@ -645,48 +914,59 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [selectedNeck, setSelectedNeck] = useState("");
   const [selectedSleeve, setSelectedSleeve] = useState("");
   const [pricingRules, setPricingRules] = useState([]);
+   
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
+
+  // --- NEW: เพิ่ม State สำหรับวันใช้งานและสถานะ ---
+  const [usageDate, setUsageDate] = useState(""); 
+  const [status, setStatus] = useState("draft");
+  // ------------------------------------------
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [showHistory, setShowHistory] = useState(false); // Toggle History Modal
 
   useEffect(() => {
     if (editingOrder) {
         setCustomerName(editingOrder.customer_name || "");
         setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
+        setDeposit(editingOrder.deposit || 0);
+        // --- NEW: Load State ---
         setUsageDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
-        setNote(editingOrder.note || "");
-        
-        // Financials
-        setDeposit1(Number(editingOrder.deposit_1 || 0));
-        setDeposit2(Number(editingOrder.deposit_2 || 0));
-        setDiscountType(editingOrder.discount_type || "THB");
-        setDiscountValue(Number(editingOrder.discount_value || 0));
-        // ... (Other fields mapping if needed, simplified for brevity)
+        // -----------------------
     } else {
-        // Reset Logic
-        setCustomerName(""); setDeadline(""); setUsageDate(""); setNote("");
-        setDeposit1(0); setDeposit2(0); setDiscountValue(0);
+        setCustomerName("");
+        setDeadline("");
+        setDeposit(0);
         setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
+        setUsageDate("");
+        setStatus("draft");
     }
   }, [editingOrder]);
 
-  // ... (Fetch Masters logic - same as before) ...
   useEffect(() => {
       const fetchMasters = async () => {
           try {
               const [fData, nData, sData, pData, cData] = await Promise.all([
-                  fetchWithAuth('/products/fabrics'), fetchWithAuth('/products/necks'),
-                  fetchWithAuth('/products/sleeves'), fetchWithAuth('/pricing-rules/'),
+                  fetchWithAuth('/products/fabrics'),
+                  fetchWithAuth('/products/necks'),
+                  fetchWithAuth('/products/sleeves'),
+                  fetchWithAuth('/pricing-rules/'),
                   fetchWithAuth('/company/config')
               ]);
-              setFabrics(fData || []); setNecks(nData || []); setSleeves(sData || []); setPricingRules(pData || []);
+              setFabrics(fData || []);
+              setNecks(nData || []);
+              setSleeves(sData || []);
+              setPricingRules(pData || []);
+               
               if (cData) {
-                  setConfig({ vat_rate: cData.vat_rate || 0.07, default_shipping_cost: cData.default_shipping_cost || 0 });
+                  setConfig({ 
+                      vat_rate: cData.vat_rate || 0.07, 
+                      default_shipping_cost: cData.default_shipping_cost || 0 
+                  });
                   if (!editingOrder) setShippingCost(cData.default_shipping_cost || 0);
               }
+
               if (!editingOrder) { 
                   if (fData?.length) setSelectedFabric(fData[0].name);
                   if (nData?.length) setSelectedNeck(nData[0].name);
@@ -699,39 +979,33 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
-  // Auto Price
   useEffect(() => {
       if (totalQty > 0 && selectedFabric && pricingRules.length > 0) {
-          const matchedRule = pricingRules.find(rule => rule.fabric_type === selectedFabric && totalQty >= rule.min_qty && totalQty <= rule.max_qty);
+          const matchedRule = pricingRules.find(rule => 
+              rule.fabric_type === selectedFabric &&
+              totalQty >= rule.min_qty &&
+              totalQty <= rule.max_qty
+          );
           if (matchedRule) setBasePrice(matchedRule.unit_price);
       }
   }, [totalQty, selectedFabric, pricingRules]);
 
-  // --- CALCULATION LOGIC ---
   const productSubtotal = totalQty * basePrice;
-  
-  // Calculate Discount Amount
-  let discountAmount = 0;
-  if (discountType === 'PERCENT') {
-      discountAmount = (productSubtotal * discountValue) / 100;
-  } else {
-      discountAmount = discountValue;
-  }
-
-  const totalBeforeVat = productSubtotal + addOnCost + shippingCost - discountAmount;
+  const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
     
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
-    grandTotal = totalBeforeVat;
-    vatAmount = (totalBeforeVat * (config.vat_rate * 100)) / (100 + (config.vat_rate * 100));
+    grandTotal = totalBeforeCalc;
+    vatAmount = (totalBeforeCalc * (config.vat_rate * 100)) / (100 + (config.vat_rate * 100));
   } else {
-    vatAmount = totalBeforeVat * config.vat_rate;
-    grandTotal = totalBeforeVat + vatAmount;
+    vatAmount = totalBeforeCalc * config.vat_rate;
+    grandTotal = totalBeforeCalc + vatAmount;
   }
-  
-  const balance = grandTotal - deposit1 - deposit2;
+  const balance = grandTotal - deposit;
 
-  const generateOrderId = useCallback(() => editingOrder ? editingOrder.order_no : `PO-${Date.now().toString().slice(-6)}`, [editingOrder]);
+  const generateOrderId = useCallback(() => {
+    return editingOrder ? editingOrder.order_no : `PO-${Date.now().toString().slice(-6)}`;
+  }, [editingOrder]);
 
   const handleSaveOrder = async () => {
     try {
@@ -739,27 +1013,33 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             order_no: generateOrderId(),
             customer_name: customerName,
             contact_channel: contactChannel,
-            
-            // Financials
-            total_amount: productSubtotal,
-            discount_type: discountType,
-            discount_value: discountValue,
-            discount_amount: discountAmount,
-            deposit_1: deposit1,
-            deposit_2: deposit2,
-            balance: balance,
-            
+            total_amount: grandTotal,
+            deposit: deposit,
+            // --- NEW: Send new fields ---
             status: status,
             deadline: deadline ? new Date(deadline).toISOString() : null,
             usage_date: usageDate ? new Date(usageDate).toISOString() : null,
-            note: note, // Note
-            
+            // ---------------------------
             items: []
         };
+        
         const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders/';
-        await fetchWithAuth(url, { method: editingOrder ? 'PUT' : 'POST', body: JSON.stringify(orderData) });
+        const method = editingOrder ? 'PUT' : 'POST';
+        
+        await fetchWithAuth(url, {
+            method: method,
+            body: JSON.stringify(orderData)
+        });
         setShowSuccess(true);
-    } catch (e) { onNotify("บันทึกไม่สำเร็จ: " + e.message, "error"); }
+    } catch (e) {
+        onNotify("บันทึกไม่สำเร็จ: " + e.message, "error");
+    }
+  };
+
+  const handleCopySummary = () => {
+    const text = `📋 Order Summary\nCustomer: ${customerName}\nTotal: ${totalQty} pcs\nGrand Total: ${grandTotal.toLocaleString()} THB`;
+    navigator.clipboard.writeText(text);
+    onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
   useEffect(() => {
@@ -768,11 +1048,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     setUrgencyStatus(diffDays <= 5 ? "critical" : diffDays <= 10 ? "warning" : "normal");
   }, [deadline]);
 
+  const theme = {
+    critical: { border: "border-l-8 border-rose-500", header: "bg-rose-100 text-rose-800" },
+    warning: { border: "border-l-8 border-amber-500", header: "bg-amber-100 text-amber-800" },
+    normal: { border: "border-l-8 border-emerald-500", header: "bg-emerald-100 text-emerald-800" }
+  };
+
   return (
     <div className="p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full">
-        {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discountAmount, discountType, discountValue, isVatIncluded, vatAmount, grandTotal, deposit1, deposit2, balance, note, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve, order_no: generateOrderId()}} onClose={() => setShowPreview(false)} />}
-        {showHistory && editingOrder && <HistoryLogModal orderId={editingOrder.id} onClose={() => setShowHistory(false)} />}
-        
+        {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discount, isVatIncluded, vatAmount, grandTotal, deposit, balance, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve, order_no: generateOrderId()}} onClose={() => setShowPreview(false)} />}
         {showSuccess && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
                 <div className="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full">
@@ -786,11 +1070,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         <header className={`mb-8 flex items-center gap-4`}>
              <button onClick={() => onNavigate('order_list')} className="w-10 h-10 bg-white rounded-full flex items-center justify-center border hover:bg-gray-50 shadow-sm"><ArrowLeft size={20}/></button>
              <h1 className="text-2xl font-black text-[#1a1c23]">{editingOrder ? "แก้ไขออเดอร์" : "สร้างออเดอร์ใหม่"}</h1>
-             {editingOrder && (
-                 <button onClick={() => setShowHistory(true)} className="ml-auto bg-white text-gray-600 px-3 py-1.5 rounded-lg border text-xs font-bold hover:bg-gray-50 flex items-center gap-1 shadow-sm">
-                     <FileClock size={16}/> ดูประวัติ
-                 </button>
-             )}
+             <div className={`px-4 py-2 rounded-lg ml-auto ${theme[urgencyStatus].header}`}><AlertCircle size={20} className="inline mr-2"/>{urgencyStatus.toUpperCase()}</div>
         </header>
 
         <div className="grid grid-cols-12 gap-8">
@@ -798,88 +1078,68 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                 <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><User className="mr-2" size={18}/> ข้อมูลลูกค้า</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
-                        <select className="border-gray-200 border p-3 rounded-xl bg-gray-50" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
-                        <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-                        <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
-                        
-                        {/* --- NEW FIELDS --- */}
+                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
+                        <select className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
+                        <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+                        <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
+                    
+                        {/* --- NEW: ช่องกรอกวันใช้งาน & สถานะ --- */}
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">วันที่ใช้งาน (Event)</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Event Date</label>
                             <input type="date" className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} />
                         </div>
+
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">สถานะ</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl" value={status} onChange={e => setStatus(e.target.value)}>
-                                <option value="draft">Draft</option>
-                                <option value="designing">Designing</option>
-                                <option value="waiting_approval">Waiting Approval</option>
-                                <option value="production">Production</option>
-                                <option value="shipping">Shipping</option>
-                                <option value="delivered">Delivered</option>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-white focus:ring-2 focus:ring-[#1a1c23]" value={status} onChange={(e) => setStatus(e.target.value)}>
+                                <option value="draft">แบบร่าง</option>
+                                <option value="designing">กำลังออกแบบ</option>
+                                <option value="waiting_approval">รอแบบอนุมัติ</option>
+                                <option value="production">กำลังผลิต</option>
+                                <option value="shipping">เตรียมจัดส่ง</option>
+                                <option value="delivered">ส่งมอบแล้ว</option>
                             </select>
                         </div>
-                        
-                        <div className="col-span-2">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">หมายเหตุ (Note)</label>
-                            <textarea 
-                                className="w-full border-gray-200 border p-3 rounded-xl bg-yellow-50 focus:bg-white" 
-                                placeholder="รายละเอียดพิเศษ, เงื่อนไข..." 
-                                rows="2"
-                                value={note}
-                                onChange={e => setNote(e.target.value)}
-                            ></textarea>
-                        </div>
-                        {/* ------------------ */}
+                        {/* ------------------------------------- */}
                     </div>
                 </section>
-                
-                {/* --- FIX: Added Product Dropdowns Section --- */}
+
                 <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">แบรนด์</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={brand} onChange={e => setBrand(e.target.value)}>
-                                {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">ชนิดผ้า</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                         <div>
+                            <label className="block text-sm mb-1 text-gray-500">ชนิดผ้า</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
                                 {fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">รูปแบบคอ</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
+                            <label className="block text-sm mb-1 text-gray-500">คอเสื้อ</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
                                 {necks.map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">รูปแบบแขน</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
+                            <label className="block text-sm mb-1 text-gray-500">แขนเสื้อ</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
                                 {sleeves.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                             </select>
                         </div>
                     </div>
-
                     <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                        <label className="block text-sm font-bold text-gray-700 mb-4">ระบุจำนวน</label>
                         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
                             {SIZES.map((size) => (
                                 <div key={size} className="text-center">
                                     <label className="text-xs font-bold text-gray-400 mb-1 block">{size}</label>
-                                    <input type="number" min="0" className="w-full text-center border-gray-200 border rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0"
-                                        value={quantities[size] > 0 ? quantities[size] : ""}
+                                    <input type="number" min="0" className="w-full text-center border-gray-200 border rounded-lg p-2 focus:ring-2 focus:ring-[#1a1c23]" placeholder="0"
                                         onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})} />
                                 </div>
                             ))}
                         </div>
                     </div>
                 </section>
-                {/* ------------------------------------------- */}
             </div>
 
             <div className="col-span-12 lg:col-span-4 space-y-6">
@@ -888,29 +1148,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     <div className="space-y-4 mb-8 text-sm text-gray-600">
                         <div className="flex justify-between"><span>จำนวนรวม</span><span className="font-bold text-gray-800">{totalQty} ตัว</span></div>
                         <div className="flex justify-between items-center"><span>ราคาขาย/ตัว</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={basePrice} onChange={e => setBasePrice(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center"><span>ค่าบล็อก/Addon</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
+                        <div className="flex justify-between items-center"><span>ค่าบล็อก/ค่าออกแบบเพิ่ม</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
                         <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
+                        <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-20 text-right border-rose-200 border rounded p-1 bg-rose-50 text-rose-600" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
                         
-                        {/* --- NEW: Discount Toggle --- */}
-                        <div className="flex justify-between items-center text-red-500 bg-rose-50 p-2 rounded-lg border border-rose-100">
-                            <div className="flex items-center gap-2">
-                                <span>ส่วนลด</span>
-                                <select 
-                                    className="text-xs bg-white border border-rose-200 rounded px-1 py-0.5 outline-none"
-                                    value={discountType}
-                                    onChange={(e) => setDiscountType(e.target.value)}
-                                >
-                                    <option value="THB">บาท</option>
-                                    <option value="PERCENT">%</option>
-                                </select>
-                            </div>
-                            <input type="number" className="w-20 text-right border-rose-200 border rounded p-1 bg-white text-rose-600 font-bold" value={discountValue} onChange={e => setDiscountValue(Number(e.target.value))}/>
-                        </div>
-                        <div className="text-right text-xs text-rose-400 mt-[-10px]">
-                            {discountType === 'PERCENT' && `ลดจริง: -${discountAmount.toLocaleString()} บาท`}
-                        </div>
-                        {/* ---------------------------- */}
-                        
+                        {/* VAT CONFIGURATION SECTION */}
                         <div className="flex justify-between items-center py-2 border-t border-dashed">
                             <label className="flex items-center text-xs cursor-pointer">
                                 <input type="checkbox" className="mr-2 rounded text-[#1a1c23]" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
@@ -920,23 +1162,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </div>
 
                         <div className="flex justify-between font-black text-2xl text-[#1a1c23] mt-4 pt-4 border-t border-gray-100"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
-                        
-                        {/* --- NEW: Deposit 1 & 2 --- */}
-                        <div className="space-y-2 pt-2 border-t border-gray-100">
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-500">มัดจำงวด 1</span>
-                                <input type="number" className="w-24 text-right border-gray-200 border rounded p-1 bg-gray-50" placeholder="0" value={deposit1} onChange={e => setDeposit1(Number(e.target.value))}/>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs text-gray-500">มัดจำงวด 2</span>
-                                <input type="number" className="w-24 text-right border-gray-200 border rounded p-1 bg-gray-50" placeholder="0" value={deposit2} onChange={e => setDeposit2(Number(e.target.value))}/>
-                            </div>
-                            <div className="flex justify-between font-bold text-emerald-600 bg-emerald-50 p-2 rounded-lg">
-                                <span>คงเหลือชำระ</span>
-                                <span>{balance.toLocaleString()} ฿</span>
-                            </div>
-                        </div>
-                        {/* ------------------------ */}
                     </div>
                     <button className="w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center transition" onClick={handleSaveOrder}>
                         <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
@@ -1951,7 +2176,7 @@ const App = () => {
                 
                 {/* --- แสดงเฉพาะ Admin หรือ Owner --- */}
                 {(userRole === 'admin' || userRole === 'owner') && (
-                    <NavItem id="users" icon={Users} label="จัดการผู้ใช้ (Admin)" active={currentPage === 'users'} />
+                    <NavItem id="users" icon={Users} label="จัดการผู้ใช้" active={currentPage === 'users'} />
                 )}
                 
                 <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} />

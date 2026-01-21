@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from sqlalchemy.orm import relationship # <--- 1. อย่าลืม import นี้
+from sqlalchemy.orm import relationship  # <--- 1. ต้อง Import ตัวนี้เพิ่ม
 from sqlalchemy.sql import func
 from app.db.base_class import Base
 
