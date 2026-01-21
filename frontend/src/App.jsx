@@ -887,8 +887,7 @@ const InvoiceModal = ({ data, onClose }) => {
     </div>
   );
 };
-
-// 2.2 ORDER CREATION PAGE (Updated: usageDate & Status)
+// 2.2 ORDER CREATION PAGE - FIXED VERSION
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
@@ -905,8 +904,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [discount, setDiscount] = useState(0);
   const [isVatIncluded, setIsVatIncluded] = useState(false);
   const [deposit, setDeposit] = useState(0);
-  const [costPerUnit, setCostPerUnit] = useState(80);
-    
+  
   const [fabrics, setFabrics] = useState([]);
   const [necks, setNecks] = useState([]);
   const [sleeves, setSleeves] = useState([]);
@@ -914,26 +912,26 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [selectedNeck, setSelectedNeck] = useState("");
   const [selectedSleeve, setSelectedSleeve] = useState("");
   const [pricingRules, setPricingRules] = useState([]);
-   
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
-  // --- NEW: เพิ่ม State สำหรับวันใช้งานและสถานะ ---
+  // NEW: State for usageDate and status
   const [usageDate, setUsageDate] = useState(""); 
   const [status, setStatus] = useState("draft");
-  // ------------------------------------------
+  
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // Initialize form when editing an order
   useEffect(() => {
     if (editingOrder) {
         setCustomerName(editingOrder.customer_name || "");
         setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
         setDeposit(editingOrder.deposit || 0);
-        // --- NEW: Load State ---
         setUsageDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
-        // -----------------------
     } else {
         setCustomerName("");
         setDeadline("");
@@ -944,16 +942,19 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     }
   }, [editingOrder]);
 
+  // Fetch master data
   useEffect(() => {
       const fetchMasters = async () => {
           try {
+              setIsLoading(true);
               const [fData, nData, sData, pData, cData] = await Promise.all([
-                  fetchWithAuth('/products/fabrics'),
-                  fetchWithAuth('/products/necks'),
-                  fetchWithAuth('/products/sleeves'),
-                  fetchWithAuth('/pricing-rules/'),
-                  fetchWithAuth('/company/config')
+                  fetchWithAuth('/products/fabrics').catch(() => null),
+                  fetchWithAuth('/products/necks').catch(() => null),
+                  fetchWithAuth('/products/sleeves').catch(() => null),
+                  fetchWithAuth('/pricing-rules/').catch(() => null),
+                  fetchWithAuth('/company/config').catch(() => null)
               ]);
+              
               setFabrics(fData || []);
               setNecks(nData || []);
               setSleeves(sData || []);
@@ -967,15 +968,26 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                   if (!editingOrder) setShippingCost(cData.default_shipping_cost || 0);
               }
 
+              // Set default selections (with safety check)
               if (!editingOrder) { 
-                  if (fData?.length) setSelectedFabric(fData[0].name);
-                  if (nData?.length) setSelectedNeck(nData[0].name);
-                  if (sData?.length) setSelectedSleeve(sData[0].name);
+                  if (fData?.length > 0) setSelectedFabric(fData[0].name);
+                  else setSelectedFabric("");
+                  
+                  if (nData?.length > 0) setSelectedNeck(nData[0].name);
+                  else setSelectedNeck("");
+                  
+                  if (sData?.length > 0) setSelectedSleeve(sData[0].name);
+                  else setSelectedSleeve("");
               }
-          } catch (e) { console.error(e); }
+          } catch (e) { 
+              console.error("Failed to fetch masters:", e);
+              onNotify("ไม่สามารถโหลดข้อมูลสินค้า", "error");
+          } finally {
+              setIsLoading(false);
+          }
       };
       fetchMasters();
-  }, [editingOrder]);
+  }, [editingOrder, onNotify]);
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
@@ -1015,14 +1027,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             contact_channel: contactChannel,
             total_amount: grandTotal,
             deposit: deposit,
-            // --- NEW: Send new fields ---
             status: status,
             deadline: deadline ? new Date(deadline).toISOString() : null,
             usage_date: usageDate ? new Date(usageDate).toISOString() : null,
-            // ---------------------------
             items: []
         };
-        
+
         const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders/';
         const method = editingOrder ? 'PUT' : 'POST';
         
@@ -1054,6 +1064,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     normal: { border: "border-l-8 border-emerald-500", header: "bg-emerald-100 text-emerald-800" }
   };
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin inline-block w-10 h-10 border-4 border-gray-300 border-t-[#1a1c23] rounded-full mb-4"></div>
+          <p className="text-gray-500 font-medium">กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full">
         {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discount, isVatIncluded, vatAmount, grandTotal, deposit, balance, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve, order_no: generateOrderId()}} onClose={() => setShowPreview(false)} />}
@@ -1084,7 +1106,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
                         <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
                     
-                        {/* --- NEW: ช่องกรอกวันใช้งาน & สถานะ --- */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Event Date</label>
                             <input type="date" className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} />
@@ -1101,7 +1122,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                 <option value="delivered">ส่งมอบแล้ว</option>
                             </select>
                         </div>
-                        {/* ------------------------------------- */}
                     </div>
                 </section>
 
@@ -1111,18 +1131,21 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                          <div>
                             <label className="block text-sm mb-1 text-gray-500">ชนิดผ้า</label>
                             <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
+                                <option value="">-- เลือกผ้า --</option>
                                 {fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm mb-1 text-gray-500">คอเสื้อ</label>
                             <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
+                                <option value="">-- เลือกคอ --</option>
                                 {necks.map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm mb-1 text-gray-500">แขนเสื้อ</label>
                             <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
+                                <option value="">-- เลือกแขน --</option>
                                 {sleeves.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                             </select>
                         </div>
@@ -1152,7 +1175,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
                         <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-20 text-right border-rose-200 border rounded p-1 bg-rose-50 text-rose-600" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
                         
-                        {/* VAT CONFIGURATION SECTION */}
                         <div className="flex justify-between items-center py-2 border-t border-dashed">
                             <label className="flex items-center text-xs cursor-pointer">
                                 <input type="checkbox" className="mr-2 rounded text-[#1a1c23]" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
