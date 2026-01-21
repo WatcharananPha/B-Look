@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, Date, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DECIMAL, Date, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
@@ -20,25 +20,38 @@ class Order(Base):
     total_amount = Column(DECIMAL(10, 2), default=0) 
     grand_total = Column(DECIMAL(10, 2), default=0)
     
-    deposit = Column(DECIMAL(10, 2), default=0)        
-    deposit_amount = Column(DECIMAL(10, 2), default=0) 
+    # Deposits
+    deposit = Column(DECIMAL(10, 2), default=0) # ยอดรวมมัดจำ (Legacy support or Total)
+    deposit_amount = Column(DECIMAL(10, 2), default=0) # ยอดรวมมัดจำจริง
+    deposit_1 = Column(DECIMAL(10, 2), default=0) # มัดจำงวด 1 (NEW)
+    deposit_2 = Column(DECIMAL(10, 2), default=0) # มัดจำงวด 2 (NEW)
     
     balance = Column(DECIMAL(10, 2), default=0)        
     balance_amount = Column(DECIMAL(10, 2), default=0) 
 
     is_vat_included = Column(Boolean, default=False)
     vat_amount = Column(DECIMAL(10, 2), default=0)
-    discount_amount = Column(DECIMAL(10, 2), default=0)
+    
+    # Discount
+    discount_type = Column(String, default="THB") # 'THB' หรือ 'PERCENT' (NEW)
+    discount_value = Column(DECIMAL(10, 2), default=0) # ค่าที่กรอก (NEW)
+    discount_amount = Column(DECIMAL(10, 2), default=0) # ยอดลดจริง
+    
     shipping_cost = Column(DECIMAL(10, 2), default=0)
     add_on_cost = Column(DECIMAL(10, 2), default=0)
     
+    # Note
+    note = Column(Text, nullable=True) # (NEW)
+
     # --- Cost & Profit ---
     total_cost = Column(DECIMAL(10, 2), default=0)       
     estimated_profit = Column(DECIMAL(10, 2), default=0) 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
     customer = relationship("Customer", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    created_by = relationship("User", back_populates="orders")
 
 class OrderItem(Base):
     __tablename__ = "order_items"

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.orm import relationship # <--- เพิ่ม import
 from sqlalchemy.sql import func
 from app.db.base_class import Base
 
@@ -9,6 +10,8 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     full_name = Column(String)
-    role = Column(String, default="admin")  # admin, owner
+    role = Column(String, default="admin")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    orders = relationship("Order", back_populates="created_by")

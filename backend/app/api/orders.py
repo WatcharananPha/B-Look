@@ -7,6 +7,9 @@ from decimal import Decimal
 from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
 from app.models.customer import Customer
+from app.models.user import User
+from app.models.audit_log import AuditLog
+from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
 
 router = APIRouter()
@@ -28,16 +31,14 @@ def read_orders(
     
     results = []
     for o in orders:
-        # แปลง SQLAlchemy Model เป็น Dictionary เพื่อ Map ข้อมูล
         o_dict = o.__dict__.copy()
         if o.customer:
             o_dict['customer_name'] = o.customer.name
             o_dict['phone'] = o.customer.phone
             o_dict['contact_channel'] = o.customer.channel
         
-        # Map fields manual
-        o_dict['deposit'] = o.deposit_amount
-        o_dict['deadline'] = o.deadline
+        # Map fields manual if needed
+        # Note: deposit_amount is mapped via schema alias
         
         results.append(o_dict)
 
@@ -45,8 +46,12 @@ def read_orders(
 
 # --- 2. CREATE ORDER ---
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
-    # 1. จัดการลูกค้า (Customer Handling)
+def create_order(
+    order_in: OrderCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    # 1. Customer Handling
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
         customer = Customer(
@@ -58,7 +63,7 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
         db.add(customer)
         db.flush()
 
-    # 2. คำนวณยอดเงินและต้นทุน (Calculation Logic)
+    # 2. Calculation Logic
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []
@@ -84,17 +89,24 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
     # Financials
     shipping = Decimal(str(order_in.shipping_cost))
     addon = Decimal(str(order_in.add_on_cost))
-    discount = Decimal(str(order_in.discount_amount))
-    deposit = Decimal(str(order_in.deposit_amount))
+    
+    # Discount Logic
+    discount_val = Decimal(str(order_in.discount_value))
+    discount_amt = Decimal(str(order_in.discount_amount)) 
+    # (Trusting frontend amount for simplicity, but could recalculate if discount_type is PERCENT)
 
-    total_before_vat = items_total_price + addon + shipping - discount
+    # Deposits Logic
+    dep1 = Decimal(str(order_in.deposit_1))
+    dep2 = Decimal(str(order_in.deposit_2))
+    total_deposit = dep1 + dep2
+
+    total_before_vat = items_total_price + addon + shipping - discount_amt
     
     vat_amount = Decimal(0)
     grand_total = Decimal(0)
     
     if order_in.is_vat_included:
         grand_total = total_before_vat
-        # ถอด VAT: Price / 1.07 * 0.07
         vat_amount = (total_before_vat * 7) / 107
     else:
         vat_amount = total_before_vat * Decimal('0.07')
@@ -102,32 +114,43 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
 
     revenue_ex_vat = grand_total - vat_amount
     estimated_profit = revenue_ex_vat - items_total_cost
-    balance = grand_total - deposit
+    balance = grand_total - total_deposit
 
-    # 3. บันทึก Order Header
+    # 3. Save Order Header
     new_order = OrderModel(
         order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
         customer_id=customer.id,
         deadline=order_in.deadline,
+        usage_date=order_in.usage_date,
         urgency_level=order_in.urgency_level,
-        status="production",
+        status=order_in.status, # Use status from input
         
         is_vat_included=order_in.is_vat_included,
         shipping_cost=shipping,
         add_on_cost=addon,
-        discount_amount=discount,
+        
+        discount_type=order_in.discount_type,
+        discount_value=discount_val,
+        discount_amount=discount_amt,
+        
         vat_amount=vat_amount,
         grand_total=grand_total,
-        deposit_amount=deposit,
-        balance_amount=balance,
         
+        deposit_amount=total_deposit,
+        deposit_1=dep1,
+        deposit_2=dep2,
+        
+        balance_amount=balance,
         total_cost=items_total_cost,
         estimated_profit=estimated_profit,
+        
+        note=order_in.note,
+        created_by_id=current_user.id if current_user else None
     )
     db.add(new_order)
     db.flush()
 
-    # 4. บันทึก Order Items
+    # 4. Save Order Items
     for item_data in order_items_data:
         src = item_data["data"]
         new_item = OrderItemModel(
@@ -147,6 +170,16 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
         )
         db.add(new_item)
     
+    # Audit Log
+    log = AuditLog(
+        action="CREATE",
+        target_type="order",
+        target_id=str(new_order.id),
+        details=f"Created order {new_order.order_no} by {current_user.username}",
+        user_id=current_user.id if current_user else None
+    )
+    db.add(log)
+
     db.commit()
     db.refresh(new_order)
     
@@ -173,13 +206,17 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
 
 # --- 4. UPDATE ORDER ---
 @router.put("/{order_id}", response_model=OrderSchema)
-def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get_db)):
-    # 1. หา Order เดิม
+def update_order(
+    order_id: int, 
+    order_in: OrderCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # 2. จัดการลูกค้า (Find or Create)
+    # Update Customer
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
         customer = Customer(
@@ -191,7 +228,7 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
         db.add(customer)
         db.flush()
 
-    # 3. Re-calculate Logic
+    # Recalculate Logic
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []
@@ -214,13 +251,17 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
             "total_cost": line_cost
         })
 
-    # Financials Calculation
+    # Financials
     shipping = Decimal(str(order_in.shipping_cost))
     addon = Decimal(str(order_in.add_on_cost))
-    discount = Decimal(str(order_in.discount_amount))
-    deposit = Decimal(str(order_in.deposit_amount))
+    discount_val = Decimal(str(order_in.discount_value))
+    discount_amt = Decimal(str(order_in.discount_amount)) 
+    
+    dep1 = Decimal(str(order_in.deposit_1))
+    dep2 = Decimal(str(order_in.deposit_2))
+    total_deposit = dep1 + dep2
 
-    total_before_vat = items_total_price + addon + shipping - discount
+    total_before_vat = items_total_price + addon + shipping - discount_amt
     
     vat_amount = Decimal(0)
     grand_total = Decimal(0)
@@ -234,24 +275,36 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
 
     revenue_ex_vat = grand_total - vat_amount
     estimated_profit = revenue_ex_vat - items_total_cost
-    balance = grand_total - deposit
+    balance = grand_total - total_deposit
 
-    # 4. อัปเดตข้อมูล Header (Update Order Object)
+    # Update Fields
     order.customer_id = customer.id
     order.deadline = order_in.deadline
+    order.usage_date = order_in.usage_date
     order.urgency_level = order_in.urgency_level
+    order.status = order_in.status
+    
     order.is_vat_included = order_in.is_vat_included
     order.shipping_cost = shipping
     order.add_on_cost = addon
-    order.discount_amount = discount
+    
+    order.discount_type = order_in.discount_type
+    order.discount_value = discount_val
+    order.discount_amount = discount_amt
+    
     order.vat_amount = vat_amount
     order.grand_total = grand_total
-    order.deposit_amount = deposit
+    
+    order.deposit_amount = total_deposit
+    order.deposit_1 = dep1
+    order.deposit_2 = dep2
+    
     order.balance_amount = balance
     order.total_cost = items_total_cost
     order.estimated_profit = estimated_profit
+    order.note = order_in.note
 
-    # 5. อัปเดต Items (ลบของเก่าทั้งหมดแล้วสร้างใหม่)
+    # Update Items (Delete old, Add new)
     db.query(OrderItemModel).filter(OrderItemModel.order_id == order.id).delete()
     
     for item_data in order_items_data:
@@ -271,6 +324,16 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
         )
         db.add(new_item)
 
+    # Audit Log
+    log = AuditLog(
+        action="UPDATE",
+        target_type="order",
+        target_id=str(order.id),
+        details=f"Updated order {order.order_no} (Status: {order.status}) by {current_user.username}",
+        user_id=current_user.id if current_user else None
+    )
+    db.add(log)
+
     db.commit()
     db.refresh(order)
 
@@ -285,11 +348,45 @@ def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get
 
 # --- 5. DELETE ORDER ---
 @router.delete("/{order_id}", status_code=204)
-def delete_order(order_id: int, db: Session = Depends(get_db)):
+def delete_order(
+    order_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
+    # Audit Log
+    log = AuditLog(
+        action="DELETE",
+        target_type="order",
+        target_id=str(order.id),
+        details=f"Deleted order {order.order_no} by {current_user.username}",
+        user_id=current_user.id if current_user else None
+    )
+    db.add(log)
+    
     db.delete(order)
     db.commit()
     return None
+
+# --- 6. GET ORDER LOGS (NEW) ---
+@router.get("/{order_id}/logs")
+def get_order_logs(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    logs = db.query(AuditLog).filter(
+        AuditLog.target_type == "order",
+        AuditLog.target_id == str(order_id)
+    ).order_by(AuditLog.created_at.desc()).all()
+    
+    return [{
+        "id": log.id,
+        "action": log.action,
+        "details": log.details,
+        "created_at": log.created_at,
+        "user": log.user.username if log.user else "Unknown"
+    } for log in logs]

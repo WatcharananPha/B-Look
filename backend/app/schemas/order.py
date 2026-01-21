@@ -20,7 +20,6 @@ class OrderItemBase(BaseModel):
     total_qty: int = 0
 
 class OrderItemCreate(OrderItemBase):
-    # ใช้สำหรับรับข้อมูลตอนสร้าง (มี field น้อยกว่า)
     pass
 
 class OrderItem(OrderItemBase):
@@ -35,21 +34,31 @@ class OrderItem(OrderItemBase):
 class OrderBase(BaseModel):
     customer_name: Optional[str] = None
     phone: Optional[str] = None
-    contact_channel: Optional[str] = Field(None, alias="channel") # รองรับทั้ง channel และ contact_channel
+    contact_channel: Optional[str] = Field(None, alias="channel")
     address: Optional[str] = None
     deadline: Optional[datetime] = None
     usage_date: Optional[datetime] = None
     urgency_level: str = "normal"
+    status: str = "draft"
     
     is_vat_included: bool = False
     shipping_cost: Decimal = 0
     add_on_cost: Decimal = 0
+    
+    # Discount (NEW)
+    discount_type: str = "THB"
+    discount_value: Decimal = 0
     discount_amount: Decimal = 0
-    deposit_amount: Decimal = Field(0, alias="deposit") # รองรับชื่อ deposit
+    
+    # Deposits (NEW)
+    deposit_amount: Decimal = Field(0, alias="deposit") # Total Deposit
+    deposit_1: Decimal = 0
+    deposit_2: Decimal = 0
+    
+    note: Optional[str] = None # NEW
 
 # Properties to receive via API on creation
 class OrderCreate(OrderBase):
-    # Frontend ส่ง deadline มาเป็น datetime string
     deadline: Optional[datetime] = None 
     items: List[OrderItemCreate] = []
 
@@ -57,7 +66,6 @@ class OrderCreate(OrderBase):
 class Order(OrderBase):
     id: int
     order_no: str
-    status: str
     
     # Financials (Mapped from DB)
     grand_total: Decimal = 0
@@ -69,15 +77,13 @@ class Order(OrderBase):
     estimated_profit: Decimal = 0
     
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     items: List[OrderItem] = []
 
     class Config:
         from_attributes = True
         populate_by_name = True
 
-    # Helper เพื่อดึงชื่อลูกค้าจาก Relationship (ถ้ามี)
     @validator('customer_name', pre=True, always=True, check_fields=False)
     def extract_customer_name(cls, v, values):
-        # ถ้าค่า v เป็น None และ object ต้นทางมี attribute 'customer'
-        # หมายเหตุ: ใน Pydantic v2 อาจต้องใช้วิธีอื่น แต่ใน v1/FastAPI ปัจจุบันใช้วิธีนี้ หรือ map ใน API เอาชัวร์สุด
         return v
