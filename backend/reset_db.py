@@ -7,13 +7,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import text
 from app.db.session import engine, SessionLocal
-from app.db.base import Base
+# --- จุดที่แก้ไข: Import Base จาก base_class แทน ---
+from app.db.base_class import Base 
 
-# --- Import Models ---
-# Import เฉพาะตัวที่มีอยู่จริง เพื่อให้ SQLAlchemy รู้จัก Table
+# Import Models เพื่อให้ Base รู้จักตารางทั้งหมด
 from app.models.user import User
 from app.models.company import Company
-# Import models อื่นๆ ผ่าน __init__ เพื่อให้แน่ใจว่าถูก Register เข้า Base
+# Import models อื่นๆ (ถ้ามี __init__.py รวมไว้แล้วก็ใช้ได้ หรือ import แยกเพื่อให้ชัวร์)
 import app.models 
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +24,6 @@ def reset_database():
     print("💣 กำลังล้าง Database (Reset DB)...")
 
     # 1. ล้างข้อมูลเก่า (Drop Schema Public)
-    # วิธีนี้จะลบทุกตารางและ Type ที่เกี่ยวข้อง แก้ปัญหา Foreign Key ค้างได้ชะงัด
     with engine.connect() as connection:
         with connection.begin():
             connection.execute(text("DROP SCHEMA public CASCADE;"))
@@ -35,6 +34,7 @@ def reset_database():
 
     # 2. สร้างตารางใหม่
     print("🏗️ กำลังสร้างตารางใหม่...")
+    # ตอนนี้ Base จะรู้จักตาราง Company และ User แล้ว
     Base.metadata.create_all(bind=engine)
     print("✅ สร้างตารางเสร็จสมบูรณ์")
 
@@ -53,16 +53,12 @@ def reset_database():
         )
         db.add(admin)
         
-        # 3.2 สร้าง Company Config (สำคัญ! ถ้าไม่มี หน้า Dashboard อาจ error)
-        # เช็คก่อนว่า Company import มาได้จริงไหม ถ้าไม่ได้ให้ข้ามหรือใช้ค่า default
-        try:
-            company = Company(
-                vat_rate=0.07,
-                default_shipping_cost=0.0
-            )
-            db.add(company)
-        except NameError:
-            print("⚠️ Warning: Company model not found, skipping company config.")
+        # 3.2 สร้าง Company Config
+        company = Company(
+            vat_rate=0.07,
+            default_shipping_cost=50.0
+        )
+        db.add(company)
 
         db.commit()
         print("✅ สร้าง User 'admin' (Pass: 1234) เรียบร้อย")
