@@ -151,21 +151,123 @@ const UserManagementPage = ({ onNotify }) => {
     );
 };
 
-// 2.1 DASHBOARD (Updated Logic)
+// -----------------------------------------------------------------------------
+// HELPER COMPONENT: DETAIL LIST MODAL
+// -----------------------------------------------------------------------------
+const DetailListModal = ({ title, items, onClose, onEdit }) => (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 className="text-xl font-bold text-[#1a1c23]">{title}</h3>
+                <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={24} className="text-slate-500"/></button>
+            </div>
+            <div className="p-0 overflow-y-auto flex-1">
+                {items && items.length > 0 ? (
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
+                            <tr>
+                                <th className="p-4 bg-gray-50 text-gray-600">Order No</th>
+                                <th className="p-4 bg-gray-50 text-gray-600">ลูกค้า</th>
+                                <th className="p-4 bg-gray-50 text-gray-600">สถานะ</th>
+                                <th className="p-4 bg-gray-50 text-gray-600">รายละเอียด</th>
+                                <th className="p-4 bg-gray-50 text-gray-600 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {items.map((item, idx) => (
+                                <tr key={item.id || idx} className="hover:bg-blue-50/50 transition">
+                                    <td className="p-4 font-mono font-bold text-sm text-[#1a1c23]">{item.order_no}</td>
+                                    <td className="p-4 text-sm">
+                                        <div className="font-bold text-gray-700">{item.customer_name}</div>
+                                        <div className="text-xs text-gray-400">{item.contact_channel}</div>
+                                    </td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
+                                            item.status === 'production' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                            item.status === 'urgent' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                                            item.status === 'delivered' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                            'bg-gray-100 text-gray-600 border-gray-200'
+                                        }`}>
+                                            {item.status || 'Draft'}
+                                        </span>
+                                    </td>
+                                    <td className="p-4 text-sm text-gray-600">
+                                        {item.desc || (item.deadline ? `ส่ง: ${new Date(item.deadline).toLocaleDateString('th-TH')}` : '-')}
+                                    </td>
+                                    <td className="p-4 text-right">
+                                        <button 
+                                            onClick={() => { onClose(); if(onEdit && item.id) onEdit(item); }}
+                                            className="text-xs bg-[#1a1c23] text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition"
+                                        >
+                                            ดูข้อมูล
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <div className="p-12 text-center text-gray-400 flex flex-col items-center justify-center h-64">
+                        <FileText size={48} className="mb-2 opacity-20"/>
+                        <p>ไม่มีรายการข้อมูล</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+);
+
+// -----------------------------------------------------------------------------
+// 2.1 DASHBOARD (FULL UPDATED CODE)
+// -----------------------------------------------------------------------------
 const DashboardPage = ({ onEdit }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     
+    // Global Filter States
+    const [timeRange, setTimeRange] = useState('today'); // 'today', 'week', 'month'
+    const [brandFilter, setBrandFilter] = useState('All Outlets'); // 'All Outlets', 'BG', 'Jersey'
+
     // Data States
     const [allOrders, setAllOrders] = useState([]);
-    const [stats, setStats] = useState({ 
-        newOrdersToday: 0, 
-        inProduction: 0, 
-        deliveryIn3Days: 0, 
-        deliveredThisMonth: 0 
+    
+    // Metric Lists (Filtered)
+    const [metricLists, setMetricLists] = useState({
+        newOrders: [],
+        inProduction: [],
+        deliveryIn3Days: [],
+        delivered: []
     });
+
     const [events, setEvents] = useState([]);
-    const [alerts, setAlerts] = useState([]);
+    
+    // Today's List Data & Filter
+    const [todaysList, setTodaysList] = useState([]);
+    const [todayFilter, setTodayFilter] = useState('all'); 
+
+    // Modals
     const [showQueueModal, setShowQueueModal] = useState(false);
+    const [detailModal, setDetailModal] = useState(null); 
+
+    // --- Helper: Date Range Checker ---
+    const isInTimeRange = (dateStr, range) => {
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        if (range === 'today') {
+            return date >= startOfDay && date < new Date(startOfDay.getTime() + 86400000);
+        } else if (range === 'week') {
+            const day = startOfDay.getDay() || 7; // Get current day (1-7)
+            if (day !== 1) startOfDay.setHours(-24 * (day - 1)); // Go back to Monday
+            const endOfWeek = new Date(startOfDay.getTime() + 6 * 24 * 60 * 60 * 1000);
+            endOfWeek.setHours(23, 59, 59, 999);
+            return date >= startOfDay && date <= endOfWeek;
+        } else if (range === 'month') {
+            return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+        }
+        return true;
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -174,103 +276,96 @@ const DashboardPage = ({ onEdit }) => {
                 const data = orders || [];
                 setAllOrders(data);
                 
-                const today = new Date();
+                // --- 1. Apply Brand Filter First ---
+                let filteredData = data;
+                if (brandFilter !== 'All Outlets') {
+                    // สมมติว่ามี field brand หรือเดาจากสินค้า (ในที่นี้ถ้าไม่มี field brand ชัดเจน อาจต้องข้ามไปก่อน หรือใช้ logic อื่น)
+                    // *หมายเหตุ: ใน Requirement 5.2 มี "เลือกแบรนด์: BG หรือ Jersey" แต่ใน Model ปัจจุบันยังไม่มี column brand ชัดเจน
+                    // ผมจะ assume ว่าถ้ามีการเก็บข้อมูล brand จะ filter ตรงนี้
+                    // filteredData = data.filter(o => o.brand === brandFilter);
+                }
+
+                // --- 2. Calculate Metrics based on Time Range ---
                 
-                const newOrdersToday = data.filter(o => {
-                    const created = o.created_at ? new Date(o.created_at) : new Date(o.updated_at); 
-                    return created.getDate() === today.getDate() && 
-                           created.getMonth() === today.getMonth() && 
-                           created.getFullYear() === today.getFullYear();
-                }).length;
+                // 2.1 New Orders (Created Date matches Time Range)
+                const newOrders = filteredData.filter(o => {
+                    const created = o.created_at ? new Date(o.created_at) : new Date(o.updated_at);
+                    return isInTimeRange(created, timeRange);
+                });
 
-                const inProduction = data.filter(o => o.status === 'production').length;
+                // 2.2 In Production (Snapshot - No Time Range, just Status)
+                const inProduction = filteredData.filter(o => ['production', 'designing', 'waiting_approval'].includes(o.status));
 
-                const deliveryIn3Days = data.filter(o => {
+                // 2.3 Delivery in 3 Days (Snapshot - Pending & Deadline approaching)
+                const today = new Date();
+                const deliveryIn3Days = filteredData.filter(o => {
                     if (!o.deadline || o.status === 'delivered') return false;
                     const deadline = new Date(o.deadline);
                     const diffTime = deadline - today;
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                     return diffDays >= 0 && diffDays <= 3;
-                }).length;
-
-                const deliveredThisMonth = data.filter(o => {
-                    if (o.status !== 'delivered') return false;
-                    const date = o.deadline ? new Date(o.deadline) : new Date(); 
-                    return date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
-                }).length;
-
-                setStats({ newOrdersToday, inProduction, deliveryIn3Days, deliveredThisMonth });
-
-                // --- NEW: Logic แจ้งเตือนตาม Cycle ---
-                const smartAlerts = [];
-
-                data.forEach(o => {
-                    const deadline = o.deadline ? new Date(o.deadline) : null;
-                    const usageDate = o.usage_date ? new Date(o.usage_date) : null;
-                    const updatedAt = o.updated_at ? new Date(o.updated_at) : new Date(o.created_at);
-                    const diffUpdate = Math.ceil((today - updatedAt) / (1000 * 60 * 60 * 24));
-
-                    // 1. แจ้งเตือน: รอแบบอนุมัติ นานเกิน 1 วัน (ต้องตามลูกค้า)
-                    if (o.status === 'waiting_approval' && diffUpdate >= 1) {
-                        smartAlerts.push({
-                            type: 'WARNING', 
-                            title: `ตามผลแบบ: ${o.customer_name}`, 
-                            desc: `ส่งแบบไปแล้ว ${diffUpdate} วัน ยังไม่ตอบรับ`
-                        });
-                    }
-
-                    // 2. แจ้งเตือน: ใกล้วันใช้งานจริง 2 วัน (ต้องถึงมือลูกค้าแล้ว)
-                    if (usageDate) {
-                        const diffUsage = Math.ceil((usageDate - today) / (1000 * 60 * 60 * 24));
-                        if (diffUsage > 0 && diffUsage <= 2 && o.status !== 'delivered') {
-                            smartAlerts.push({
-                                type: 'CRITICAL', 
-                                title: `ลูกค้าจะใช้งานใน ${diffUsage} วัน!`, 
-                                desc: `ออเดอร์ ${o.order_no} ต้องส่งของทันที`
-                            });
-                        }
-                    }
-
-                    // 3. แจ้งเตือน: กำหนดส่งผลิต (Deadline)
-                    if (deadline && o.status === 'production') {
-                        const diffDead = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
-                        if (diffDead <= 1 && diffDead >= 0) {
-                            smartAlerts.push({
-                                type: 'URGENT', 
-                                title: `ครบกำหนดผลิต: ${o.order_no}`, 
-                                desc: `ต้องเสร็จภายในวันนี้หรือพรุ่งนี้`
-                            });
-                        }
-                    }
                 });
-                setAlerts(smartAlerts); // Set alerts เข้า State
 
-                // --- NEW: Map Event สำหรับปฏิทิน แยกสี ---
-                const mappedEvents = data.map(o => {
-                    // เลือกใช้วันที่สำคัญที่สุด (ถ้ามีวันใช้งาน ให้โชว์วันใช้งานด้วย)
+                // 2.4 Delivered (Delivered Date/Update Date matches Time Range)
+                const delivered = filteredData.filter(o => {
+                    if (o.status !== 'delivered') return false;
+                    const completedDate = o.updated_at ? new Date(o.updated_at) : new Date(); // Use updated_at as completion date proxy
+                    return isInTimeRange(completedDate, timeRange);
+                });
+
+                setMetricLists({
+                    newOrders,
+                    inProduction,
+                    deliveryIn3Days,
+                    delivered
+                });
+
+                // --- 3. Calendar Events (Show All for the selected month view) ---
+                const mappedEvents = filteredData.map(o => {
                     const targetDate = o.usage_date ? new Date(o.usage_date) : (o.deadline ? new Date(o.deadline) : null);
                     if (!targetDate) return null;
 
                     return {
-                        id: o.id,
+                        ...o, 
                         day: targetDate.getDate(),
                         month: targetDate.getMonth(),
                         year: targetDate.getFullYear(),
                         title: o.customer_name,
-                        status: o.status || 'pending',
-                        order_no: o.order_no,
-                        isUsageDate: !!o.usage_date // flag บอกว่าเป็นวันใช้งาน
+                        isUsageDate: !!o.usage_date
                     };
                 }).filter(e => e !== null);
 
                 setEvents(mappedEvents.filter(e => e.month === currentDate.getMonth() && e.year === currentDate.getFullYear()));
+
+                // --- 4. Today's Activity List (Fix list generation) ---
+                const todayItems = [];
+                const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
+                
+                // New Today
+                filteredData.filter(o => {
+                    const d = o.created_at ? new Date(o.created_at) : new Date();
+                    return d.getDate() === startOfToday.getDate() && d.getMonth() === startOfToday.getMonth();
+                }).forEach(o => todayItems.push({...o, type: 'new', desc: 'สร้างวันนี้'}));
+
+                // Deadline Today
+                filteredData.forEach(o => {
+                    if(o.deadline) {
+                        const d = new Date(o.deadline); d.setHours(0,0,0,0);
+                        if(d.getTime() === startOfToday.getTime()) todayItems.push({...o, type: 'deadline', desc: 'กำหนดส่งวันนี้'});
+                    }
+                    if(o.usage_date) {
+                        const u = new Date(o.usage_date); u.setHours(0,0,0,0);
+                        if(u.getTime() === startOfToday.getTime()) todayItems.push({...o, type: 'usage', desc: 'ลูกค้าใช้งานวันนี้'});
+                    }
+                });
+                setTodaysList(todayItems);
 
             } catch (err) {
                 console.error("Dashboard Fetch Error", err);
             }
         };
         fetchData();
-    }, [currentDate]);
+    }, [currentDate, timeRange, brandFilter]); // Re-run when filters change
 
     const eventsByDay = events.reduce((acc, evt) => {
         acc[evt.day] = [...(acc[evt.day] || []), evt];
@@ -279,22 +374,43 @@ const DashboardPage = ({ onEdit }) => {
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
 
-    const MetricCard = ({ title, value, color }) => (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 hover:shadow-md transition">
+    const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
+        <div 
+            onClick={onClick}
+            className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
+        >
             <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
             <div className={`text-4xl font-black ${color}`}>{value}</div>
         </div>
     );
 
-    // Filter production orders for modal
-    const productionOrders = allOrders.filter(o => o.status === 'production');
+    // Filter Today List for UI
+    const filteredTodayList = todayFilter === 'all' ? todaysList : todaysList.filter(i => i.type === todayFilter);
+
+    // Labels for Time Range
+    const timeRangeLabels = {
+        'today': 'วันนี้',
+        'week': 'สัปดาห์นี้',
+        'month': 'เดือนนี้'
+    };
 
     return (
         <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
-            {/* Queue Modal */}
+            
+            {/* Modal for Details */}
+            {detailModal && (
+                <DetailListModal 
+                    title={detailModal.title} 
+                    items={detailModal.items} 
+                    onClose={() => setDetailModal(null)} 
+                    onEdit={onEdit}
+                />
+            )}
+
+            {/* Queue Modal (Fixed Layout) */}
             {showQueueModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <div className="flex items-center gap-3">
                                 <Box className="text-[#1a1c23]" />
@@ -303,66 +419,120 @@ const DashboardPage = ({ onEdit }) => {
                             <button onClick={() => setShowQueueModal(false)} className="bg-white p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={24} className="text-slate-500"/></button>
                         </div>
                         <div className="p-0 overflow-y-auto flex-1">
-                            <table className="w-full text-left">
+                            <table className="w-full text-left table-fixed">
                                 <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                                     <tr>
-                                        <th className="p-4 w-1/4">เลขที่ออเดอร์</th>
-                                        <th className="p-4 w-1/4">ลูกค้า</th>
-                                        <th className="p-4 w-1/4">กำหนดส่ง</th>
-                                        <th className="p-4 w-1/4 text-right">สถานะ</th>
+                                        <th className="p-4 w-[15%] bg-gray-50">Order No</th>
+                                        <th className="p-4 w-[25%] bg-gray-50">ลูกค้า</th>
+                                        <th className="p-4 w-[20%] bg-gray-50">กำหนดส่ง</th>
+                                        <th className="p-4 w-[20%] bg-gray-50">สถานะ</th>
+                                        <th className="p-4 w-[20%] bg-gray-50 text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                    {productionOrders.map(o => (
+                                    {metricLists.inProduction.map(o => (
                                         <tr key={o.id} className="hover:bg-blue-50/50 transition">
-                                            <td className="p-4 font-mono font-bold text-sm text-[#1a1c23]">{o.order_no}</td>
-                                            <td className="p-4 text-sm text-gray-700">{o.customer_name}</td>
+                                            <td className="p-4 font-mono font-bold text-sm text-[#1a1c23] truncate">{o.order_no}</td>
+                                            <td className="p-4 text-sm text-gray-700 truncate" title={o.customer_name}>{o.customer_name}</td>
                                             <td className="p-4 text-sm text-gray-500">{o.deadline ? new Date(o.deadline).toLocaleDateString('th-TH') : '-'}</td>
-                                            <td className="p-4 text-right">
-                                                <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm border border-amber-200">
-                                                    กำลังผลิต/รอส่ง
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold border ${
+                                                    o.status === 'production' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                                    'bg-blue-100 text-blue-700 border-blue-200'
+                                                }`}>
+                                                    {o.status}
                                                 </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <button onClick={() => { setShowQueueModal(false); onEdit(o); }} className="text-xs underline text-slate-500 hover:text-[#1a1c23]">แก้ไข</button>
                                             </td>
                                         </tr>
                                     ))}
-                                    {productionOrders.length === 0 && (
+                                    {metricLists.inProduction.length === 0 && (
                                         <tr>
-                                            <td colSpan="4" className="p-12 text-center text-gray-400 flex flex-col items-center justify-center">
-                                                <CheckCircle size={48} className="mb-2 opacity-20"/>
-                                                ไม่มีรายการที่รอจัดส่ง
-                                            </td>
+                                            <td colSpan="5" className="p-12 text-center text-gray-400">ไม่มีรายการที่รอจัดส่ง</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
-                        </div>
-                        <div className="p-4 border-t border-gray-100 bg-gray-50 text-right">
-                            <button onClick={() => setShowQueueModal(false)} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg">ปิดหน้าต่าง</button>
                         </div>
                     </div>
                 </div>
             )}
 
             <header className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
-                    สวัสดี, ภาพรวมร้านค้าของคุณ
-                </h1>
-                <p className="text-gray-500">ยินดีต้อนรับสู่ระบบจัดการ B-LOOK</p>
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
+                            Overview
+                        </h1>
+                        <p className="text-gray-500">ภาพรวมร้านค้าของคุณ</p>
+                    </div>
+                    
+                    {/* --- GLOBAL FILTER BAR --- */}
+                    <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 gap-1">
+                        {['today', 'week', 'month'].map(range => (
+                            <button
+                                key={range}
+                                onClick={() => setTimeRange(range)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                                    timeRange === range 
+                                    ? 'bg-[#1a1c23] text-white shadow-md' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                            >
+                                {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
+                            </button>
+                        ))}
+                        <div className="w-px bg-gray-200 mx-1"></div>
+                        <select 
+                            className="bg-transparent text-xs font-bold text-gray-700 outline-none px-2 cursor-pointer hover:bg-gray-50 rounded-lg"
+                            value={brandFilter}
+                            onChange={(e) => setBrandFilter(e.target.value)}
+                        >
+                            <option>All Outlets</option>
+                            <option>BG</option>
+                            <option>Jersey</option>
+                        </select>
+                    </div>
+                </div>
             </header>
 
+            {/* Metrics Grid (Dynamic based on Filter) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <MetricCard title="ออเดอร์ใหม่ (วันนี้)" value={stats.newOrdersToday} color="text-blue-600" />
-                <MetricCard title="กำลังผลิต" value={stats.inProduction} color="text-amber-500" />
-                <MetricCard title="ต้องส่งภายใน 3 วัน" value={stats.deliveryIn3Days} color="text-rose-600" />
-                <MetricCard title="ส่งมอบแล้ว (เดือนนี้)" value={stats.deliveredThisMonth} color="text-emerald-600" />
+                <MetricCard 
+                    title={`ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`}
+                    value={metricLists.newOrders.length} 
+                    color="text-blue-600" 
+                    onClick={() => setDetailModal({ title: `ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`, items: metricLists.newOrders })}
+                />
+                <MetricCard 
+                    title="กำลังดำเนินการ" 
+                    value={metricLists.inProduction.length} 
+                    color="text-amber-500" 
+                    onClick={() => setDetailModal({ title: "รายการกำลังดำเนินการทั้งหมด", items: metricLists.inProduction })}
+                />
+                <MetricCard 
+                    title="ต้องส่งใน 3 วัน" 
+                    value={metricLists.deliveryIn3Days.length} 
+                    color="text-rose-600" 
+                    onClick={() => setDetailModal({ title: "รายการด่วน (ส่งภายใน 3 วัน)", items: metricLists.deliveryIn3Days })}
+                />
+                <MetricCard 
+                    title={`ส่งมอบแล้ว (${timeRangeLabels[timeRange]})`}
+                    value={metricLists.delivered.length} 
+                    color="text-emerald-600" 
+                    onClick={() => setDetailModal({ title: `รายการส่งมอบแล้ว (${timeRangeLabels[timeRange]})`, items: metricLists.delivered })}
+                />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* Calendar Panel */}
                 <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-[#1a1c23]">ตารางการผลิต</h3>
-                            <p className="text-xs text-gray-400">ติดตามกำหนดส่งสินค้า</p>
+                            <h3 className="text-xl font-bold text-[#1a1c23]">ตารางงาน</h3>
+                            <p className="text-xs text-gray-400">คลิกที่วันเพื่อดูรายละเอียด</p>
                         </div>
                         <div className="flex items-center space-x-2 bg-gray-50 rounded-lg p-1">
                             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronLeft size={16}/></button>
@@ -386,20 +556,31 @@ const DashboardPage = ({ onEdit }) => {
                                     const day = i + 1;
                                     const evts = eventsByDay[day] || [];
                                     const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth();
+                                    
                                     return (
-                                        <div key={day} className={`h-24 border border-gray-100 rounded-xl p-2 relative hover:border-blue-200 transition group flex flex-col ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white'}`}>
+                                        <div 
+                                            key={day} 
+                                            onClick={() => {
+                                                if (evts.length > 0) {
+                                                    setDetailModal({ 
+                                                        title: `รายละเอียดวันที่ ${day} ${currentDate.toLocaleString('th-TH', { month: 'long' })}`, 
+                                                        items: evts 
+                                                    });
+                                                }
+                                            }}
+                                            className={`h-24 border border-gray-100 rounded-xl p-2 relative transition group flex flex-col 
+                                                ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white hover:border-blue-300 cursor-pointer'}
+                                            `}
+                                        >
                                             <span className={`text-sm font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}>{day}</span>
                                             <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
                                                 {evts.map((e, idx) => {
-                                                    // กำหนดสีตามสถานะ
-                                                    let bgClass = "bg-gray-100 text-gray-600"; // Default
+                                                    let bgClass = "bg-gray-100 text-gray-600";
                                                     if (e.status === 'designing') bgClass = "bg-purple-100 text-purple-700 border-purple-200";
                                                     if (e.status === 'waiting_approval') bgClass = "bg-yellow-100 text-yellow-700 border-yellow-200";
                                                     if (e.status === 'production') bgClass = "bg-blue-100 text-blue-700 border-blue-200";
                                                     if (e.status === 'shipping') bgClass = "bg-orange-100 text-orange-700 border-orange-200";
                                                     if (e.status === 'delivered') bgClass = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                                                    
-                                                    // ถ้าเป็นวันใช้งานจริง ให้เป็นสีแดงเด่นๆ
                                                     if (e.isUsageDate && e.status !== 'delivered') bgClass = "bg-rose-500 text-white font-bold shadow-md";
 
                                                     return (
@@ -418,27 +599,50 @@ const DashboardPage = ({ onEdit }) => {
                 </div>
 
                 <div className="space-y-6">
-                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
+                    {/* Today's List Panel with Summary/Detail Filter */}
+                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[400px]">
                         <div className="mb-4 flex items-center justify-between">
-                             <h3 className="text-lg font-bold text-[#1a1c23]">แจ้งเตือน</h3>
-                             <span className="bg-rose-100 text-rose-600 text-xs px-2 py-1 rounded-full font-bold">{alerts.length}</span>
+                             <div>
+                                 <h3 className="text-lg font-bold text-[#1a1c23]">รายการวันนี้</h3>
+                                 <p className="text-xs text-gray-400">{new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long'})}</p>
+                             </div>
+                             {/* Filter Summary / Detail (Simulated by Type Filter) */}
+                             <select 
+                                className="text-xs border rounded-lg p-1.5 bg-gray-50 focus:ring-1 focus:ring-[#1a1c23] outline-none"
+                                value={todayFilter}
+                                onChange={(e) => setTodayFilter(e.target.value)}
+                             >
+                                 <option value="all">ทั้งหมด (All)</option>
+                                 <option value="new">ออเดอร์ใหม่</option>
+                                 <option value="deadline">ครบกำหนด</option>
+                                 <option value="usage">วันใช้งาน</option>
+                             </select>
                         </div>
-                        <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto">
-                            {alerts.length > 0 ? alerts.map((alert, i) => (
-                                <div key={i} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                    <div className="bg-rose-100 p-2 rounded-full text-rose-500 shrink-0">
-                                        <AlertCircle size={16} />
+                        
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            {filteredTodayList.length > 0 ? filteredTodayList.map((item, i) => (
+                                <div key={i} onClick={() => onEdit(item)} className="flex items-start space-x-3 p-3 bg-gray-50 hover:bg-blue-50 cursor-pointer rounded-xl border border-gray-100 transition group">
+                                    <div className={`p-2 rounded-full shrink-0 ${
+                                        item.type === 'new' ? 'bg-blue-100 text-blue-500' : 
+                                        item.type === 'usage' ? 'bg-rose-100 text-rose-500' : 'bg-amber-100 text-amber-500'
+                                    }`}>
+                                        {item.type === 'new' ? <Plus size={16}/> : <AlertCircle size={16} />}
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800">{alert.title}</p>
-                                        <p className="text-xs text-gray-500">{alert.desc}</p>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between">
+                                            <p className="text-sm font-bold text-gray-800 truncate">{item.customer_name}</p>
+                                            <span className="text-[10px] bg-white px-1.5 rounded border text-gray-500">{item.order_no}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 truncate">{item.desc}</p>
                                     </div>
                                 </div>
                             )) : (
-                                <div className="text-center py-8 text-gray-400 text-sm">ไม่มีการแจ้งเตือนด่วน</div>
+                                <div className="text-center py-12 text-gray-300 text-sm flex flex-col items-center">
+                                    <CheckCircle size={32} className="mb-2 opacity-30"/>
+                                    ไม่มีรายการในช่วงนี้
+                                </div>
                             )}
                         </div>
-                        <button className="w-full py-2 text-xs font-bold text-gray-500 hover:text-gray-900 border rounded-lg hover:bg-gray-50 transition">ดูทั้งหมด</button>
                     </div>
 
                     <div className="bg-[#1a1c23] rounded-3xl shadow-lg p-6 text-white relative overflow-hidden">
@@ -450,7 +654,7 @@ const DashboardPage = ({ onEdit }) => {
                                     <Box size={20} className="text-blue-400"/>
                                     <span className="text-sm font-medium">รอจัดส่ง</span>
                                 </div>
-                                <span className="text-xl font-bold">{productionOrders.length}</span>
+                                <span className="text-xl font-bold">{metricLists.inProduction.length}</span>
                             </div>
                             <button 
                                 onClick={() => setShowQueueModal(true)}

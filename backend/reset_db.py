@@ -1,34 +1,59 @@
-import sys
-import os
-
-# Add path to project root
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.db.session import engine
+import logging
+from sqlalchemy import text
+from app.db.session import engine, SessionLocal
 from app.db.base import Base
+# Import Models ให้ครบทุกตัว
+from app.models import User, Order, Customer, Product, Supplier, PricingRule, AuditLog, Company
 
-# Import models เพื่อให้ Base.metadata รู้จักตารางทั้งหมด
-# (จำเป็นต้อง Import โมดูลที่มีการประกาศ Class Base ทั้งหมด)
-from app.models import user, customer, order, product, supplier, company, pricing_rule
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def reset_database():
-    print("WARNING: This will delete all data in the database!")
+def fix_database_final():
+    print("------------------------------------------------")
+    logger.info("🔧 เริ่มกระบวนการซ่อมแซม Database...")
     
-    print("💣 Dropping all tables...")
+    # 1. ล้างข้อมูลเก่าทิ้งทั้งหมด (Force Reset)
+    with engine.connect() as connection:
+        with connection.begin():
+            logger.info("   -> ลบ Schema เดิม (Drop All)...")
+            connection.execute(text("DROP SCHEMA public CASCADE;"))
+            connection.execute(text("CREATE SCHEMA public;"))
+            connection.execute(text("GRANT ALL ON SCHEMA public TO public;"))
+    
+    # 2. สร้างตารางใหม่
+    logger.info("   -> สร้างตารางใหม่ (Create Tables)...")
+    Base.metadata.create_all(bind=engine)
+    
+    # 3. สร้าง User Admin
+    db = SessionLocal()
     try:
-        # ลบตารางทั้งหมด
-        Base.metadata.drop_all(bind=engine)
-        print("✅ All tables dropped.")
+        from app.core.security import get_password_hash
+        # เช็คว่ามี admin หรือยัง (จริงๆ ไม่มีเพราะเพิ่ง drop)
+        admin = User(
+            username="admin",
+            password_hash=get_password_hash("1234"),
+            full_name="System Admin",
+            role="owner",
+            is_active=True
+        )
+        db.add(admin)
+        
+        # เพิ่มข้อมูลตั้งค่าบริษัทเริ่มต้น (กัน Error)
+        company = Company(
+            vat_rate=0.07,
+            default_shipping_cost=50.0
+        )
+        db.add(company)
+        
+        db.commit()
+        logger.info("✅ Database พร้อมใช้งานแล้ว!")
+        logger.info("🔐 Login: admin / 1234")
     except Exception as e:
-        print(f"❌ Error dropping tables: {e}")
-
-    print("🏗️ Creating all tables...")
-    try:
-        # สร้างตารางใหม่ทั้งหมดตาม Schema ล่าสุด
-        Base.metadata.create_all(bind=engine)
-        print("✅ All tables created successfully.")
-    except Exception as e:
-        print(f"❌ Error creating tables: {e}")
+        logger.error(f"❌ Error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+    print("------------------------------------------------")
 
 if __name__ == "__main__":
-    reset_database()
+    fix_database_final()
