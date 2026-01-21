@@ -119,6 +119,7 @@ def create_order(
     # 3. Save Order Header
     new_order = OrderModel(
         order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
+        brand=order_in.brand,
         customer_id=customer.id,
         deadline=order_in.deadline,
         usage_date=order_in.usage_date,

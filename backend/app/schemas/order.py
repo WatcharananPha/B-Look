@@ -33,6 +33,7 @@ class OrderItem(OrderItemBase):
 # Base Properties
 class OrderBase(BaseModel):
     customer_name: Optional[str] = None
+    brand: Optional[str] = "BG"
     phone: Optional[str] = None
     contact_channel: Optional[str] = Field(None, alias="channel")
     address: Optional[str] = None

@@ -4,7 +4,7 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock
+  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import LoginPage from './Login';
@@ -285,6 +285,7 @@ const DashboardPage = ({ onEdit }) => {
 
     // Data States
     const [allOrders, setAllOrders] = useState([]);
+    const [notifications, setNotifications] = useState([]); // Smart Alerts
     
     // Metric Lists (Filtered)
     const [metricLists, setMetricLists] = useState({
@@ -393,6 +394,27 @@ const DashboardPage = ({ onEdit }) => {
 
                 setEvents(mappedEvents.filter(e => e.month === currentDate.getMonth() && e.year === currentDate.getFullYear()));
 
+                // --- 3.5 Smart Notifications (Alerts for urgent items) ---
+                const alerts = [];
+                data.forEach(o => {
+                    const now = new Date();
+                    // Alert 1: Design/Waiting too long (updated > 2 days ago)
+                    if (['designing', 'waiting_approval'].includes(o.status)) {
+                        const lastUpdate = new Date(o.updated_at || o.created_at);
+                        const diffDays = Math.floor((now - lastUpdate) / (1000 * 3600 * 24));
+                        if (diffDays >= 2) alerts.push({ id: o.id, type: 'warning', msg: `ออเดอร์ ${o.order_no} ค้างในสถานะ "${o.status}" เกิน 2 วันแล้ว`, order: o });
+                    }
+                    // Alert 2: Usage Date approaching (in 2 days)
+                    if (o.usage_date) {
+                        const usage = new Date(o.usage_date);
+                        const diffUsage = Math.ceil((usage - now) / (1000 * 3600 * 24));
+                        if (diffUsage > 0 && diffUsage <= 2 && o.status !== 'delivered') {
+                            alerts.push({ id: o.id, type: 'critical', msg: `🚩 ลูกค้าจะใช้งานออเดอร์ ${o.order_no} ในอีก ${diffUsage} วัน`, order: o });
+                        }
+                    }
+                });
+                setNotifications(alerts);
+
                 // --- 4. Today's Activity List (Fix list generation) ---
                 const todayItems = [];
                 const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
@@ -461,6 +483,24 @@ const DashboardPage = ({ onEdit }) => {
                     onClose={() => setDetailModal(null)} 
                     onEdit={onEdit}
                 />
+            )}
+
+            {/* Notifications Panel */}
+            {notifications.length > 0 && (
+                <div className="mb-8 bg-white p-6 rounded-3xl shadow-sm border border-red-100">
+                    <h3 className="text-lg font-bold text-[#1a1c23] mb-4 flex items-center gap-2"><Bell className="text-rose-500"/> รายการที่ต้องติดตามด่วน</h3>
+                    <div className="space-y-3">
+                        {notifications.map((n, i) => (
+                            <div key={i} onClick={() => onEdit(n.order)} className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer hover:bg-gray-50 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                                <div className="flex items-center gap-3">
+                                    {n.type === 'critical' ? <Flag size={18}/> : <Clock size={18}/>}
+                                    <span className="text-sm font-bold">{n.msg}</span>
+                                </div>
+                                <span className="text-xs underline">ดูรายละเอียด</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             )}
 
             {/* Queue Modal (Fixed Layout) */}
@@ -811,6 +851,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [contactChannel, setContactChannel] = useState("LINE OA");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
   const [basePrice, setBasePrice] = useState(150);
   const [addOnCost, setAddOnCost] = useState(0);
@@ -818,6 +859,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [discount, setDiscount] = useState(0);
   const [isVatIncluded, setIsVatIncluded] = useState(false);
   const [deposit, setDeposit] = useState(0);
+  const [deposit1, setDeposit1] = useState(0);
+  const [deposit2, setDeposit2] = useState(0);
   
   const [fabrics, setFabrics] = useState([]);
   const [necks, setNecks] = useState([]);
@@ -841,15 +884,23 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   // Initialize form when editing an order
   useEffect(() => {
     if (editingOrder) {
+        setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
         setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
         setDeposit(editingOrder.deposit || 0);
+        setDeposit1(editingOrder.deposit_1 || 0);
+        setDeposit2(editingOrder.deposit_2 || 0);
+        setNote(editingOrder.note || "");
         setUsageDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
     } else {
+        setBrand(BRANDS[0]);
         setCustomerName("");
         setDeadline("");
         setDeposit(0);
+        setDeposit1(0);
+        setDeposit2(0);
+        setNote("");
         setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
         setUsageDate("");
         setStatus("draft");
@@ -938,12 +989,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         const orderData = {
             order_no: generateOrderId(),
             customer_name: customerName,
+            brand: brand,
             contact_channel: contactChannel,
             total_amount: grandTotal,
             deposit: deposit,
+            deposit_1: deposit1,
+            deposit_2: deposit2,
             status: status,
             deadline: deadline ? new Date(deadline).toISOString() : null,
             usage_date: usageDate ? new Date(usageDate).toISOString() : null,
+            note: note,
             items: []
         };
 
@@ -1019,9 +1074,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <select className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
                         <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
                         <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
+                        <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-yellow-50 focus:bg-white transition" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
                     
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Event Date</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">วันใช้งาน (Usage Date)</label>
                             <input type="date" className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} />
                         </div>
 
@@ -1041,7 +1097,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
                 <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                        <div>
+                            <label className="block text-sm mb-1 text-gray-500">แบรนด์</label>
+                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={brand} onChange={e => setBrand(e.target.value)}>
+                                {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                        </div>
                          <div>
                             <label className="block text-sm mb-1 text-gray-500">ชนิดผ้า</label>
                             <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
@@ -1098,6 +1160,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </div>
 
                         <div className="flex justify-between font-black text-2xl text-[#1a1c23] mt-4 pt-4 border-t border-gray-100"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
+                        
+                        <div className="bg-emerald-50 p-3 rounded space-y-2 mt-2">
+                            <div className="flex justify-between items-center text-xs"><span>มัดจำ 1</span><input type="number" className="w-16 border text-right border-gray-200 rounded p-1 bg-white" value={deposit1} onChange={e=>setDeposit1(Number(e.target.value))}/></div>
+                            <div className="flex justify-between items-center text-xs"><span>มัดจำ 2</span><input type="number" className="w-16 border text-right border-gray-200 rounded p-1 bg-white" value={deposit2} onChange={e=>setDeposit2(Number(e.target.value))}/></div>
+                            <div className="flex justify-between font-bold text-emerald-700"><span>ค้างชำระ</span><span>{(grandTotal - deposit1 - deposit2).toLocaleString()}</span></div>
+                        </div>
                     </div>
                     <button className="w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center transition" onClick={handleSaveOrder}>
                         <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
