@@ -6,6 +6,10 @@ from decimal import Decimal
 class MasterBase(BaseModel):
     name: str
     is_active: bool = True
+    
+    # ✅ เพิ่ม 2 บรรทัดนี้ที่ตัวแม่ (เพื่อให้ลูกทุกตัวมีเหมือนกัน)
+    quantity: int = 0
+    cost_price: Decimal = 0
 
 # --- Product Type (ทรงเสื้อ) ---
 class ProductTypeCreate(MasterBase):

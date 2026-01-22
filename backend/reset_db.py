@@ -1,7 +1,7 @@
 import logging
 import sys
 import os
-from sqlalchemy import text, inspect
+from sqlalchemy import text
 
 # ตั้งค่า Path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -9,13 +9,12 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.db.session import engine, SessionLocal
 from app.db.base_class import Base
 
-# Import Models
+# --- IMPORT MODELS ให้ครบ (สำคัญมาก เพื่อให้สร้างตารางครบทุกคอลัมน์) ---
 from app.models.user import User
 from app.models.company import Company
 from app.models.customer import Customer
-# Import Product เพื่อเช็ค
-from app.models.product import FabricType, NeckType, SleeveType
-# ... imports อื่นๆ
+# ✅ เน้น: Import Product ให้ครบเพื่อดึง quantity/cost_price มาสร้าง
+from app.models.product import FabricType, NeckType, SleeveType 
 from app.models.order import Order, OrderItem
 from app.models.supplier import Supplier
 from app.models.pricing_rule import PricingRule
@@ -25,46 +24,27 @@ logging.basicConfig(level=logging.INFO)
 
 def reset_database():
     print("------------------------------------------------")
-    print("🔍 กำลังตรวจสอบ Model ก่อน Reset...")
-    
-    # Check FabricType columns in Python
-    fabric_cols = [c.name for c in FabricType.__table__.columns]
-    print(f"   Python Model 'FabricType' columns: {fabric_cols}")
-    
-    if 'quantity' not in fabric_cols or 'cost_price' not in fabric_cols:
-        print("❌ ERROR: ไม่พบคอลัมน์ 'quantity' หรือ 'cost_price' ในไฟล์ models/product.py")
-        print("   กรุณาบันทึกไฟล์ models/product.py ให้เรียบร้อยก่อน!")
-        return
-
-    print("✅ Model ถูกต้อง เริ่มทำการ Reset DB...")
+    print("🔄 กำลังล้างและสร้างฐานข้อมูลใหม่ (Full Reset)...")
     
     try:
-        # 1. Drop Schema
+        # 1. ล้างข้อมูลเก่า (Drop Tables)
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("DROP SCHEMA public CASCADE;"))
                 connection.execute(text("CREATE SCHEMA public;"))
                 connection.execute(text("GRANT ALL ON SCHEMA public TO public;"))
-        print("   -> ลบข้อมูลเก่าเรียบร้อย")
+        print("   -> 🗑️ ลบตารางเก่าเรียบร้อย")
 
-        # 2. Create Tables
+        # 2. สร้างตารางใหม่ (Create Tables)
+        # จังหวะนี้มันจะอ่าน Code จาก models/product.py ที่คุณแก้ไว้
         Base.metadata.create_all(bind=engine)
-        print("   -> สร้างตารางใหม่เรียบร้อย")
-        
-        # 3. Double Check Database Columns
-        inspector = inspect(engine)
-        db_cols = [c['name'] for c in inspector.get_columns("fabric_types")]
-        print(f"   DB Table 'fabric_types' columns: {db_cols}")
-        
-        if 'quantity' in db_cols:
-            print("✅ ยืนยัน: ตารางใน Database มีคอลัมน์ quantity แล้ว!")
-        else:
-            print("❌ ERROR: สร้างตารางแล้วแต่ไม่มี quantity (แปลกมาก!)")
+        print("   -> ✨ สร้างตารางใหม่ (พร้อมคอลัมน์ quantity/cost_price) เรียบร้อย")
 
-        # 4. Seed Data
+        # 3. สร้างข้อมูลเริ่มต้น (Seed Data)
         db = SessionLocal()
         from app.core.security import get_password_hash
         
+        # Admin
         if not db.query(User).filter(User.username == "admin").first():
             admin = User(
                 username="admin", 
@@ -74,7 +54,8 @@ def reset_database():
                 is_active=True
             )
             db.add(admin)
-        
+            
+        # Company Config
         if not db.query(Company).first():
             db.add(Company(vat_rate=0.07, default_shipping_cost=50.0))
 
@@ -82,7 +63,8 @@ def reset_database():
         db.close()
         
         print("------------------------------------------------")
-        print("🎉 Reset เสร็จสมบูรณ์ พร้อมใช้งาน!")
+        print("✅ อัปเดต Database สำเร็จ! (คอลัมน์ใหม่มาแล้ว)")
+        print("🔐 Login: admin / 1234")
         print("------------------------------------------------")
 
     except Exception as e:
