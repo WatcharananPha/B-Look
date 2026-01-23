@@ -44,6 +44,76 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 };
 
 // --- COMPONENTS ---
+// 0. Pagination Component with page numbers
+const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
+    const getPageNumbers = () => {
+        if (totalPages <= 7) {
+            return Array.from({ length: totalPages }, (_, i) => i + 1);
+        }
+        
+        let pages = [1];
+        if (currentPage > 3) {
+            if (currentPage > 4) pages.push('...');
+            for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+                if (!pages.includes(i)) pages.push(i);
+            }
+        } else {
+            for (let i = 2; i <= 4; i++) {
+                pages.push(i);
+            }
+        }
+        
+        if (currentPage < totalPages - 2) {
+            if (currentPage < totalPages - 3) pages.push('...');
+            pages.push(totalPages);
+        } else if (!pages.includes(totalPages)) {
+            pages.push(totalPages);
+        }
+        
+        return pages;
+    };
+
+    const pages = getPageNumbers();
+
+    return (
+        <div className="p-4 border-t border-gray-100 flex justify-center items-center gap-2">
+            <button
+                onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+                <ChevronLeft size={16} />
+            </button>
+
+            {pages.map((page, idx) => (
+                page === '...' ? (
+                    <span key={`ellipsis-${idx}`} className="px-2 py-2 text-gray-400">...</span>
+                ) : (
+                    <button
+                        key={page}
+                        onClick={() => onPageChange(page)}
+                        className={`px-3 py-2 rounded-lg transition ${
+                            currentPage === page
+                                ? 'bg-[#1a1c23] text-white font-bold shadow-lg'
+                                : 'border border-gray-300 hover:bg-gray-50'
+                        }`}
+                    >
+                        {page}
+                    </button>
+                )
+            ))}
+
+            <button
+                onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+                <ChevronRight size={16} />
+            </button>
+        </div>
+    );
+};
+
 // 1. History Log Modal (NEW)
 const HistoryLogModal = ({ orderId, onClose }) => {
     const [logs, setLogs] = useState([]);
@@ -101,11 +171,99 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 };
 
 // 2. Invoice Modal
+const InvoiceModal = ({ data, onClose }) => {
+  const handlePrint = () => window.print();
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
+      <style>{`@media print { body * { visibility: hidden; } #invoice-content, #invoice-content * { visibility: visible; } #invoice-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #no-print-btn { display: none !important; } }`}</style>
+      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
+          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
+              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
+          </button>
+          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close (Esc)">
+              <XCircle size={24} />
+          </button>
+      </div>
+      <div id="invoice-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
+            <div>
+                <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
+                <p className="text-slate-600 font-semibold">บริษัท บี-ลุค จำกัด</p>
+                <p className="text-sm text-slate-500">123 ถนนตัวอย่าง กทม.</p>
+            </div>
+            <div className="text-right">
+                <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
+                <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
+                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
+            </div>
+        </div>
+        {/* Customer Info */}
+        <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
+            <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
+            <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
+            <p className="text-sm text-slate-500">{data.phoneNumber} | {data.contactChannel}</p>
+            <p className="text-sm text-slate-500 mt-1">{data.address}</p>
+        </div>
+        {/* Table */}
+        <table className="w-full text-sm mb-8">
+            <thead>
+                <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td className="py-4 px-4">
+                        <p className="font-bold">{data.brand}</p>
+                        <p className="text-xs text-slate-500">ผ้า: {data.fabric} | คอ: {data.neck} | แขน: {data.sleeve}</p>
+                    </td>
+                    <td className="py-4 px-4 text-right">{data.totalQty}</td>
+                    <td className="py-4 px-4 text-right">{data.basePrice.toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right">{(data.totalQty * data.basePrice).toLocaleString()}</td>
+                </tr>
+            </tbody>
+        </table>
+        {/* Totals */}
+        <div className="flex justify-end">
+            <div className="w-1/2 space-y-2 text-sm">
+                <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{(data.addOnCost + data.shippingCost).toLocaleString()}</span></div>
+                
+                {/* Display Discount */}
+                <div className="flex justify-between text-rose-600">
+                    <span>ส่วนลด {data.discountType === 'PERCENT' ? `(${data.discountValue}%)` : ''}</span>
+                    <span>-{data.discountAmount.toLocaleString()}</span>
+                </div>
+
+                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{data.vatAmount.toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{data.grandTotal.toLocaleString()}</span></div>
+                
+                {/* Deposit Details */}
+                <div className="border-t border-dashed pt-2 mt-2 space-y-1">
+                    <div className="flex justify-between text-gray-500 text-xs"><span>มัดจำงวด 1</span><span>{data.deposit1.toLocaleString()}</span></div>
+                    <div className="flex justify-between text-gray-500 text-xs"><span>มัดจำงวด 2</span><span>{data.deposit2.toLocaleString()}</span></div>
+                    <div className="flex justify-between font-bold text-emerald-600"><span>คงเหลือชำระ</span><span>{data.balance.toLocaleString()}</span></div>
+                </div>
+
+                {/* Note */}
+                {data.note && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded text-xs text-yellow-800">
+                        <strong>หมายเหตุ:</strong> {data.note}
+                    </div>
+                )}
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // 2.7 USER MANAGEMENT PAGE
 const UserManagementPage = ({ onNotify }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const currentUserRole = localStorage.getItem('user_role'); // ดึงสิทธิ์ของคนปัจจุบัน
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const fetchUsers = async () => {
         setLoading(true);
@@ -146,15 +304,18 @@ const UserManagementPage = ({ onNotify }) => {
         }
     };
 
+    const totalPages = Math.ceil(users.length / itemsPerPage);
+    const paginatedUsers = users.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
     return (
-        <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+        <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
             <header className="mb-8">
                 <h1 className="text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
                 <p className="text-gray-500 font-medium">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
             </header>
 
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
-                <div className="p-2 md:p-6 overflow-x-auto">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
+                <div className="p-2 md:p-6 overflow-x-auto flex-1">
                     {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
                         <table className="w-full text-left min-w-[800px]">
                             <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
@@ -166,7 +327,7 @@ const UserManagementPage = ({ onNotify }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {users.map(u => (
+                                {paginatedUsers.map(u => (
                                     <tr key={u.id} className="hover:bg-gray-50 transition">
                                         <td className="py-4 px-6 font-bold text-gray-700">{u.username}</td>
                                         <td className="py-4 px-6 text-sm text-gray-600">{u.full_name || "-"}</td>
@@ -202,6 +363,14 @@ const UserManagementPage = ({ onNotify }) => {
                         </table>
                     )}
                 </div>
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <PaginationControls 
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
+                )}
             </div>
         </div>
     );
@@ -768,79 +937,6 @@ const DashboardPage = ({ onEdit }) => {
     );
 };
 
-// --- COMPONENT: INVOICE PREVIEW MODAL ---
-const InvoiceModal = ({ data, onClose }) => {
-  const handlePrint = () => window.print();
-  useEffect(() => {
-    const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
-      <style>{`@media print { body * { visibility: hidden; } #invoice-content, #invoice-content * { visibility: visible; } #invoice-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #no-print-btn { display: none !important; } }`}</style>
-      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
-          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
-              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
-          </button>
-          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close (Esc)">
-              <XCircle size={24} />
-          </button>
-      </div>
-      <div id="invoice-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
-            <div>
-                <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
-                <p className="text-slate-600 font-semibold">บริษัท บี-ลุค จำกัด</p>
-                <p className="text-sm text-slate-500">123 ถนนตัวอย่าง กทม.</p>
-            </div>
-            <div className="text-right">
-                <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
-                <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
-                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
-            </div>
-        </div>
-        {/* Customer Info */}
-        <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
-            <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
-            <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
-            <p className="text-sm text-slate-500">{data.phoneNumber} | {data.contactChannel}</p>
-            <p className="text-sm text-slate-500 mt-1">{data.address}</p>
-        </div>
-        {/* Table */}
-        <table className="w-full text-sm mb-8">
-            <thead>
-                <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td className="py-4 px-4">
-                        <p className="font-bold">{data.brand}</p>
-                        <p className="text-xs text-slate-500">ผ้า: {data.fabric} | คอ: {data.neck} | แขน: {data.sleeve}</p>
-                    </td>
-                    <td className="py-4 px-4 text-right">{data.totalQty}</td>
-                    <td className="py-4 px-4 text-right">{data.basePrice.toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right">{(data.totalQty * data.basePrice).toLocaleString()}</td>
-                </tr>
-            </tbody>
-        </table>
-        {/* Totals */}
-        <div className="flex justify-end">
-            <div className="w-1/2 space-y-2 text-sm">
-                <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{(data.addOnCost + data.shippingCost).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>ส่วนลด</span><span>-{data.discount.toLocaleString()}</span></div>
-                {/* เพิ่มบรรทัด VAT */}
-                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{data.vatAmount.toLocaleString()}</span></div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{data.grandTotal.toLocaleString()}</span></div>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 // 2.2 ORDER CREATION PAGE - FIXED VERSION
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [role, setRole] = useState("owner"); 
@@ -1191,6 +1287,8 @@ const ProductPage = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [newItem, setNewItem] = useState({ name: "", quantity: 0, cost_price: 0 });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchItems = useCallback(async () => {
       setLoading(true);
@@ -1271,8 +1369,11 @@ const ProductPage = () => {
     <button onClick={() => setActiveTab(id)} className={`px-6 py-3 font-medium text-sm border-b-2 transition ${activeTab === id ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>{label}</button>
   );
 
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const paginatedItems = items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
       {/* Add/Edit Modal */}
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1374,13 +1475,13 @@ const ProductPage = () => {
             <Plus size={18} className="mr-2"/> เพิ่มสินค้า
         </button>
       </header>
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
         <div className="flex border-b border-gray-100 overflow-x-auto">
             <TabButton id="ชนิดผ้า" label="ชนิดผ้า" />
             <TabButton id="รูปแบบคอ" label="รูปแบบคอ" />
             <TabButton id="รูปแบบแขน" label="รูปแบบแขน" />
         </div>
-        <div className="p-2 md:p-6">
+        <div className="p-2 md:p-6 flex-1 overflow-x-auto">
             {loading ? <p className="p-10 text-center text-gray-400">Loading...</p> : (
                 <table className="w-full text-left">
                     <thead>
@@ -1392,7 +1493,7 @@ const ProductPage = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {items.map((item) => (
+                        {paginatedItems.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50 transition group">
                                 <td className="py-4 px-6 font-bold text-gray-700">{item.name}</td>
                                 <td className="py-4 px-6 text-center">
@@ -1442,6 +1543,14 @@ const ProductPage = () => {
                 </table>
             )}
         </div>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+            <PaginationControls 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+            />
+        )}
       </div>
     </div>
   );
@@ -1455,6 +1564,8 @@ const CustomerPage = () => {
   const [modalMode, setModalMode] = useState("add"); 
   const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", contact_channel: "LINE OA", address: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchCustomers = async () => {
       setLoading(true);
@@ -1510,8 +1621,11 @@ const CustomerPage = () => {
       } catch (e) { alert("Error: " + e.message); }
   };
 
+  const totalPages = Math.ceil(customers.length / itemsPerPage);
+  const paginatedCustomers = customers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
       {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
@@ -1571,20 +1685,20 @@ const CustomerPage = () => {
         <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
       </header>
         
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
-        <div className="p-2 md:p-6">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
+        <div className="p-2 md:p-6 overflow-x-auto flex-1">
             {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
                 <table className="w-full text-left">
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 text-center">ชื่อลูกค้า</th>
-                            <th className="py-4 px-6 text-center">ช่องทาง</th>
-                            <th className="py-4 px-6 text-center">เบอร์โทร</th>
-                            <th className="py-4 px-6 text-center">จัดการ</th>
+                            <th className="py-4 px-6">ชื่อลูกค้า</th>
+                            <th className="py-4 px-6">ช่องทาง</th>
+                            <th className="py-4 px-6">เบอร์โทร</th>
+                            <th className="py-4 px-6 text-right">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {customers.map((cust) => (
+                        {paginatedCustomers.map((cust) => (
                             <tr key={cust.id} className="hover:bg-gray-50 transition group">
                                 <td className="py-4 px-6 font-bold text-gray-700">{cust.name}</td>
                                 <td className="py-4 px-6 text-sm text-gray-600">
@@ -1616,6 +1730,14 @@ const CustomerPage = () => {
                 </table>
             )}
         </div>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+            <PaginationControls 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+            />
+        )}
       </div>
     </div>
   );
@@ -1627,6 +1749,8 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState(""); 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
    
   const fetchOrders = useCallback(async () => {
       setLoading(true);
@@ -1717,8 +1841,11 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
       document.body.removeChild(link);
   };
 
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
       {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
@@ -1764,22 +1891,22 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
         </div>
       </header>
         
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden min-h-[500px]">
-        <div className="p-0 md:p-2 overflow-x-auto">
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
+        <div className="p-0 md:p-2 overflow-x-auto flex-1">
             {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
                 <table className="w-full text-left min-w-[800px] table-fixed">
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 w-1/6 text-center">เลขที่</th>
-                            <th className="py-4 px-6 w-1/6 text-center">ลูกค้า</th>
-                            <th className="py-4 px-6 w-1/6 text-center">กำหนดส่ง</th>
-                            <th className="py-4 px-6 w-1/6 text-center">ยอดรวม</th>
+                            <th className="py-4 px-6 w-1/6">เลขที่</th>
+                            <th className="py-4 px-6 w-1/6">ลูกค้า</th>
+                            <th className="py-4 px-6 w-1/6">กำหนดส่ง</th>
+                            <th className="py-4 px-6 w-1/6 text-right">ยอดรวม</th>
                             <th className="py-4 px-6 w-1/6 text-center">สถานะ</th>
-                            <th className="py-4 px-6 w-1/6 text-center">จัดการ</th>
+                            <th className="py-4 px-6 w-1/6 text-right">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {filteredOrders.map((order) => (
+                        {paginatedOrders.map((order) => (
                             <tr key={order.id} className="hover:bg-gray-50 transition group">
                                 <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate">{order.order_no}</td>
                                 <td className="py-4 px-6 text-gray-700 truncate">
@@ -1817,11 +1944,18 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                 </table>
             )}
         </div>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+            <PaginationControls 
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+            />
+        )}
       </div>
     </div>
   );
 };
-
 
 // 2.6 SETTINGS PAGE (UPDATED: Delete Modal & Save Notify)
 const SettingsPage = ({ onNotify }) => {
@@ -1867,9 +2001,9 @@ const SettingsPage = ({ onNotify }) => {
   }
 
   useEffect(() => {
-    if (activeTab === 'pricing') fetchRulesAndMasters();
-    if (activeTab === 'general') fetchGlobalConfig();
-  }, [activeTab]);
+    fetchRulesAndMasters();
+    fetchGlobalConfig();
+  }, []);
 
   const handleAddRule = async () => {
     try {
@@ -1933,136 +2067,126 @@ const SettingsPage = ({ onNotify }) => {
         <p className="text-gray-500 font-medium">กำหนดราคาและค่าเริ่มต้นของระบบ</p>
       </header>
 
-      <div className="flex gap-6 mb-6 border-b border-gray-200">
-          <button onClick={() => setActiveTab("pricing")} className={`pb-3 font-bold text-sm border-b-2 transition ${activeTab==="pricing" ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
-             ตั้งราคาขาย
-          </button>
-          <button onClick={() => setActiveTab("general")} className={`pb-3 font-bold text-sm border-b-2 transition ${activeTab==="general" ? "border-[#1a1c23] text-[#1a1c23]" : "border-transparent text-gray-400 hover:text-gray-600"}`}>
-             VAT & ค่าส่ง
-          </button>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[500px]">
+              {/* Left Column: Form + VAT */}
+              <div className="space-y-4 overflow-y-auto pr-2">
+                  {/* Form เพิ่มกฎ */}
+                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                      <h3 className="font-bold text-base mb-3 text-[#1a1c23]">เพิ่มเงื่อนไขราคา</h3>
+                      <div className="space-y-2.5">
+                          <div>
+                              <label className="block text-xs font-medium mb-0.5">ชนิดผ้า</label>
+                              <select 
+                                className="w-full border p-1.5 rounded-lg text-sm"
+                                value={newRule.fabric_type}
+                                onChange={e => setNewRule({...newRule, fabric_type: e.target.value})}
+                              >
+                                  {fabrics.length > 0 ? (
+                                      fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)
+                                  ) : (
+                                      <option value="">กำลังโหลด...</option>
+                                  )}
+                              </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">ขั้นต่ำ (ตัว)</label>
+                                  <input type="number" className="w-full border p-1.5 rounded-lg text-sm" value={newRule.min_qty} onChange={e => setNewRule({...newRule, min_qty: parseInt(e.target.value)||0})} />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">ถึง (ตัว)</label>
+                                  <input type="number" className="w-full border p-1.5 rounded-lg text-sm" value={newRule.max_qty} onChange={e => setNewRule({...newRule, max_qty: parseInt(e.target.value)||0})} />
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium mb-0.5">ราคาต่อหน่วย (บาท)</label>
+                              <input type="number" className="w-full border p-1.5 rounded-lg bg-gray-50 text-[#1a1c23] font-bold text-sm" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
+                          </div>
+                          <button onClick={handleAddRule} className="bg-[#1a1c23] text-white font-bold py-2 px-6 text-sm rounded-xl hover:bg-slate-800 transition shadow-lg mx-auto block">บันทึก</button>
+                      </div>
+                  </div>
 
-      {activeTab === "pricing" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Form เพิ่มกฎ */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 h-fit">
-                  <h3 className="font-bold text-lg mb-4 text-[#1a1c23]">เพิ่มเงื่อนไขราคา</h3>
-                  <div className="space-y-4">
-                      <div>
-                          <label className="block text-sm font-medium mb-1">ชนิดผ้า</label>
-                          <select 
-                            className="w-full border p-2 rounded-lg"
-                            value={newRule.fabric_type}
-                            onChange={e => setNewRule({...newRule, fabric_type: e.target.value})}
-                          >
-                              {fabrics.length > 0 ? (
-                                  fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)
-                              ) : (
-                                  <option value="">กำลังโหลด...</option>
-                              )}
-                          </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
+                  {/* VAT & Shipping Section */}
+                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
+                      <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
+                          <Calculator size={18} className="mr-2 text-gray-400"/>
+                          ตั้งค่า VAT และค่าส่ง
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                              <label className="block text-sm font-medium mb-1">ขั้นต่ำ (ตัว)</label>
-                              <input type="number" className="w-full border p-2 rounded-lg" value={newRule.min_qty} onChange={e => setNewRule({...newRule, min_qty: parseInt(e.target.value)||0})} />
+                              <label className="block text-xs font-bold text-slate-700 mb-1">อัตรา VAT (%)</label>
+                              <div className="relative">
+                                  <input 
+                                      type="number" 
+                                      className="w-full border border-gray-200 p-1.5 rounded-xl pl-8 text-sm" 
+                                      placeholder="7" 
+                                      value={globalConfig.vat_rate}
+                                      onChange={e => setGlobalConfig({...globalConfig, vat_rate: parseFloat(e.target.value)})}
+                                  />
+                                  <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">%</span>
+                              </div>
                           </div>
+
                           <div>
-                              <label className="block text-sm font-medium mb-1">ถึง (ตัว)</label>
-                              <input type="number" className="w-full border p-2 rounded-lg" value={newRule.max_qty} onChange={e => setNewRule({...newRule, max_qty: parseInt(e.target.value)||0})} />
+                              <label className="block text-xs font-bold text-slate-700 mb-1">ค่าส่งเริ่มต้น (บาท)</label>
+                              <div className="relative">
+                                  <input 
+                                      type="number" 
+                                      className="w-full border border-gray-200 p-1.5 rounded-xl pl-8 text-sm" 
+                                      placeholder="0" 
+                                      value={globalConfig.default_shipping_cost}
+                                      onChange={e => setGlobalConfig({...globalConfig, default_shipping_cost: parseFloat(e.target.value)})}
+                                  />
+                                  <DollarSign className="absolute left-2.5 top-1.5 text-slate-400" size={16} />
+                              </div>
                           </div>
                       </div>
-                      <div>
-                          <label className="block text-sm font-medium mb-1">ราคาต่อหน่วย (บาท)</label>
-                          <input type="number" className="w-full border p-2 rounded-lg bg-gray-50 text-[#1a1c23] font-bold" value={newRule.unit_price} onChange={e => setNewRule({...newRule, unit_price: parseFloat(e.target.value)||0})} />
-                      </div>
-                      <button onClick={handleAddRule} className="w-full bg-[#1a1c23] text-white py-3 rounded-xl hover:bg-slate-800 font-bold shadow-lg">บันทึก</button>
+                      <button 
+                          onClick={handleSaveConfig}
+                          className="bg-[#1a1c23] text-white font-bold py-2 px-6 text-sm rounded-xl hover:bg-slate-800 transition mt-3 shadow-lg mx-auto block"
+                      >
+                          บันทึกการตั้งค่า
+                      </button>
                   </div>
               </div>
 
-              {/* Table รายการกฎ */}
-              <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 font-bold text-[#1a1c23]">ตารางราคาปัจจุบัน</div>
-                  <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50/50 text-gray-400 border-b border-gray-100 uppercase font-bold text-xs">
-                          <tr>
-                              <th className="p-4 pl-6">ชนิดผ้า</th>
-                              <th className="p-4">จำนวน (ตัว)</th>
-                              <th className="p-4 text-right">ราคา/ตัว</th>
-                              <th className="p-4 text-right pr-6">จัดการ</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                          {pricingRules.length === 0 ? (
-                              <tr><td colSpan="4" className="p-8 text-center text-slate-400">ยังไม่มีการตั้งราคา</td></tr>
-                          ) : pricingRules.map((rule) => (
-                              <tr key={rule.id} className="hover:bg-gray-50">
-                                  <td className="p-4 pl-6 font-bold text-gray-700">{rule.fabric_type}</td>
-                                  <td className="p-4">
-                                      <span className="bg-gray-100 px-2 py-1 rounded text-xs font-mono font-bold text-gray-600">
-                                          {rule.min_qty} - {rule.max_qty > 9999 ? 'ขึ้นไป' : rule.max_qty}
-                                      </span>
-                                  </td>
-                                  <td className="p-4 text-right font-bold text-[#1a1c23]">{rule.unit_price} ฿</td>
-                                  <td className="p-4 text-right pr-6">
-                                      <button onClick={() => setDeleteConfirm(rule)} className="text-gray-400 hover:text-rose-500 transition"><Trash2 size={16}/></button>
-                                  </td>
+              {/* Right Column: Table รายการกฎ */}
+              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                  <div className="p-6 border-b border-gray-100">
+                      <h3 className="font-bold text-lg text-[#1a1c23]">ราคาปัจจุบัน</h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto">
+                      <table className="w-full text-left text-sm">
+                          <thead className="bg-white border-b border-gray-200 sticky top-0">
+                              <tr>
+                                  <th className="p-4 pl-6 text-gray-500 font-semibold text-xs">ชนิดผ้า</th>
+                                  <th className="p-4 text-gray-500 font-semibold text-xs">จำนวน (ตัว)</th>
+                                  <th className="p-4 text-right text-gray-500 font-semibold text-xs">ราคา</th>
+                                  <th className="p-4 text-right pr-6 text-gray-500 font-semibold text-xs">จัดการ</th>
                               </tr>
-                          ))}
-                      </tbody>
-                  </table>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                              {pricingRules.length === 0 ? (
+                                  <tr><td colSpan="4" className="p-12 text-center text-gray-400">ยังไม่มีการตั้งราคา</td></tr>
+                              ) : pricingRules.map((rule) => (
+                                  <tr key={rule.id} className="hover:bg-gray-50">
+                                      <td className="p-4 pl-6 font-semibold text-gray-800">{rule.fabric_type}</td>
+                                      <td className="p-4">
+                                          <span className="bg-gray-100 px-3 py-1 rounded-md text-xs font-mono font-bold text-gray-700">
+                                              {rule.min_qty} - {rule.max_qty > 9999 ? 'ขึ้นไป' : rule.max_qty}
+                                          </span>
+                                      </td>
+                                      <td className="p-4 text-right font-bold text-[#1a1c23]">{rule.unit_price} ฿</td>
+                                      <td className="p-4 text-right pr-6">
+                                          <button onClick={() => setDeleteConfirm(rule)} className="text-gray-400 hover:text-rose-500 transition"><Trash2 size={16}/></button>
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
               </div>
           </div>
-      )}
-
-      {activeTab === "general" && (
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 max-w-lg mx-auto mt-10">
-              <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Calculator size={32} className="text-gray-400"/>
-                  </div>
-                  <h3 className="text-xl font-bold text-[#1a1c23]">ตั้งค่าทั่วไป</h3>
-                  <p className="text-gray-500 text-sm">กำหนดค่าเริ่มต้นสำหรับทั้งระบบ</p>
-              </div>
-               
-              <div className="space-y-4">
-                  <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">อัตรา VAT (%)</label>
-                      <div className="relative">
-                          <input 
-                              type="number" 
-                              className="w-full border border-gray-200 p-3 rounded-xl pl-10" 
-                              placeholder="7" 
-                              value={globalConfig.vat_rate}
-                              onChange={e => setGlobalConfig({...globalConfig, vat_rate: parseFloat(e.target.value)})}
-                          />
-                          <span className="absolute left-3 top-3 text-slate-400">%</span>
-                      </div>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">ค่าส่งเริ่มต้น (บาท)</label>
-                      <div className="relative">
-                          <input 
-                              type="number" 
-                              className="w-full border border-gray-200 p-3 rounded-xl pl-10" 
-                              placeholder="0" 
-                              value={globalConfig.default_shipping_cost}
-                              onChange={e => setGlobalConfig({...globalConfig, default_shipping_cost: parseFloat(e.target.value)})}
-                          />
-                          <DollarSign className="absolute left-3 top-3 text-slate-400" size={18} />
-                      </div>
-                  </div>
-
-                  <button 
-                      onClick={handleSaveConfig}
-                      className="w-full bg-[#1a1c23] text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition mt-4 shadow-lg"
-                  >
-                      บันทึกการตั้งค่า
-                  </button>
-              </div>
-          </div>
-      )}
     </div>
   );
 };
