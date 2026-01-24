@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
-from datetime import datetime
+from pydantic import BaseModel, Field, field_validator, model_validator
 from decimal import Decimal
+from datetime import datetime
 
 # --- Order Item Schema ---
 class OrderItemBase(BaseModel):
@@ -11,7 +11,6 @@ class OrderItemBase(BaseModel):
     sleeve_type: Optional[str] = None
     quantity_matrix: Dict[str, int] = {}
     
-    # Prices & Costs
     base_price: float = 0
     price_per_unit: float = 0
     cost_per_unit: float = 0
@@ -25,17 +24,18 @@ class OrderItemCreate(OrderItemBase):
 class OrderItem(OrderItemBase):
     id: int
     order_id: int
-
     class Config:
         from_attributes = True
 
 # --- Order Schema ---
 class OrderBase(BaseModel):
     customer_name: Optional[str] = "Unknown"
-    brand: Optional[str] = None
+    brand: Optional[str] = "BG"
     phone: Optional[str] = None
     
-    contact_channel: Optional[str] = None 
+    # ✅ FIX 1: รับค่าตรงๆ ไม่ต้องมี alias
+    contact_channel: Optional[str] = None
+    channel: Optional[str] = None # เผื่อไว้รับค่าเก่า
     
     address: Optional[str] = None
     deadline: Optional[datetime] = None
@@ -57,7 +57,25 @@ class OrderBase(BaseModel):
     
     note: Optional[str] = None
 
+    # ✅ FIX 2: Validator รวมร่าง (ไม่ว่าจะส่งชื่อไหนมา ให้รวมไปที่ contact_channel)
+    @model_validator(mode='before')
+    def sync_channels(cls, values):
+        # กรณีรับเป็น dict (ตอนรับ Request)
+        if isinstance(values, dict):
+            c_channel = values.get('contact_channel')
+            channel = values.get('channel')
+            
+            # ถ้ามี channel แต่ไม่มี contact_channel -> ย้ายค่ามา
+            if channel and not c_channel:
+                values['contact_channel'] = channel
+            # ถ้ามี contact_channel แต่ไม่มี channel -> copy ไปเผื่อ
+            elif c_channel and not channel:
+                values['channel'] = c_channel
+                
+        return values
+
 class OrderCreate(OrderBase):
+    customer_name: str 
     items: List[OrderItemCreate] = []
 
 class OrderUpdate(OrderBase):
@@ -67,10 +85,10 @@ class Order(OrderBase):
     id: int
     order_no: str
     
-    grand_total: Decimal = 0
     vat_amount: Decimal = 0
+    grand_total: Decimal = 0
+    deposit_amount: Decimal = 0
     balance_amount: Decimal = 0
-    
     total_cost: Decimal = 0
     estimated_profit: Decimal = 0
     

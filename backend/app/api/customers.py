@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field  # ✅ Import Field เพิ่ม
 
 router = APIRouter()
 
@@ -12,7 +12,10 @@ class CustomerSchema(BaseModel):
     id: int
     name: str
     phone: str | None = None
-    contact_channel: str | None = None # ใช้ contact_channel ให้ตรงกับ Frontend
+    
+    # ✅ FIX: Map ค่าจาก 'channel' (DB) มาใส่ 'contact_channel' (Frontend)
+    contact_channel: str | None = Field(default=None, validation_alias="channel")
+    
     address: str | None = None
 
     class Config:
