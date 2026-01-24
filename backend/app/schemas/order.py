@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from decimal import Decimal
 from datetime import datetime
 
@@ -28,11 +28,13 @@ class OrderItem(OrderItemBase):
 
 # --- Order Schema ---
 class OrderBase(BaseModel):
-    customer_name: Optional[str] = "Unknown" 
-    
+    customer_name: Optional[str] = "Unknown"
     brand: Optional[str] = None
     
+    # ✅ เพิ่ม channel เพื่อรับค่าจาก Frontend
+    channel: Optional[str] = None 
     contact_channel: Optional[str] = None 
+    
     address: Optional[str] = None
     phone: Optional[str] = None
 
@@ -54,9 +56,22 @@ class OrderBase(BaseModel):
     
     note: Optional[str] = None
 
+    # ✅ Auto-Sync: ถ้าส่ง channel มา ให้เอาไปใส่ contact_channel ด้วย
+    @field_validator('contact_channel', mode='before')
+    def sync_channel(cls, v, values):
+        # ถ้า contact_channel ว่าง แต่มี channel ให้ใช้ channel แทน
+        if v is None and 'channel' in values.data:
+            return values.data['channel']
+        return v
+
 class OrderCreate(OrderBase):
     customer_name: str 
     items: List[OrderItemCreate] = []
+
+    def __init__(self, **data):
+        if 'channel' in data and 'contact_channel' not in data:
+            data['contact_channel'] = data['channel']
+        super().__init__(**data)
 
 class OrderUpdate(OrderBase):
     pass
