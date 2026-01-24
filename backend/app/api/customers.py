@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
-from pydantic import BaseModel, Field  # ✅ Import Field เพิ่ม
+from pydantic import BaseModel, Field # ✅ 1. Import Field
 
 router = APIRouter()
 
@@ -13,7 +13,7 @@ class CustomerSchema(BaseModel):
     name: str
     phone: str | None = None
     
-    # ✅ FIX: Map ค่าจาก 'channel' (DB) มาใส่ 'contact_channel' (Frontend)
+    # ✅ 2. เพิ่ม validation_alias="channel" เพื่อ Map ข้อมูลจาก DB (channel) -> Frontend (contact_channel)
     contact_channel: str | None = Field(default=None, validation_alias="channel")
     
     address: str | None = None
@@ -31,14 +31,15 @@ class CustomerCreate(BaseModel):
 
 @router.get("/", response_model=List[CustomerSchema])
 def read_customers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    # เมื่อ query ออกมา Pydantic จะใช้ validation_alias ดึงค่า channel มาใส่ contact_channel ให้เอง
     return db.query(Customer).offset(skip).limit(limit).all()
 
 @router.post("/", response_model=CustomerSchema)
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     db_cust = Customer(
-        name=customer.name,
+        name=customer.name.strip(), # ✅ ตัดช่องว่าง
         phone=customer.phone,
-        channel=customer.contact_channel, # Map contact_channel -> channel (Database field)
+        channel=customer.contact_channel, 
         address=customer.address
     )
     db.add(db_cust)
@@ -52,7 +53,7 @@ def update_customer(customer_id: int, customer: CustomerCreate, db: Session = De
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")
     
-    db_cust.name = customer.name
+    db_cust.name = customer.name.strip() # ✅ ตัดช่องว่าง
     db_cust.phone = customer.phone
     db_cust.channel = customer.contact_channel
     db_cust.address = customer.address
