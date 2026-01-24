@@ -1085,8 +1085,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         const orderData = {
             order_no: generateOrderId(),
             customer_name: customerName,
+            phone: phoneNumber,
             brand: brand,
             contact_channel: contactChannel,
+            address: address,
             total_amount: grandTotal,
             deposit: deposit,
             deposit_1: deposit1,
@@ -1557,7 +1559,7 @@ const ProductPage = () => {
 };
 
 // 2.4 CUSTOMER PAGE
-const CustomerPage = () => {
+const CustomerPage = ({ refreshTrigger }) => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1578,6 +1580,13 @@ const CustomerPage = () => {
   };
 
   useEffect(() => { fetchCustomers(); }, []);
+  
+  // ✅ FIX: Auto-refresh customer list when order is created/updated
+  useEffect(() => { 
+    if (refreshTrigger) {
+      fetchCustomers();
+    }
+  }, [refreshTrigger]);
 
   const openAddModal = () => {
       setModalMode("add");
@@ -2218,6 +2227,9 @@ const App = () => {
    
   // Notification State
   const [notification, setNotification] = useState(null);
+  
+  // ✅ FIX: Track when customer list should refresh (after order creation)
+  const [customerRefreshTrigger, setCustomerRefreshTrigger] = useState(false);
 
   useEffect(() => {
         const link = document.querySelector("link[rel~='icon']");
@@ -2263,9 +2275,9 @@ const App = () => {
         case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
         case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
         case 'settings': return <SettingsPage onNotify={handleNotify} />;
-        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleNotify} />;
+        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={(msg, type) => { handleNotify(msg, type); if (type === 'success') setCustomerRefreshTrigger(!customerRefreshTrigger); }} />;
         case 'product': return <ProductPage />;
-        case 'customer': return <CustomerPage />;
+        case 'customer': return <CustomerPage refreshTrigger={customerRefreshTrigger} />;
         case 'users': return <UserManagementPage onNotify={handleNotify} />;
         default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
     }
