@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, field_validator
-from decimal import Decimal
+from pydantic import BaseModel, Field
 from datetime import datetime
+from decimal import Decimal
 
 # --- Order Item Schema ---
 class OrderItemBase(BaseModel):
@@ -9,9 +9,15 @@ class OrderItemBase(BaseModel):
     fabric_type: Optional[str] = None
     neck_type: Optional[str] = None
     sleeve_type: Optional[str] = None
-    base_price: Decimal = 0
-    cost_per_unit: Decimal = 0
-    quantity_matrix: Dict[str, int] = {} 
+    quantity_matrix: Dict[str, int] = {}
+    
+    # Prices & Costs
+    base_price: float = 0
+    price_per_unit: float = 0
+    cost_per_unit: float = 0
+    total_price: float = 0
+    total_cost: float = 0
+    total_qty: int = 0
 
 class OrderItemCreate(OrderItemBase):
     pass
@@ -19,9 +25,6 @@ class OrderItemCreate(OrderItemBase):
 class OrderItem(OrderItemBase):
     id: int
     order_id: int
-    total_qty: int = 0
-    total_price: Decimal = 0
-    total_cost: Decimal = 0
 
     class Config:
         from_attributes = True
@@ -30,14 +33,11 @@ class OrderItem(OrderItemBase):
 class OrderBase(BaseModel):
     customer_name: Optional[str] = "Unknown"
     brand: Optional[str] = None
+    phone: Optional[str] = None
     
-    # ✅ เพิ่ม channel เพื่อรับค่าจาก Frontend
-    channel: Optional[str] = None 
     contact_channel: Optional[str] = None 
     
     address: Optional[str] = None
-    phone: Optional[str] = None
-
     deadline: Optional[datetime] = None
     usage_date: Optional[datetime] = None
     urgency_level: str = "normal"
@@ -51,27 +51,14 @@ class OrderBase(BaseModel):
     discount_value: Decimal = 0
     discount_amount: Decimal = 0
     
+    deposit_amount: Decimal = Field(0, alias="deposit") 
     deposit_1: Decimal = 0
     deposit_2: Decimal = 0
     
     note: Optional[str] = None
 
-    # ✅ Auto-Sync: ถ้าส่ง channel มา ให้เอาไปใส่ contact_channel ด้วย
-    @field_validator('contact_channel', mode='before')
-    def sync_channel(cls, v, values):
-        # ถ้า contact_channel ว่าง แต่มี channel ให้ใช้ channel แทน
-        if v is None and 'channel' in values.data:
-            return values.data['channel']
-        return v
-
 class OrderCreate(OrderBase):
-    customer_name: str 
     items: List[OrderItemCreate] = []
-
-    def __init__(self, **data):
-        if 'channel' in data and 'contact_channel' not in data:
-            data['contact_channel'] = data['channel']
-        super().__init__(**data)
 
 class OrderUpdate(OrderBase):
     pass
@@ -80,18 +67,17 @@ class Order(OrderBase):
     id: int
     order_no: str
     
-    vat_amount: Decimal = 0
     grand_total: Decimal = 0
-    deposit_amount: Decimal = 0
+    vat_amount: Decimal = 0
     balance_amount: Decimal = 0
     
     total_cost: Decimal = 0
     estimated_profit: Decimal = 0
     
-    created_at: datetime
+    created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
     items: List[OrderItem] = []
 
     class Config:
         from_attributes = True
+        populate_by_name = True
