@@ -21,7 +21,7 @@ def read_orders(
     limit: int = 100, 
     db: Session = Depends(get_db)
 ):
-    
+    # Eager load customer and items to prevent N+1 queries
     orders = db.query(OrderModel)\
         .options(joinedload(OrderModel.customer), joinedload(OrderModel.items))\
         .order_by(OrderModel.id.desc())\
@@ -33,8 +33,8 @@ def read_orders(
     for o in orders:
         o_dict = o.__dict__.copy()
         
+        # Populate customer details if missing in order snapshot but available in customer relation
         if o.customer:
-            # ถ้าใน Order ไม่มี ให้ดึงจาก Customer มาแสดง
             if not o_dict.get('customer_name'): o_dict['customer_name'] = o.customer.name
             if not o_dict.get('phone'): o_dict['phone'] = o.customer.phone
             if not o_dict.get('contact_channel'): o_dict['contact_channel'] = o.customer.channel
@@ -51,42 +51,42 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    # ✅ Robust Logic: รองรับทั้ง contact_channel และ channel (ป้องกันค่าว่าง)
+    # ✅ Robust Logic: Support both contact_channel and channel fields
     incoming_channel = getattr(order_in, 'channel', None)
     final_channel = incoming_channel if incoming_channel else order_in.contact_channel
 
     # 1. Customer Handling (Sync Logic)
-    # ✅ FIX: ตัดช่องว่างชื่อลูกค้า (Strip Whitespace) ป้องกันสร้างคนซ้ำเพียงเพราะเคาะวรรคผิด
+    # ✅ FIX: Strip whitespace to prevent duplicate customers (e.g. "John" vs "John ")
     clean_name = order_in.customer_name.strip() if order_in.customer_name else "Unknown"
 
     customer = db.query(Customer).filter(Customer.name == clean_name).first()
     
     if not customer:
-        # กรณีลูกค้าใหม่ -> สร้างใหม่
+        # Case: New Customer -> Create
         customer = Customer(
-            name=clean_name, # ใช้ชื่อที่ Clean แล้ว
-            phone=order_in.phone.strip() if order_in.phone else None, # Clean phone
-            channel=final_channel, # ใช้ค่าที่เตรียมไว้
+            name=clean_name,
+            phone=order_in.phone.strip() if order_in.phone else None,
+            channel=final_channel,
             address=order_in.address
         )
         db.add(customer)
-        db.flush() # เอา ID ออกมา
+        db.flush() # Flush to get customer.id
     else:
-        # ✅ Sync Logic: อัปเดตข้อมูลลูกค้าเก่าให้เป็นปัจจุบัน
+        # Case: Existing Customer -> UPDATE info if changed (The Fix)
         is_changed = False
         
-        # 1. เช็คเบอร์โทร (Clean logic)
+        # 1. Check Phone
         new_phone = order_in.phone.strip() if order_in.phone else None
         if new_phone and customer.phone != new_phone:
             customer.phone = new_phone
             is_changed = True
             
-        # 2. เช็คช่องทาง (ใช้ final_channel)
+        # 2. Check Channel
         if final_channel and customer.channel != final_channel:
             customer.channel = final_channel
             is_changed = True
             
-        # 3. เช็คที่อยู่
+        # 3. Check Address
         if order_in.address and customer.address != order_in.address:
             customer.address = order_in.address
             is_changed = True
@@ -151,8 +151,8 @@ def create_order(
         brand=order_in.brand,
         customer_id=customer.id,
         
-        # Snapshot Data (บันทึกติดตัวออเดอร์ไว้ด้วย)
-        contact_channel=final_channel, # ใช้ค่าที่เตรียมไว้
+        # Snapshot Data (Save current state to order)
+        contact_channel=final_channel,
         address=order_in.address,
         phone=order_in.phone,
 
@@ -257,11 +257,9 @@ def update_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # ✅ Robust Logic: รองรับทั้ง contact_channel และ channel
     incoming_channel = getattr(order_in, 'channel', None)
     final_channel = incoming_channel if incoming_channel else order_in.contact_channel
 
-    # ✅ FIX: Clean name
     clean_name = order_in.customer_name.strip() if order_in.customer_name else "Unknown"
 
     # Update Customer Info (Sync Logic)
@@ -269,28 +267,25 @@ def update_order(
     if not customer:
         customer = Customer(
             name=clean_name,
-            phone=order_in.phone.strip() if order_in.phone else None, # Clean phone
+            phone=order_in.phone.strip() if order_in.phone else None,
             channel=final_channel,
             address=order_in.address
         )
         db.add(customer)
         db.flush()
     else:
-        # ✅ Sync Logic: อัปเดตข้อมูลลูกค้าเก่า
+        # ✅ Sync Logic: Update existing customer info
         is_changed = False
         
-        # 1. เช็คเบอร์โทร (Clean logic)
         new_phone = order_in.phone.strip() if order_in.phone else None
         if new_phone and customer.phone != new_phone:
             customer.phone = new_phone
             is_changed = True
             
-        # 2. เช็คช่องทาง (ใช้ final_channel)
         if final_channel and customer.channel != final_channel:
             customer.channel = final_channel
             is_changed = True
             
-        # 3. เช็คที่อยู่
         if order_in.address and customer.address != order_in.address:
             customer.address = order_in.address
             is_changed = True
@@ -350,7 +345,7 @@ def update_order(
 
     # Update Order Fields
     order.customer_id = customer.id
-    order.contact_channel = final_channel # ใช้ค่าที่เตรียมไว้
+    order.contact_channel = final_channel
     order.address = order_in.address
     order.phone = order_in.phone
     
@@ -417,7 +412,6 @@ def update_order(
     order_dict = order.__dict__.copy()
     if order.customer:
         order_dict['customer_name'] = order.customer.name
-        # Ensure updated fields are returned
         if not order_dict.get('phone'): order_dict['phone'] = order.customer.phone
         if not order_dict.get('contact_channel'): order_dict['contact_channel'] = order.customer.channel
         if not order_dict.get('address'): order_dict['address'] = order.customer.address
