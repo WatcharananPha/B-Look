@@ -1562,7 +1562,8 @@ const CustomerPage = () => {
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); 
-  const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", contact_channel: "LINE OA", address: "" });
+  // ✅ แก้ไข: เปลี่ยนจาก contact_channel เป็น channel
+  const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -1580,7 +1581,8 @@ const CustomerPage = () => {
 
   const openAddModal = () => {
       setModalMode("add");
-      setCurrentCustomer({ id: null, name: "", phone: "", contact_channel: "LINE OA", address: "" });
+      // ✅ แก้ไข: ใช้ channel
+      setCurrentCustomer({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
       setIsModalOpen(true);
   };
 
@@ -1590,7 +1592,8 @@ const CustomerPage = () => {
           id: cust.id,
           name: cust.name,
           phone: cust.phone,
-          contact_channel: cust.contact_channel || cust.channel || "LINE OA",
+          // ✅ แก้ไข: ใช้ channel (รองรับข้อมูลเก่า contact_channel เผื่อไว้)
+          channel: cust.channel || cust.contact_channel || "LINE OA",
           address: cust.address
       });
       setIsModalOpen(true);
@@ -1641,7 +1644,8 @@ const CustomerPage = () => {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">ช่องทางติดต่อ</label>
-                        <select className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value={currentCustomer.contact_channel} onChange={e => setCurrentCustomer({...currentCustomer, contact_channel: e.target.value})}>
+                        {/* ✅ แก้ไข: value และ onChange ให้เป็น channel */}
+                        <select className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value={currentCustomer.channel} onChange={e => setCurrentCustomer({...currentCustomer, channel: e.target.value})}>
                             <option>LINE OA</option>
                             <option>Facebook</option>
                             <option>Phone</option>
@@ -1703,7 +1707,8 @@ const CustomerPage = () => {
                                 <td className="py-4 px-6 font-bold text-gray-700">{cust.name}</td>
                                 <td className="py-4 px-6 text-sm text-gray-600">
                                     <span className="bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
-                                        {cust.contact_channel || cust.channel}
+                                        {/* ✅ แก้ไข: แสดงผลจาก channel */}
+                                        {cust.channel || cust.contact_channel}
                                     </span>
                                 </td>
                                 <td className="py-4 px-6 text-sm text-gray-600 font-mono">{cust.phone}</td>
@@ -1732,11 +1737,23 @@ const CustomerPage = () => {
         </div>
         {/* Pagination Controls */}
         {totalPages > 1 && (
-            <PaginationControls 
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-            />
+            <div className="p-4 border-t border-gray-100 flex justify-end gap-2">
+                <button 
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border rounded disabled:opacity-50"
+                >
+                    Previous
+                </button>
+                <span className="px-3 py-1">Page {currentPage} of {totalPages}</span>
+                <button 
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 border rounded disabled:opacity-50"
+                >
+                    Next
+                </button>
+            </div>
         )}
       </div>
     </div>

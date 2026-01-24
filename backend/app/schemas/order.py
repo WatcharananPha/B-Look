@@ -1,23 +1,17 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, validator
-from datetime import datetime, date
+from pydantic import BaseModel
 from decimal import Decimal
+from datetime import datetime
 
-# --- Item Schemas ---
+# --- Order Item Schema ---
 class OrderItemBase(BaseModel):
     product_name: str
     fabric_type: Optional[str] = None
     neck_type: Optional[str] = None
     sleeve_type: Optional[str] = None
-    quantity_matrix: Dict[str, int] = {}
-    
-    # Prices & Costs
-    base_price: float = 0
-    price_per_unit: float = 0
-    cost_per_unit: float = 0
-    total_price: float = 0
-    total_cost: float = 0
-    total_qty: int = 0
+    base_price: Decimal = 0
+    cost_per_unit: Decimal = 0
+    quantity_matrix: Dict[str, int] = {} 
 
 class OrderItemCreate(OrderItemBase):
     pass
@@ -25,18 +19,23 @@ class OrderItemCreate(OrderItemBase):
 class OrderItem(OrderItemBase):
     id: int
     order_id: int
+    total_qty: int = 0
+    total_price: Decimal = 0
+    total_cost: Decimal = 0
 
     class Config:
         from_attributes = True
 
-# --- Order Schemas ---
-# Base Properties
+# --- Order Schema ---
 class OrderBase(BaseModel):
-    customer_name: Optional[str] = None
-    brand: Optional[str] = "BG"
-    phone: Optional[str] = None
-    contact_channel: Optional[str] = Field(None, alias="channel")
+    customer_name: Optional[str] = "Unknown" 
+    
+    brand: Optional[str] = None
+    
+    contact_channel: Optional[str] = None 
     address: Optional[str] = None
+    phone: Optional[str] = None
+
     deadline: Optional[datetime] = None
     usage_date: Optional[datetime] = None
     urgency_level: str = "normal"
@@ -46,45 +45,38 @@ class OrderBase(BaseModel):
     shipping_cost: Decimal = 0
     add_on_cost: Decimal = 0
     
-    # Discount (NEW)
     discount_type: str = "THB"
     discount_value: Decimal = 0
     discount_amount: Decimal = 0
     
-    # Deposits (NEW)
-    deposit_amount: Decimal = Field(0, alias="deposit") # Total Deposit
     deposit_1: Decimal = 0
     deposit_2: Decimal = 0
     
-    note: Optional[str] = None # NEW
+    note: Optional[str] = None
 
-# Properties to receive via API on creation
 class OrderCreate(OrderBase):
-    deadline: Optional[datetime] = None 
+    customer_name: str 
     items: List[OrderItemCreate] = []
 
-# Properties to return to client (GET response)
+class OrderUpdate(OrderBase):
+    pass
+
 class Order(OrderBase):
     id: int
     order_no: str
     
-    # Financials (Mapped from DB)
-    grand_total: Decimal = 0
     vat_amount: Decimal = 0
+    grand_total: Decimal = 0
+    deposit_amount: Decimal = 0
     balance_amount: Decimal = 0
     
-    # Profitability
     total_cost: Decimal = 0
     estimated_profit: Decimal = 0
     
-    created_at: Optional[datetime] = None
+    created_at: datetime
     updated_at: Optional[datetime] = None
+    
     items: List[OrderItem] = []
 
     class Config:
         from_attributes = True
-        populate_by_name = True
-
-    @validator('customer_name', pre=True, always=True, check_fields=False)
-    def extract_customer_name(cls, v, values):
-        return v

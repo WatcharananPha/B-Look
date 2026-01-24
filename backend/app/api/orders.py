@@ -32,13 +32,16 @@ def read_orders(
     results = []
     for o in orders:
         o_dict = o.__dict__.copy()
-        if o.customer:
-            o_dict['customer_name'] = o.customer.name
-            o_dict['phone'] = o.customer.phone
-            o_dict['contact_channel'] = o.customer.channel
         
-        # Map fields manual if needed
-        # Note: deposit_amount is mapped via schema alias
+        # Priority 1: ข้อมูลจาก Snapshot ใน Order (ถ้ามี)
+        # Priority 2: ข้อมูลจาก Customer Master (ถ้า Snapshot ว่าง)
+        
+        if o.customer:
+            # ถ้าใน Order ไม่มี ให้ดึงจาก Customer มาแสดง
+            if not o_dict.get('customer_name'): o_dict['customer_name'] = o.customer.name
+            if not o_dict.get('phone'): o_dict['phone'] = o.customer.phone
+            if not o_dict.get('contact_channel'): o_dict['contact_channel'] = o.customer.channel
+            if not o_dict.get('address'): o_dict['address'] = o.customer.address
         
         results.append(o_dict)
 
@@ -51,9 +54,11 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    # 1. Customer Handling
+    # 1. Customer Handling (Sync Logic)
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
+    
     if not customer:
+        # กรณีลูกค้าใหม่ -> สร้างใหม่
         customer = Customer(
             name=order_in.customer_name,
             phone=order_in.phone,
@@ -62,6 +67,22 @@ def create_order(
         )
         db.add(customer)
         db.flush()
+    else:
+        # ✅ FIX: กรณีลูกค้าเก่า -> อัปเดตข้อมูลให้เป็นปัจจุบัน (Sync)
+        is_changed = False
+        if order_in.phone and customer.phone != order_in.phone:
+            customer.phone = order_in.phone
+            is_changed = True
+        if order_in.contact_channel and customer.channel != order_in.contact_channel:
+            customer.channel = order_in.contact_channel
+            is_changed = True
+        if order_in.address and customer.address != order_in.address:
+            customer.address = order_in.address
+            is_changed = True
+            
+        if is_changed:
+            db.add(customer)
+            db.flush()
 
     # 2. Calculation Logic
     items_total_price = Decimal(0)
@@ -90,12 +111,9 @@ def create_order(
     shipping = Decimal(str(order_in.shipping_cost))
     addon = Decimal(str(order_in.add_on_cost))
     
-    # Discount Logic
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount)) 
-    # (Trusting frontend amount for simplicity, but could recalculate if discount_type is PERCENT)
 
-    # Deposits Logic
     dep1 = Decimal(str(order_in.deposit_1))
     dep2 = Decimal(str(order_in.deposit_2))
     total_deposit = dep1 + dep2
@@ -121,10 +139,16 @@ def create_order(
         order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
         brand=order_in.brand,
         customer_id=customer.id,
+        
+        # Snapshot Data (บันทึกติดตัวออเดอร์ไว้ด้วย)
+        contact_channel=order_in.contact_channel,
+        address=order_in.address,
+        phone=order_in.phone,
+
         deadline=order_in.deadline,
         usage_date=order_in.usage_date,
         urgency_level=order_in.urgency_level,
-        status=order_in.status, # Use status from input
+        status=order_in.status, 
         
         is_vat_included=order_in.is_vat_included,
         shipping_cost=shipping,
@@ -184,11 +208,7 @@ def create_order(
     db.commit()
     db.refresh(new_order)
     
-    return {
-        "message": "Order created successfully",
-        "order_no": new_order.order_no,
-        "id": new_order.id
-    }
+    return new_order
 
 # --- 3. GET SINGLE ORDER ---
 @router.get("/{order_id}", response_model=OrderSchema)
@@ -200,8 +220,10 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
     order_dict = order.__dict__.copy()
     if order.customer:
         order_dict['customer_name'] = order.customer.name
-        order_dict['phone'] = order.customer.phone
-        order_dict['contact_channel'] = order.customer.channel
+        # Fallback to customer info if order specific info is missing
+        if not order_dict.get('phone'): order_dict['phone'] = order.customer.phone
+        if not order_dict.get('contact_channel'): order_dict['contact_channel'] = order.customer.channel
+        if not order_dict.get('address'): order_dict['address'] = order.customer.address
         
     return order_dict
 
@@ -217,7 +239,7 @@ def update_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Update Customer
+    # Update Customer Info (Sync Logic)
     customer = db.query(Customer).filter(Customer.name == order_in.customer_name).first()
     if not customer:
         customer = Customer(
@@ -228,6 +250,22 @@ def update_order(
         )
         db.add(customer)
         db.flush()
+    else:
+        # ✅ FIX: Update existing customer info on Order Update too
+        is_changed = False
+        if order_in.phone and customer.phone != order_in.phone:
+            customer.phone = order_in.phone
+            is_changed = True
+        if order_in.contact_channel and customer.channel != order_in.contact_channel:
+            customer.channel = order_in.contact_channel
+            is_changed = True
+        if order_in.address and customer.address != order_in.address:
+            customer.address = order_in.address
+            is_changed = True
+            
+        if is_changed:
+            db.add(customer)
+            db.flush()
 
     # Recalculate Logic
     items_total_price = Decimal(0)
@@ -278,8 +316,15 @@ def update_order(
     estimated_profit = revenue_ex_vat - items_total_cost
     balance = grand_total - total_deposit
 
-    # Update Fields
+    # Update Order Fields
     order.customer_id = customer.id
+    
+    # Sync specific fields to Order Record
+    order.contact_channel = order_in.contact_channel
+    order.address = order_in.address
+    order.phone = order_in.phone
+    
+    order.brand = order_in.brand
     order.deadline = order_in.deadline
     order.usage_date = order_in.usage_date
     order.urgency_level = order_in.urgency_level
@@ -338,12 +383,14 @@ def update_order(
     db.commit()
     db.refresh(order)
 
-    # Map Response Manually
+    # Construct Response
     order_dict = order.__dict__.copy()
     if order.customer:
         order_dict['customer_name'] = order.customer.name
-        order_dict['phone'] = order.customer.phone
-        order_dict['contact_channel'] = order.customer.channel
+        # Ensure updated fields are returned
+        if not order_dict.get('phone'): order_dict['phone'] = order.customer.phone
+        if not order_dict.get('contact_channel'): order_dict['contact_channel'] = order.customer.channel
+        if not order_dict.get('address'): order_dict['address'] = order.customer.address
         
     return order_dict
 
