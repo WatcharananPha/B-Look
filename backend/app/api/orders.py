@@ -280,7 +280,6 @@ def update_order(
         db.add(customer)
         db.flush()
     else:
-        # ✅ Sync Logic: Update existing customer info
         is_changed = False
 
         new_phone = order_in.phone.strip() if order_in.phone else None

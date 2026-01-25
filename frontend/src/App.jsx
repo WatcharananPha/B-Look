@@ -172,6 +172,16 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 
 // 2. Invoice Modal
 const InvoiceModal = ({ data, onClose }) => {
+  if (!data) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
+        <div className="bg-white p-8 rounded-xl text-center">
+          <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
+        </div>
+      </div>
+    );
+  }
   const handlePrint = () => window.print();
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
@@ -201,9 +211,9 @@ const InvoiceModal = ({ data, onClose }) => {
         {/* Customer Info */}
         <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
             <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
-            <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
-            <p className="text-sm text-slate-500">{data.phoneNumber} | {data.contactChannel}</p>
-            <p className="text-sm text-slate-500 mt-1">{data.address}</p>
+            <p className="font-bold text-slate-800 text-lg">{data.customerName || data.customer_name || "-"}</p>
+            <p className="text-sm text-slate-500">{data.phoneNumber || data.phone || "-"} | {data.contactChannel || data.contact_channel || "-"}</p>
+            <p className="text-sm text-slate-500 mt-1">{data.address || "-"}</p>
         </div>
         {/* Table */}
         <table className="w-full text-sm mb-8">
@@ -213,12 +223,12 @@ const InvoiceModal = ({ data, onClose }) => {
             <tbody>
                 <tr>
                     <td className="py-4 px-4">
-                        <p className="font-bold">{data.brand}</p>
-                        <p className="text-xs text-slate-500">ผ้า: {data.fabric} | คอ: {data.neck} | แขน: {data.sleeve}</p>
+                        <p className="font-bold">{data.brand || "-"}</p>
+                        <p className="text-xs text-slate-500">ผ้า: {data.fabric || "-"} | คอ: {data.neck || "-"} | แขน: {data.sleeve || "-"}</p>
                     </td>
-                    <td className="py-4 px-4 text-right">{data.totalQty}</td>
-                    <td className="py-4 px-4 text-right">{data.basePrice.toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right">{(data.totalQty * data.basePrice).toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right">{data.totalQty || 0}</td>
+                    <td className="py-4 px-4 text-right">{(data.basePrice || 0).toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right">{((data.totalQty || 0) * (data.basePrice || 0)).toLocaleString()}</td>
                 </tr>
             </tbody>
         </table>
@@ -226,22 +236,177 @@ const InvoiceModal = ({ data, onClose }) => {
         <div className="flex justify-end">
             <div className="w-1/2 space-y-2 text-sm">
                 <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{(data.addOnCost + data.shippingCost).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{((data.addOnCost || 0) + (data.shippingCost || 0)).toLocaleString()}</span></div>
                 
                 {/* Display Discount */}
-                <div className="flex justify-between text-rose-600">
-                    <span>ส่วนลด {data.discountType === 'PERCENT' ? `(${data.discountValue}%)` : ''}</span>
-                    <span>-{data.discountAmount.toLocaleString()}</span>
-                </div>
+                {(data.discount || data.discountAmount || 0) > 0 && (
+                  <div className="flex justify-between text-rose-600">
+                      <span>ส่วนลด {data.discountType === 'PERCENT' ? `(${data.discountValue}%)` : ''}</span>
+                      <span>-{(data.discountAmount || data.discount || 0).toLocaleString()}</span>
+                  </div>
+                )}
 
-                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{data.vatAmount.toLocaleString()}</span></div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{data.grandTotal.toLocaleString()}</span></div>
+                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{(data.vatAmount || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{(data.grandTotal || 0).toLocaleString()}</span></div>
                 
                 {/* Deposit Details */}
                 <div className="border-t border-dashed pt-2 mt-2 space-y-1">
-                    <div className="flex justify-between text-gray-500 text-xs"><span>มัดจำงวด 1</span><span>{data.deposit1.toLocaleString()}</span></div>
-                    <div className="flex justify-between text-gray-500 text-xs"><span>มัดจำงวด 2</span><span>{data.deposit2.toLocaleString()}</span></div>
-                    <div className="flex justify-between font-bold text-emerald-600"><span>คงเหลือชำระ</span><span>{data.balance.toLocaleString()}</span></div>
+                    <div className="flex justify-between text-gray-500 text-xs"><span>มัดจำ</span><span>{(data.deposit || data.balance && data.grandTotal - data.balance || 0).toLocaleString()}</span></div>
+                    <div className="flex justify-between font-bold text-emerald-600"><span>คงเหลือชำระ</span><span>{(data.balance || 0).toLocaleString()}</span></div>
+                </div>
+
+                {/* Note */}
+                {data.note && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded text-xs text-yellow-800">
+                        <strong>หมายเหตุ:</strong> {data.note}
+                    </div>
+                )}
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Helper function to build order data for display
+const buildOrderDisplayData = (order) => {
+  if (!order) return null;
+  
+  // Calculate totals from order
+  const baseAmount = (order.total_qty || 0) * (order.base_price || 0);
+  const addOnShipping = (order.add_on_cost || 0) + (order.shipping_cost || 0);
+  const discountAmount = order.discount || 0;
+  const vatAmount = order.vat_amount || 0;
+  const grandTotal = order.grand_total || 0;
+  
+  return {
+    order_no: order.order_no,
+    customerName: order.customer_name,
+    phoneNumber: order.phone,
+    contactChannel: order.contact_channel,
+    address: order.address,
+    deadline: order.deadline,
+    brand: order.brand || "-",
+    quantities: order.quantities || {},
+    totalQty: order.total_qty || 0,
+    basePrice: order.base_price || 0,
+    addOnCost: order.add_on_cost || 0,
+    shippingCost: order.shipping_cost || 0,
+    discount: discountAmount,
+    discountAmount: discountAmount,
+    isVatIncluded: order.is_vat_included || false,
+    vatAmount: vatAmount,
+    grandTotal: grandTotal,
+    deposit: order.deposit || 0,
+    balance: order.balance || (grandTotal - (order.deposit || 0)),
+    fabric: order.fabric || "-",
+    neck: order.neck || "-",
+    sleeve: order.sleeve || "-",
+    note: order.note || ""
+  };
+};
+
+// 2.1 ORDER DETAIL MODAL (Reuses invoice structure)
+const OrderDetailModal = ({ order, onClose }) => {
+  if (!order) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
+        <div className="bg-white p-8 rounded-xl text-center">
+          <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
+        </div>
+      </div>
+    );
+  }
+  
+  const data = buildOrderDisplayData(order);
+  const handlePrint = () => window.print();
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
+      <style>{`@media print { body * { visibility: hidden; } #detail-content, #detail-content * { visibility: visible; } #detail-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #detail-no-print { display: none !important; } }`}</style>
+      <div id="detail-no-print" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
+          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
+              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
+          </button>
+          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close">
+              <XCircle size={24} />
+          </button>
+      </div>
+      <div id="detail-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
+            <div>
+                <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
+                <p className="text-slate-600 font-semibold">บริษัท บี-ลุค จำกัด</p>
+                <p className="text-sm text-slate-500">123 ถนนตัวอย่าง กทม.</p>
+            </div>
+            <div className="text-right">
+                <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
+                <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
+                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
+            </div>
+        </div>
+        {/* Customer Info */}
+        <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
+            <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
+            <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
+            <p className="text-sm text-slate-500">{data.phoneNumber || "-"} | {data.contactChannel || "-"}</p>
+            <p className="text-sm text-slate-500 mt-1">{data.address || "-"}</p>
+        </div>
+        {/* Table */}
+        <table className="w-full text-sm mb-8">
+            <thead>
+                <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td className="py-4 px-4">
+                        <p className="font-bold">{data.brand || "-"}</p>
+                        <p className="text-xs text-slate-500">ผ้า: {data.fabric || "-"} | คอ: {data.neck || "-"} | แขน: {data.sleeve || "-"}</p>
+                    </td>
+                    <td className="py-4 px-4 text-right">{data.totalQty || 0}</td>
+                    <td className="py-4 px-4 text-right">{(data.basePrice || 0).toLocaleString()}</td>
+                    <td className="py-4 px-4 text-right">{((data.totalQty || 0) * (data.basePrice || 0)).toLocaleString()}</td>
+                </tr>
+            </tbody>
+        </table>
+        {/* Totals */}
+        <div className="flex justify-end">
+            <div className="w-1/2 space-y-2 text-sm">
+                <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{((data.totalQty || 0) * (data.basePrice || 0)).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{((data.addOnCost || 0) + (data.shippingCost || 0)).toLocaleString()}</span></div>
+                
+                {/* Display Discount */}
+                {(data.discount || data.discountAmount || 0) > 0 && (
+                  <div className="flex justify-between text-rose-600">
+                      <span>ส่วนลด</span>
+                      <span>-{(data.discountAmount || data.discount || 0).toLocaleString()}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'รวมแล้ว' : 'แยก'} 7%)</span><span>{(data.vatAmount || 0).toLocaleString()}</span></div>
+                <div className="flex justify-between font-bold text-lg border-t pt-2 mb-4"><span>ยอดสุทธิ</span><span>{(data.grandTotal || 0).toLocaleString()}</span></div>
+                
+                {/* Deposit Details Block */}
+                <div className="border-2 border-emerald-200 bg-emerald-50 rounded-lg p-4 mt-4">
+                    <h4 className="text-sm font-bold text-emerald-900 mb-3">รายละเอียดการชำระเงิน</h4>
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-700">ยอดสุทธิ</span>
+                            <span className="font-bold text-slate-800">{(data.grandTotal || 0).toLocaleString()} บาท</span>
+                        </div>
+                        <div className="border-t border-emerald-200"></div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-emerald-700 font-semibold">มัดจำที่ชำระแล้ว</span>
+                            <span className="font-bold text-emerald-700">{(data.deposit || 0).toLocaleString()} บาท</span>
+                        </div>
+                        <div className="border-t-2 border-emerald-300"></div>
+                        <div className="flex justify-between items-center pt-1">
+                            <span className="text-emerald-900 font-bold text-base">คงเหลือชำระ</span>
+                            <span className="font-bold text-emerald-900 text-lg">{(data.balance || 0).toLocaleString()} บาท</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Note */}
@@ -376,9 +541,8 @@ const UserManagementPage = ({ onNotify }) => {
     );
 };
 
-// -----------------------------------------------------------------------------
 // HELPER COMPONENT: DETAIL LIST MODAL
-// -----------------------------------------------------------------------------
+
 const DetailListModal = ({ title, items, onClose, onEdit }) => (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
@@ -472,7 +636,8 @@ const DashboardPage = ({ onEdit }) => {
 
     // Modals
     const [showQueueModal, setShowQueueModal] = useState(false);
-    const [detailModal, setDetailModal] = useState(null); 
+    const [detailModal, setDetailModal] = useState(null);
+    const [detailOrder, setDetailOrder] = useState(null); 
 
     // --- Helper: Date Range Checker ---
     const isInTimeRange = (dateStr, range) => {
@@ -644,6 +809,11 @@ const DashboardPage = ({ onEdit }) => {
     return (
         <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
             
+            {/* Detail Order Modal */}
+            {detailOrder && (
+                <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
+            )}
+
             {/* Modal for Details */}
             {detailModal && (
                 <DetailListModal 
@@ -660,7 +830,7 @@ const DashboardPage = ({ onEdit }) => {
                     <h3 className="text-lg font-bold text-[#1a1c23] mb-4 flex items-center gap-2"><Bell className="text-rose-500"/> รายการที่ต้องติดตามด่วน</h3>
                     <div className="space-y-3">
                         {notifications.map((n, i) => (
-                            <div key={i} onClick={() => onEdit(n.order)} className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer hover:bg-gray-50 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                            <div key={i} onClick={() => setDetailOrder(n.order)} className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer hover:bg-gray-50 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
                                 <div className="flex items-center gap-3">
                                     {n.type === 'critical' ? <Flag size={18}/> : <Clock size={18}/>}
                                     <span className="text-sm font-bold">{n.msg}</span>
@@ -1568,6 +1738,8 @@ const CustomerPage = ({ refreshTrigger }) => {
   const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [detailOrder, setDetailOrder] = useState(null);
+  const [customerOrders, setCustomerOrders] = useState([]);
   const itemsPerPage = 10;
 
   const fetchCustomers = async () => {
@@ -1690,6 +1862,10 @@ const CustomerPage = ({ refreshTrigger }) => {
           </div>
       )}
 
+      {detailOrder && (
+          <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
+      )}
+
       <header className="mb-8 flex justify-between items-end">
         <div>
             <h1 className="text-3xl font-black text-[#1a1c23]">ลูกค้า</h1>
@@ -1712,7 +1888,18 @@ const CustomerPage = ({ refreshTrigger }) => {
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {paginatedCustomers.map((cust) => (
-                            <tr key={cust.id} className="hover:bg-gray-50 transition group">
+                            <tr key={cust.id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={async () => {
+                                // Fetch orders for this customer
+                                try {
+                                    const allOrders = await fetchWithAuth('/orders/');
+                                    const custOrders = (allOrders || []).filter(o => o.customer_id === cust.id);
+                                    if (custOrders.length > 0) {
+                                        setDetailOrder(custOrders[0]); // Show first order
+                                    }
+                                } catch (e) {
+                                    console.error("Failed to fetch customer orders", e);
+                                }
+                            }}>
                                 <td className="py-4 px-6 font-bold text-gray-700">{cust.name}</td>
                                 <td className="py-4 px-6 text-sm text-gray-600">
                                     <span className="bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
@@ -1721,7 +1908,7 @@ const CustomerPage = ({ refreshTrigger }) => {
                                     </span>
                                 </td>
                                 <td className="py-4 px-6 text-sm text-gray-600 font-mono">{cust.phone}</td>
-                                <td className="py-4 px-6 text-right">
+                                <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex justify-end gap-3">
                                         <button onClick={() => openEditModal(cust)} className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข"><Edit size={16}/></button>
                                         <button onClick={() => setDeleteConfirm(cust)} className="text-gray-400 hover:text-rose-500 transition" title="ลบ"><Trash2 size={16}/></button>
@@ -1776,6 +1963,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState(""); 
   const [currentPage, setCurrentPage] = useState(1);
+  const [detailOrder, setDetailOrder] = useState(null);
   const itemsPerPage = 10;
    
   const fetchOrders = useCallback(async () => {
@@ -1797,6 +1985,30 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
           setDeleteConfirm(null);
           fetchOrders();
       } catch (e) { alert("Error: " + e.message); }
+  };
+
+  const handleStatusChange = async (orderId, newStatus) => {
+      try {
+          const order = orders.find(o => o.id === orderId);
+          if (!order) return;
+          
+          await fetchWithAuth(`/orders/${orderId}`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                  ...order,
+                  status: newStatus,
+                  customer_name: order.customer_name,
+                  phone: order.phone,
+                  contact_channel: order.contact_channel,
+                  address: order.address,
+                  items: []
+              })
+          });
+          onNotify(`เปลี่ยนสถานะเป็น ${newStatus} สำเร็จ`, "success");
+          fetchOrders();
+      } catch (e) { 
+          onNotify("เปลี่ยนสถานะไม่สำเร็จ: " + e.message, "error");
+      }
   };
 
   const getStatusBadge = (status) => {
@@ -1872,6 +2084,10 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 
   return (
     <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+      {detailOrder && (
+          <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
+      )}
+      
       {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
@@ -1933,7 +2149,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {paginatedOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-gray-50 transition group">
+                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={() => setDetailOrder(order)}>
                                 <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate">{order.order_no}</td>
                                 <td className="py-4 px-6 text-gray-700 truncate">
                                     <div className="font-medium truncate">{order.customer_name}</div>
@@ -1943,8 +2159,22 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                     {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
                                 </td>
                                 <td className="py-4 px-6 text-right font-bold text-gray-700">{order.grand_total?.toLocaleString()}</td>
-                                <td className="py-4 px-6 text-center">{getStatusBadge(order.status)}</td>
-                                <td className="py-4 px-6 text-right">
+                                <td className="py-4 px-6 text-center">
+                                    <select 
+                                        value={order.status || 'draft'}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }}
+                                        className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition"
+                                    >
+                                        <option value="draft">ร่าง</option>
+                                        <option value="designing">ออกแบบ</option>
+                                        <option value="waiting_approval">รออนุมัติ</option>
+                                        <option value="production">ผลิต</option>
+                                        <option value="shipping">จัดส่ง</option>
+                                        <option value="delivered">ส่งแล้ว</option>
+                                    </select>
+                                </td>
+                                <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex justify-end gap-3">
                                         <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}>
                                             <Edit size={16}/>
