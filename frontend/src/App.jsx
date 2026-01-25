@@ -555,7 +555,7 @@ const DetailListModal = ({ title, items, onClose, onEdit }) => (
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                             <tr>
-                                <th className="p-4 bg-gray-50 text-gray-600">Order No</th>
+                                <th className="p-4 bg-gray-50 text-gray-600 ">Order No</th>
                                 <th className="p-4 bg-gray-50 text-gray-600">ลูกค้า</th>
                                 <th className="p-4 bg-gray-50 text-gray-600">สถานะ</th>
                                 <th className="p-4 bg-gray-50 text-gray-600">รายละเอียด</th>
@@ -1345,17 +1345,17 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-yellow-50 focus:bg-white transition" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
                     
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">วันใช้งาน (Usage Date)</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">วันที่ใช้งาน</label>
                             <input type="date" className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} />
                         </div>
 
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
                             <select className="w-full border-gray-200 border p-3 rounded-xl bg-white focus:ring-2 focus:ring-[#1a1c23]" value={status} onChange={(e) => setStatus(e.target.value)}>
-                                <option value="draft">แบบร่าง</option>
-                                <option value="designing">กำลังออกแบบ</option>
-                                <option value="waiting_approval">รอแบบอนุมัติ</option>
-                                <option value="production">กำลังผลิต</option>
+                                <option value="แบบร่าง">แบบร่าง</option>
+                                <option value="กำลังออกแบบ">กำลังออกแบบ</option>
+                                <option value="รอแบบอนุมัติ">รอแบบอนุมัติ</option>
+                                <option value="กำลังผลิต">กำลังผลิต</option>
                                 <option value="shipping">เตรียมจัดส่ง</option>
                                 <option value="delivered">ส่งมอบแล้ว</option>
                             </select>
@@ -1728,18 +1728,15 @@ const ProductPage = () => {
   );
 };
 
-// 2.4 CUSTOMER PAGE
-const CustomerPage = ({ refreshTrigger }) => {
+// 2.4 CUSTOMER PAGE (UI Layout Improved)
+const CustomerPage = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); 
-  // ✅ แก้ไข: เปลี่ยนจาก contact_channel เป็น channel
   const [currentCustomer, setCurrentCustomer] = useState({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [detailOrder, setDetailOrder] = useState(null);
-  const [customerOrders, setCustomerOrders] = useState([]);
   const itemsPerPage = 10;
 
   const fetchCustomers = async () => {
@@ -1752,17 +1749,9 @@ const CustomerPage = ({ refreshTrigger }) => {
   };
 
   useEffect(() => { fetchCustomers(); }, []);
-  
-  // ✅ FIX: Auto-refresh customer list when order is created/updated
-  useEffect(() => { 
-    if (refreshTrigger) {
-      fetchCustomers();
-    }
-  }, [refreshTrigger]);
 
   const openAddModal = () => {
       setModalMode("add");
-      // ✅ แก้ไข: ใช้ channel
       setCurrentCustomer({ id: null, name: "", phone: "", channel: "LINE OA", address: "" });
       setIsModalOpen(true);
   };
@@ -1773,7 +1762,6 @@ const CustomerPage = ({ refreshTrigger }) => {
           id: cust.id,
           name: cust.name,
           phone: cust.phone,
-          // ✅ แก้ไข: ใช้ channel (รองรับข้อมูลเก่า contact_channel เผื่อไว้)
           channel: cust.channel || cust.contact_channel || "LINE OA",
           address: cust.address
       });
@@ -1810,119 +1798,175 @@ const CustomerPage = ({ refreshTrigger }) => {
 
   return (
     <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+      {/* Modal Form: ปรับ Layout ให้ดู Balance ขึ้น */}
       {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
-                  <h3 className="text-lg font-bold mb-4">{modalMode === 'add' ? 'เพิ่มลูกค้าใหม่' : 'แก้ไขข้อมูลลูกค้า'}</h3>
-                  <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อลูกค้า</label>
-                        <input className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="ชื่อลูกค้า" value={currentCustomer.name} onChange={e => setCurrentCustomer({...currentCustomer, name: e.target.value})} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+                  <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                      <h3 className="text-xl font-black text-[#1a1c23]">
+                          {modalMode === 'add' ? 'เพิ่มลูกค้าใหม่' : 'แก้ไขข้อมูลลูกค้า'}
+                      </h3>
+                      <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition">
+                          <X size={24} />
+                      </button>
+                  </div>
+                  
+                  <div className="space-y-5">
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">ชื่อลูกค้า</label>
+                            <input 
+                                className="w-full border border-gray-200 bg-gray-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23] focus:bg-white transition" 
+                                placeholder="ระบุชื่อลูกค้า" 
+                                value={currentCustomer.name} 
+                                onChange={e => setCurrentCustomer({...currentCustomer, name: e.target.value})} 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">เบอร์โทรศัพท์</label>
+                            <input 
+                                className="w-full border border-gray-200 bg-gray-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23] focus:bg-white transition" 
+                                placeholder="0xx-xxx-xxxx" 
+                                value={currentCustomer.phone} 
+                                onChange={e => setCurrentCustomer({...currentCustomer, phone: e.target.value})} 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">ช่องทางติดต่อ</label>
+                            <select 
+                                className="w-full border border-gray-200 bg-gray-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23] focus:bg-white transition cursor-pointer" 
+                                value={currentCustomer.channel} 
+                                onChange={e => setCurrentCustomer({...currentCustomer, channel: e.target.value})}
+                            >
+                                <option>LINE OA</option>
+                                <option>Facebook</option>
+                                <option>Phone</option>
+                                <option>Walk-in</option>
+                            </select>
+                          </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">เบอร์โทรศัพท์</label>
-                        <input className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="เบอร์โทรศัพท์" value={currentCustomer.phone} onChange={e => setCurrentCustomer({...currentCustomer, phone: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">ช่องทางติดต่อ</label>
-                        {/* ✅ แก้ไข: value และ onChange ให้เป็น channel */}
-                        <select className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value={currentCustomer.channel} onChange={e => setCurrentCustomer({...currentCustomer, channel: e.target.value})}>
-                            <option>LINE OA</option>
-                            <option>Facebook</option>
-                            <option>Phone</option>
-                            <option>Walk-in</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">ที่อยู่จัดส่ง</label>
-                        <textarea className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="ที่อยู่จัดส่ง" rows="3" value={currentCustomer.address} onChange={e => setCurrentCustomer({...currentCustomer, address: e.target.value})}></textarea>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">ที่อยู่จัดส่ง</label>
+                        <textarea 
+                            className="w-full border border-gray-200 bg-gray-50 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23] focus:bg-white transition resize-none" 
+                            placeholder="ระบุที่อยู่สำหรับจัดส่ง..." 
+                            rows="3" 
+                            value={currentCustomer.address} 
+                            onChange={e => setCurrentCustomer({...currentCustomer, address: e.target.value})}
+                        ></textarea>
                       </div>
                   </div>
-                  <div className="flex justify-end gap-2 mt-6">
-                      <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
-                      <button onClick={handleSave} className="px-4 py-2 bg-[#1a1c23] text-white rounded hover:bg-slate-800 transition">บันทึก</button>
+
+                  <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+                      <button 
+                          onClick={() => setIsModalOpen(false)} 
+                          className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition"
+                      >
+                          ยกเลิก
+                      </button>
+                      <button 
+                          onClick={handleSave} 
+                          className="px-6 py-2.5 text-sm font-bold bg-[#1a1c23] text-white rounded-xl hover:bg-slate-800 transition shadow-lg"
+                      >
+                          บันทึกข้อมูล
+                      </button>
                   </div>
               </div>
           </div>
       )}
 
+      {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
-                  <div className="flex items-center mb-4">
-                      <AlertCircle className="text-rose-500 mr-3" size={24} />
-                      <h3 className="text-lg font-bold">ยืนยันการลบ</h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+              <div className="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl text-center">
+                  <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Trash2 size={32} />
                   </div>
-                  <p className="text-slate-600 mb-6">คุณต้องการลบลูกค้า <span className="font-bold">"{deleteConfirm.name}"</span> ใช่หรือไม่?</p>
-                  <div className="flex justify-end gap-2">
-                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
-                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">ยืนยันการลบ</h3>
+                  <p className="text-gray-500 mb-6 text-sm">
+                      คุณต้องการลบข้อมูลลูกค้า <br/><span className="font-bold text-gray-800">"{deleteConfirm.name}"</span> ใช่หรือไม่?
+                  </p>
+                  <div className="flex gap-3">
+                      <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 text-sm font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-xl transition">ยกเลิก</button>
+                      <button onClick={() => handleDelete(deleteConfirm.id)} className="flex-1 py-2.5 text-sm font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition shadow-md">ยืนยันลบ</button>
                   </div>
               </div>
           </div>
       )}
 
-      {detailOrder && (
-          <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
-      )}
-
-      <header className="mb-8 flex justify-between items-end">
+      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
             <h1 className="text-3xl font-black text-[#1a1c23]">ลูกค้า</h1>
-            <p className="text-gray-500 font-medium">จัดการข้อมูลลูกค้า</p>
+            <p className="text-gray-500 font-medium">จัดการฐานข้อมูลลูกค้า</p>
         </div>
-        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg"><Plus size={18} className="mr-2"/> เพิ่มลูกค้า</button>
+        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-3 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+            <Plus size={20} className="mr-2"/> เพิ่มลูกค้าใหม่
+        </button>
       </header>
         
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
-        <div className="p-2 md:p-6 overflow-x-auto flex-1">
-            {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
-                <table className="w-full text-left">
-                    <thead>
+        <div className="p-0 overflow-x-auto flex-1">
+            {loading ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mb-2"></div>
+                    <p>กำลังโหลดข้อมูล...</p>
+                </div>
+            ) : (
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50/50 sticky top-0 z-10">
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6">ชื่อลูกค้า</th>
-                            <th className="py-4 px-6">ช่องทาง</th>
-                            <th className="py-4 px-6">เบอร์โทร</th>
-                            <th className="py-4 px-6 text-right">จัดการ</th>
+                            {/* Adjusted Alignment */}
+                            <th className="py-5 px-6 text-left w-[30%]">ชื่อลูกค้า</th>
+                            <th className="py-5 px-6 text-center w-[20%]">ช่องทาง</th>
+                            <th className="py-5 px-6 text-center w-[25%]">เบอร์โทร</th>
+                            <th className="py-5 px-6 text-right w-[25%]">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {paginatedCustomers.map((cust) => (
-                            <tr key={cust.id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={async () => {
-                                // Fetch orders for this customer
-                                try {
-                                    const allOrders = await fetchWithAuth('/orders/');
-                                    const custOrders = (allOrders || []).filter(o => o.customer_id === cust.id);
-                                    if (custOrders.length > 0) {
-                                        setDetailOrder(custOrders[0]); // Show first order
-                                    }
-                                } catch (e) {
-                                    console.error("Failed to fetch customer orders", e);
-                                }
-                            }}>
-                                <td className="py-4 px-6 font-bold text-gray-700">{cust.name}</td>
-                                <td className="py-4 px-6 text-sm text-gray-600">
-                                    <span className="bg-gray-100 px-2 py-1 rounded text-xs border border-gray-200">
-                                        {/* ✅ แก้ไข: แสดงผลจาก channel */}
-                                        {cust.channel || cust.contact_channel}
+                            <tr key={cust.id} className="hover:bg-blue-50/30 transition duration-150 group">
+                                <td className="py-4 px-6 font-bold text-gray-700 group-hover:text-[#1a1c23]">
+                                    {cust.name}
+                                </td>
+                                <td className="py-4 px-6 text-center">
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                                        (cust.channel || cust.contact_channel) === 'LINE OA' ? 'bg-green-50 text-green-700 border-green-200' :
+                                        (cust.channel || cust.contact_channel) === 'Facebook' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                        'bg-gray-100 text-gray-600 border-gray-200'
+                                    }`}>
+                                        {cust.channel || cust.contact_channel || '-'}
                                     </span>
                                 </td>
-                                <td className="py-4 px-6 text-sm text-gray-600 font-mono">{cust.phone}</td>
-                                <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex justify-end gap-3">
-                                        <button onClick={() => openEditModal(cust)} className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข"><Edit size={16}/></button>
-                                        <button onClick={() => setDeleteConfirm(cust)} className="text-gray-400 hover:text-rose-500 transition" title="ลบ"><Trash2 size={16}/></button>
+                                <td className="py-4 px-6 text-center text-sm text-gray-600 font-mono tracking-wide">
+                                    {cust.phone || '-'}
+                                </td>
+                                <td className="py-4 px-6 text-right">
+                                    <div className="flex justify-end gap-2">
+                                        <button 
+                                            onClick={() => openEditModal(cust)} 
+                                            className="p-2 text-gray-400 hover:text-[#1a1c23] hover:bg-gray-100 rounded-lg transition" 
+                                            title="แก้ไข"
+                                        >
+                                            <Edit size={18}/>
+                                        </button>
+                                        <button 
+                                            onClick={() => setDeleteConfirm(cust)} 
+                                            className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" 
+                                            title="ลบ"
+                                        >
+                                            <Trash2 size={18}/>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
                         ))}
                         {customers.length === 0 && (
                             <tr>
-                                <td colSpan="4" className="py-12 text-center">
-                                    <div className="flex flex-col items-center justify-center text-slate-400">
-                                        <User size={48} className="mb-3 opacity-50" />
-                                        <p className="text-lg font-medium">ไม่พบข้อมูลลูกค้า</p>
-                                        <p className="text-sm mt-1">เริ่มต้นด้วยการเพิ่มลูกค้าใหม่</p>
+                                <td colSpan="4" className="py-20 text-center">
+                                    <div className="flex flex-col items-center justify-center text-gray-300">
+                                        <User size={64} className="mb-4 opacity-20" />
+                                        <p className="text-lg font-medium text-gray-400">ยังไม่มีข้อมูลลูกค้า</p>
+                                        <p className="text-sm mt-1 text-gray-300">เริ่มสร้างฐานลูกค้าของคุณได้เลย</p>
                                     </div>
                                 </td>
                             </tr>
@@ -1931,24 +1975,29 @@ const CustomerPage = ({ refreshTrigger }) => {
                 </table>
             )}
         </div>
+        
         {/* Pagination Controls */}
         {totalPages > 1 && (
-            <div className="p-4 border-t border-gray-100 flex justify-end gap-2">
-                <button 
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 border rounded disabled:opacity-50"
-                >
-                    Previous
-                </button>
-                <span className="px-3 py-1">Page {currentPage} of {totalPages}</span>
-                <button 
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 border rounded disabled:opacity-50"
-                >
-                    Next
-                </button>
+            <div className="p-4 border-t border-gray-100 flex justify-between items-center bg-white">
+                <span className="text-xs font-bold text-gray-400">
+                    หน้า {currentPage} จาก {totalPages}
+                </span>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                        ก่อนหน้า
+                    </button>
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                        ถัดไป
+                    </button>
+                </div>
             </div>
         )}
       </div>
@@ -2166,12 +2215,12 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                         onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }}
                                         className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition"
                                     >
-                                        <option value="draft">ร่าง</option>
-                                        <option value="designing">ออกแบบ</option>
-                                        <option value="waiting_approval">รออนุมัติ</option>
-                                        <option value="production">ผลิต</option>
-                                        <option value="shipping">จัดส่ง</option>
-                                        <option value="delivered">ส่งแล้ว</option>
+                                        <option value="ร่าง">ร่าง</option>
+                                        <option value="ออกแบบ">ออกแบบ</option>
+                                        <option value="รออนุมัติ">รออนุมัติ</option>
+                                        <option value="ผลิต">ผลิต</option>
+                                        <option value="จัดส่ง">จัดส่ง</option>
+                                        <option value="ส่งแล้ว">ส่งแล้ว</option>
                                     </select>
                                 </td>
                                 <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
