@@ -541,8 +541,9 @@ const UserManagementPage = ({ onNotify }) => {
     );
 };
 
+// -----------------------------------------------------------------------------
 // HELPER COMPONENT: DETAIL LIST MODAL
-
+// -----------------------------------------------------------------------------
 const DetailListModal = ({ title, items, onClose, onEdit }) => (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
@@ -552,26 +553,30 @@ const DetailListModal = ({ title, items, onClose, onEdit }) => (
             </div>
             <div className="p-0 overflow-y-auto flex-1">
                 {items && items.length > 0 ? (
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left table-fixed">
                         <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                             <tr>
-                                <th className="p-4 bg-gray-50 text-gray-600 ">Order No</th>
-                                <th className="p-4 bg-gray-50 text-gray-600">ลูกค้า</th>
-                                <th className="p-4 bg-gray-50 text-gray-600">สถานะ</th>
-                                <th className="p-4 bg-gray-50 text-gray-600">รายละเอียด</th>
-                                <th className="p-4 bg-gray-50 text-gray-600 text-right">Action</th>
+                                <th className="p-4 w-[20%] bg-gray-50 text-center">Order No</th>
+                                <th className="p-4 w-[20%] bg-gray-50 text-center">ลูกค้า</th>
+                                <th className="p-4 w-[20%] bg-gray-50 text-center">กำหนดส่ง</th>
+                                <th className="p-4 w-[20%] bg-gray-50 text-center">สถานะ</th>
+                                <th className="p-4 w-[20%] bg-gray-50 text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {items.map((item, idx) => (
                                 <tr key={item.id || idx} className="hover:bg-blue-50/50 transition">
-                                    <td className="p-4 font-mono font-bold text-sm text-[#1a1c23]">{item.order_no}</td>
-                                    <td className="p-4 text-sm">
-                                        <div className="font-bold text-gray-700">{item.customer_name}</div>
-                                        <div className="text-xs text-gray-400">{item.contact_channel}</div>
+                                    <td className="p-4 font-mono font-bold text-sm text-[#1a1c23] truncate text-center">
+                                        {item.order_no}
                                     </td>
-                                    <td className="p-4">
-                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
+                                    <td className="p-4 text-sm text-gray-700 truncate text-center" title={item.customer_name}>
+                                        {item.customer_name}
+                                    </td>
+                                    <td className="p-4 text-sm text-gray-500 text-center">
+                                        {item.deadline ? new Date(item.deadline).toLocaleDateString('th-TH') : '-'}
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase border ${
                                             item.status === 'production' ? 'bg-blue-100 text-blue-700 border-blue-200' :
                                             item.status === 'urgent' ? 'bg-rose-100 text-rose-700 border-rose-200' :
                                             item.status === 'delivered' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
@@ -580,15 +585,12 @@ const DetailListModal = ({ title, items, onClose, onEdit }) => (
                                             {item.status || 'Draft'}
                                         </span>
                                     </td>
-                                    <td className="p-4 text-sm text-gray-600">
-                                        {item.desc || (item.deadline ? `ส่ง: ${new Date(item.deadline).toLocaleDateString('th-TH')}` : '-')}
-                                    </td>
-                                    <td className="p-4 text-right">
+                                    <td className="p-4 text-center">
                                         <button 
                                             onClick={() => { onClose(); if(onEdit && item.id) onEdit(item); }}
-                                            className="text-xs bg-[#1a1c23] text-white px-3 py-1.5 rounded-lg hover:bg-slate-800 transition"
+                                            className="text-xs underline text-slate-500 hover:text-[#1a1c23] font-medium"
                                         >
-                                            ดูข้อมูล
+                                            แก้ไข
                                         </button>
                                     </td>
                                 </tr>
@@ -2030,7 +2032,21 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 
   const handleDelete = async (id) => {
       try {
+          // Get the order to find the customer_id
+          const orderToDelete = orders.find(o => o.id === id);
+          
+          // Delete the order
           await fetchWithAuth(`/orders/${id}`, { method: 'DELETE' });
+          
+          // If order has a customer_id, delete the customer as well
+          if (orderToDelete && orderToDelete.customer_id) {
+              try {
+                  await fetchWithAuth(`/customers/${orderToDelete.customer_id}`, { method: 'DELETE' });
+              } catch (err) {
+                  console.warn("Could not delete customer:", err);
+              }
+          }
+          
           setDeleteConfirm(null);
           fetchOrders();
       } catch (e) { alert("Error: " + e.message); }
