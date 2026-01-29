@@ -7,7 +7,7 @@ import {
   Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
-import LoginPage from './Login';
+import LoginPage from './login';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const LOGO_URL = "/logo.jpg"; 

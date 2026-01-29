@@ -23,7 +23,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db/blook_db
+      # ✅ แก้ไขตรงนี้: ระบุ Server เป็น 'db' (ชื่อ service ของ database)
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=blook_db
     depends_on:
       - db
 
