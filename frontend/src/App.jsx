@@ -14,7 +14,56 @@ const LOGO_URL = "/logo.jpg";
 
 // --- CONSTANTS ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
-const SIZES = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+
+// Step Pricing by Quantity and Collar Type
+const STEP_PRICING = {
+  // คอกลม/วี - Round/V-neck
+  roundVNeck: [
+    { minQty: 10, maxQty: 30, price: 240 },
+    { minQty: 31, maxQty: 50, price: 220 },
+    { minQty: 51, maxQty: 100, price: 190 },
+    { minQty: 101, maxQty: 300, price: 180 }
+  ],
+  // คอปก/อื่นๆ - Collar/Others
+  collarOthers: [
+    { minQty: 10, maxQty: 30, price: 300 },
+    { minQty: 31, maxQty: 50, price: 260 },
+    { minQty: 51, maxQty: 100, price: 240 },
+    { minQty: 101, maxQty: 300, price: 220 }
+  ],
+  // กางเกงกีฬา - Sports Pants
+  sportsPants: 210,
+  // กางเกงแฟชั่น - Fashion Pants
+  fashionPants: 280
+};
+
+// Add-on Options with prices
+const ADDON_OPTIONS = [
+  { id: 'longSleeve', name: 'แขนยาว', price: 40 },
+  { id: 'pocket', name: 'กระเป๋า', price: 20 },
+  { id: 'numberName', name: 'รันเบอร์/ชื่อ', price: 20 },
+  { id: 'slopeShoulder', name: 'ไหล่สโลป', price: 40 },
+  { id: 'collarTongue', name: 'คอมีลิ้น', price: 10 },
+  { id: 'shortSleeveAlt', name: 'แขนจิ้ม', price: 20 },
+  { id: 'oversizeSlopeShoulder', name: 'ทรงโอเวอร์ไซส์ไหล่สโลป', price: 60 }
+];
+
+// Necks that support คอกลม/วี pricing
+const ROUND_V_NECK_TYPES = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'];
+
+// Necks that support ไหล่สโลป option
+const SLOPE_SHOULDER_SUPPORTED_NECKS = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'];
+
+// Custom Status Options (editable)
+const DEFAULT_STATUS_OPTIONS = [
+  { value: 'แบบร่าง', label: 'แบบร่าง' },
+  { value: 'กำลังออกแบบ', label: 'กำลังออกแบบ' },
+  { value: 'รอแบบอนุมัติ', label: 'รอแบบอนุมัติ' },
+  { value: 'กำลังผลิต', label: 'กำลังผลิต' },
+  { value: 'เตรียมจัดส่ง', label: 'เตรียมจัดส่ง' },
+  { value: 'ส่งมอบแล้ว', label: 'ส่งมอบแล้ว' }
+];
 
 // --- HELPER: API Fetch Wrapper ---
 const fetchWithAuth = async (endpoint, options = {}) => {
@@ -76,23 +125,23 @@ const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
     const pages = getPageNumbers();
 
     return (
-        <div className="p-4 border-t border-gray-100 flex justify-center items-center gap-2">
+        <div className="p-2 sm:p-4 border-t border-gray-100 flex justify-center items-center gap-1 sm:gap-2 flex-wrap">
             <button
                 onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={14} className="sm:w-4 sm:h-4" />
             </button>
 
             {pages.map((page, idx) => (
                 page === '...' ? (
-                    <span key={`ellipsis-${idx}`} className="px-2 py-2 text-gray-400">...</span>
+                    <span key={`ellipsis-${idx}`} className="px-1 sm:px-2 py-1 sm:py-2 text-gray-400 text-xs sm:text-base">...</span>
                 ) : (
                     <button
                         key={page}
                         onClick={() => onPageChange(page)}
-                        className={`px-3 py-2 rounded-lg transition ${
+                        className={`px-2 sm:px-3 py-1 sm:py-2 rounded-lg transition text-xs sm:text-base ${
                             currentPage === page
                                 ? 'bg-[#1a1c23] text-white font-bold shadow-lg'
                                 : 'border border-gray-300 hover:bg-gray-50'
@@ -106,9 +155,9 @@ const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
             <button
                 onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="px-2 sm:px-3 py-1 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-                <ChevronRight size={16} />
+                <ChevronRight size={14} className="sm:w-4 sm:h-4" />
             </button>
         </div>
     );
@@ -172,6 +221,10 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 
 // 2. Invoice Modal
 const InvoiceModal = ({ data, onClose }) => {
+  const [image3DFront, setImage3DFront] = useState("");
+  const [image3DBack, setImage3DBack] = useState("");
+  const [showImageInput, setShowImageInput] = useState(false);
+  
   if (!data) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -182,86 +235,289 @@ const InvoiceModal = ({ data, onClose }) => {
       </div>
     );
   }
-  const handlePrint = () => window.print();
+  
+  const handlePrint = () => {
+    const invoiceElement = document.getElementById('invoice-content');
+    if (!invoiceElement) return;
+    
+    const printWindow = window.open('', '', 'height=297mm,width=210mm');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          @page { size: A4; margin: 0; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: sans-serif; }
+          #print-content { width: 210mm; height: 297mm; overflow: hidden; }
+        </style>
+      </head>
+      <body>
+        <div id="print-content">${invoiceElement.innerHTML}</div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+
+  const handleDownloadPDF = async () => {
+    const invoiceElement = document.getElementById('invoice-content');
+    if (!invoiceElement) return;
+    
+    try {
+      // Dynamically import html2pdf
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => {
+        const element = invoiceElement.cloneNode(true);
+        element.style.margin = '0';
+        element.style.padding = '0';
+        
+        const opt = {
+          margin: 0,
+          filename: `order-${data.order_no || 'draft'}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { format: 'a4', orientation: 'portrait', compress: true }
+        };
+        
+        html2pdf().set(opt).from(element).save();
+      };
+      document.head.appendChild(script);
+    } catch (error) {
+      console.error('PDF download failed:', error);
+      alert('ไม่สามารถดาวน์โหลด PDF ได้');
+    }
+  };
+  const isFactoryView = data.isFactoryView || false;
+  
+  // Get sizes with quantities > 0
+  const activeSizes = SIZES.filter(size => (data.quantities?.[size] || 0) > 0);
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
-      <style>{`@media print { body * { visibility: hidden; } #invoice-content, #invoice-content * { visibility: visible; } #invoice-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #no-print-btn { display: none !important; } }`}</style>
-      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
-          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
-              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
-          </button>
-          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close (Esc)">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #invoice-content, #invoice-content * { visibility: visible; }
+        }
+      `}</style>
+      
+      {/* Action Buttons */}
+      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex flex-wrap gap-2 print:hidden">
+          {!isFactoryView && (
+              <>
+                  <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                      <Printer size={18} className="mr-2"/> บันทึก PDF
+                  </button>
+                  <button onClick={() => setShowImageInput(!showImageInput)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                      <Plus size={18} className="mr-1"/> ภาพ 3D
+                  </button>
+              </>
+          )}
+          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition">
               <XCircle size={24} />
           </button>
       </div>
-      <div id="invoice-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
-            <div>
-                <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
-                <p className="text-slate-600 font-semibold">บริษัท บี-ลุค จำกัด</p>
-                <p className="text-sm text-slate-500">123 ถนนตัวอย่าง กทม.</p>
-            </div>
-            <div className="text-right">
-                <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
-                <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
-                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
-            </div>
-        </div>
-        {/* Customer Info */}
-        <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
-            <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
-            <p className="font-bold text-slate-800 text-lg">{data.customerName || data.customer_name || "-"}</p>
-            <p className="text-sm text-slate-500">{data.phoneNumber || data.phone || "-"} | {data.contactChannel || data.contact_channel || "-"}</p>
-            <p className="text-sm text-slate-500 mt-1">{data.address || "-"}</p>
-        </div>
-        {/* Table */}
-        <table className="w-full text-sm mb-8">
-            <thead>
-                <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td className="py-4 px-4">
-                        <p className="font-bold">{data.brand || "-"}</p>
-                        <p className="text-xs text-slate-500">ผ้า: {data.fabric || "-"} | คอ: {data.neck || "-"} | แขน: {data.sleeve || "-"}</p>
-                    </td>
-                    <td className="py-4 px-4 text-right">{data.totalQty || 0}</td>
-                    <td className="py-4 px-4 text-right">{(data.basePrice || 0).toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right">{((data.totalQty || 0) * (data.basePrice || 0)).toLocaleString()}</td>
-                </tr>
-            </tbody>
-        </table>
-        {/* Totals */}
-        <div className="flex justify-end">
-            <div className="w-1/2 space-y-2 text-sm">
-                <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{(data.totalQty * data.basePrice).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{((data.addOnCost || 0) + (data.shippingCost || 0)).toLocaleString()}</span></div>
-                
-                {/* Display Discount */}
-                {(data.discount || data.discountAmount || 0) > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                      <span>ส่วนลด {data.discountType === 'PERCENT' ? `(${data.discountValue}%)` : ''}</span>
-                      <span>-{(data.discountAmount || data.discount || 0).toLocaleString()}</span>
+      
+      {/* Image Input Panel */}
+      {showImageInput && !isFactoryView && (
+          <div id="image-input-panel" className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden">
+              <h4 className="text-sm font-bold text-purple-700 mb-3">🎨 เพิ่มภาพ 3D / Design</h4>
+              <div className="space-y-3">
+                  <div>
+                      <label className="text-xs text-gray-600 font-semibold">ภาพด้านหน้า</label>
+                      <input type="text" className="w-full border-2 border-gray-200 p-2 rounded-lg text-xs mt-1 focus:border-purple-400" placeholder="URL ภาพด้านหน้า" value={image3DFront} onChange={(e) => setImage3DFront(e.target.value)} />
                   </div>
-                )}
-
-                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'Included' : 'Excluded'} 7%)</span><span>{(data.vatAmount || 0).toLocaleString()}</span></div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2"><span>ยอดสุทธิ</span><span>{(data.grandTotal || 0).toLocaleString()}</span></div>
-                
-                {/* Deposit Details */}
-                <div className="border-t border-dashed pt-2 mt-2 space-y-1">
-                    <div className="flex justify-between text-gray-500 text-xs"><span>มัดจำ</span><span>{(data.deposit || data.balance && data.grandTotal - data.balance || 0).toLocaleString()}</span></div>
-                    <div className="flex justify-between font-bold text-emerald-600"><span>คงเหลือชำระ</span><span>{(data.balance || 0).toLocaleString()}</span></div>
+                  <div>
+                      <label className="text-xs text-gray-600 font-semibold">ภาพด้านหลัง</label>
+                      <input type="text" className="w-full border-2 border-gray-200 p-2 rounded-lg text-xs mt-1 focus:border-purple-400" placeholder="URL ภาพด้านหลัง" value={image3DBack} onChange={(e) => setImage3DBack(e.target.value)} />
+                  </div>
+              </div>
+              <button onClick={() => setShowImageInput(false)} className="w-full mt-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700">ยืนยัน</button>
+          </div>
+      )}
+      
+      {/* Main Invoice Content - A4 Paper Size */}
+      <div id="invoice-content" className="bg-white w-[210mm] h-[297mm] shadow-2xl relative text-slate-800 font-sans overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        
+        {/* Header - Red Banner (30mm) */}
+        <div className="bg-red-600 text-white px-6 py-3 flex-shrink-0">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-black leading-none">ORDER</h1>
+                    <p className="text-xs font-semibold mt-0.5">{data.brand || "Jersey Express"}</p>
                 </div>
-
-                {/* Note */}
-                {data.note && (
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded text-xs text-yellow-800">
-                        <strong>หมายเหตุ:</strong> {data.note}
+                <div className="text-right">
+                    <p className="text-xs text-red-100">เลขที่</p>
+                    <p className="text-lg font-bold">{data.order_no || "SP-DRAFT"}</p>
+                    {isFactoryView && <span className="inline-block px-2 py-0.5 bg-white/20 rounded text-xs font-bold mt-1">FACTORY</span>}
+                </div>
+            </div>
+        </div>
+        
+        {/* Order Info Row */}
+        <div className="grid grid-cols-2 border-b border-gray-300">
+            <div className="p-3 border-r border-gray-300">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                        <span className="text-gray-500 text-xs">หมายเลข:</span>
+                        <p className="font-bold text-base">{data.order_no || "SP-DRAFT"}</p>
+                    </div>
+                    <div>
+                        <span className="text-gray-500 text-xs">ลูกค้า:</span>
+                        <p className="font-bold">{data.customerName || data.customer_name || "-"}</p>
+                    </div>
+                </div>
+            </div>
+            <div className="p-3">
+                <div className="grid grid-cols-1 gap-1 text-sm">
+                    <div>
+                        <span className="text-gray-500 text-xs">รายละเอียด:</span>
+                        <p className="font-medium">คอ{data.neck || "-"} แขน{data.sleeve || "-"}</p>
+                        <p className="font-medium">ผ้า{data.fabric || "-"}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {/* Phone & Graphic Code Row */}
+        <div className="grid grid-cols-2 border-b border-gray-300 text-sm">
+            <div className="p-2 border-r border-gray-300">
+                <span className="text-gray-500 text-xs">โทรศัพท์:</span>
+                <span className="font-medium ml-2">{data.phoneNumber || data.phone || "-"}</span>
+            </div>
+            <div className="p-2">
+                <span className="text-gray-500 text-xs">วันจัดส่ง:</span>
+                <span className="font-medium ml-2">{data.deliveryDate ? new Date(data.deliveryDate).toLocaleDateString('th-TH') : "-"}</span>
+            </div>
+        </div>
+        
+        {/* Main Content: 3D Images + Details */}
+        <div className="grid grid-cols-1 md:grid-cols-2 border-b border-gray-300">
+            {/* Left: 3D Images */}
+            <div className="p-4 border-r border-gray-300">
+                <h3 className="text-xs font-bold text-gray-600 mb-3 uppercase">ตัวอย่างแบบเสื้อ</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    {/* Front Image */}
+                    <div className="aspect-square bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                        {image3DFront ? (
+                            <img src={image3DFront} alt="Front" className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                        ) : null}
+                        <div className={`${image3DFront ? 'hidden' : 'flex'} flex-col items-center justify-center text-gray-400 text-xs text-center p-2`}>
+                            <Box size={32} className="mb-2 opacity-50" />
+                            <span>ด้านหน้า</span>
+                        </div>
+                    </div>
+                    {/* Back Image */}
+                    <div className="aspect-square bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                        {image3DBack ? (
+                            <img src={image3DBack} alt="Back" className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                        ) : null}
+                        <div className={`${image3DBack ? 'hidden' : 'flex'} flex-col items-center justify-center text-gray-400 text-xs text-center p-2`}>
+                            <Box size={32} className="mb-2 opacity-50" />
+                            <span>ด้านหลัง</span>
+                        </div>
+                    </div>
+                </div>
+                {data.graphicCode && (
+                    <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-200">
+                        <span className="text-xs text-amber-700">รหัสกราฟิก: <strong>{data.graphicCode}</strong></span>
                     </div>
                 )}
             </div>
+            
+            {/* Right: Size Breakdown & Totals */}
+            <div className="p-4">
+                <h3 className="text-xs font-bold text-gray-600 mb-3 uppercase">รายละเอียดไซส์</h3>
+                
+                {/* Size Table */}
+                <div className="border border-gray-300 rounded overflow-hidden mb-4">
+                    <div className="bg-gray-100 p-2 text-center border-b border-gray-300">
+                        <span className="text-sm font-bold">จำนวนรวม: <span className="text-lg text-blue-600">{data.totalQty || 0} ตัว</span></span>
+                    </div>
+                    <div className="divide-y divide-gray-200">
+                        {activeSizes.map(size => (
+                            <div key={size} className="flex justify-between items-center px-4 py-2 text-sm hover:bg-gray-50">
+                                <span className="font-medium text-gray-700">{size}</span>
+                                <span className="font-bold text-gray-900">= {data.quantities?.[size] || 0}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                
+                {/* Add-ons */}
+                {data.selectedAddOns && data.selectedAddOns.length > 0 && (
+                    <div className="mb-4 p-2 bg-purple-50 rounded border border-purple-200">
+                        <span className="text-xs font-bold text-purple-700">ตัวเลือกเพิ่มเติม:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {data.selectedAddOns.map(opt => (
+                                <span key={opt.id} className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">{opt.name}</span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {data.isOversize && (
+                    <div className="mb-4 p-2 bg-blue-50 rounded border border-blue-200">
+                        <span className="text-xs font-bold text-blue-700">⬆️ ทรง OVERSIZE</span>
+                    </div>
+                )}
+            </div>
+        </div>
+        
+        {/* Pricing Section - Hidden in Factory View */}
+        {!isFactoryView && (
+            <div className="p-4 border-b border-gray-300">
+                <div className="max-w-md ml-auto">
+                    <table className="w-full text-sm">
+                        <tbody>
+                            <tr><td className="py-1 text-gray-600">ยอดสินค้า ({data.totalQty} x {data.basePrice})</td><td className="py-1 text-right font-medium">{(data.productSubtotal || data.totalQty * data.basePrice || 0).toLocaleString()}</td></tr>
+                            {data.sizingSurcharge > 0 && <tr className="text-orange-600"><td className="py-1">ค่าไซส์พิเศษ</td><td className="py-1 text-right">+{data.sizingSurcharge.toLocaleString()}</td></tr>}
+                            {data.addOnOptionsTotal > 0 && <tr className="text-purple-600"><td className="py-1">ค่า Add-on</td><td className="py-1 text-right">+{data.addOnOptionsTotal.toLocaleString()}</td></tr>}
+                            <tr><td className="py-1 text-gray-600">ค่าบล็อก/อื่นๆ</td><td className="py-1 text-right font-medium">{(data.addOnCost || 0).toLocaleString()}</td></tr>
+                            <tr><td className="py-1 text-gray-600">ค่าขนส่ง</td><td className="py-1 text-right font-medium">{(data.shippingCost || 0).toLocaleString()}</td></tr>
+                            {(data.discount || 0) > 0 && <tr className="text-rose-600"><td className="py-1">ส่วนลด</td><td className="py-1 text-right">-{data.discount.toLocaleString()}</td></tr>}
+                            <tr><td className="py-1 text-gray-600">VAT (7%)</td><td className="py-1 text-right font-medium">{(data.vatAmount || 0).toLocaleString()}</td></tr>
+                            <tr className="border-t-2 border-gray-300"><td className="py-2 font-bold text-base">ยอดสุทธิ</td><td className="py-2 text-right font-black text-lg">{(data.grandTotal || 0).toLocaleString()} บาท</td></tr>
+                        </tbody>
+                    </table>
+                    
+                    {/* Payment Box */}
+                    <div className="mt-4 p-3 bg-emerald-50 border-2 border-emerald-300 rounded-lg">
+                        <h4 className="text-xs font-bold text-emerald-800 mb-2">💰 การชำระเงิน</h4>
+                        <div className="space-y-1 text-sm">
+                            <div className="flex justify-between"><span>มัดจำ 1 (Confirm Order)</span><span className="font-bold">{(data.deposit1 || 0).toLocaleString()} บาท</span></div>
+                            <div className="flex justify-between"><span>มัดจำ 2 (Final Payment)</span><span className="font-bold">{(data.deposit2 || 0).toLocaleString()} บาท</span></div>
+                            <div className="flex justify-between pt-2 border-t border-emerald-300 text-emerald-800 font-bold"><span>ค้างชำระ</span><span className="text-base">{(data.balance || 0).toLocaleString()} บาท</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* Note Section */}
+        <div className="p-4">
+            <div className="border-2 border-gray-300 rounded p-3">
+                <span className="text-xs font-bold text-gray-600">*หมายเหตุพิเศษ:</span>
+                <p className="mt-1 text-sm text-gray-700 min-h-[40px]">{data.note || "-"}</p>
+            </div>
+        </div>
+        
+        {/* Factory View Notice */}
+        {isFactoryView && (
+            <div className="mx-4 mb-4 p-3 bg-gray-100 rounded-lg text-center text-gray-500 border-2 border-dashed border-gray-300">
+                <p className="font-bold text-sm">📦 ใบส่งโรงงาน - Factory Copy</p>
+                <p className="text-xs">เอกสารนี้ไม่แสดงราคา</p>
+            </div>
+        )}
+        
+        {/* Footer */}
+        <div className="bg-gray-50 p-3 text-center text-xs text-gray-400 border-t border-gray-200">
+            พิมพ์เมื่อ: {new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
     </div>
@@ -473,31 +729,31 @@ const UserManagementPage = ({ onNotify }) => {
     const paginatedUsers = users.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     return (
-        <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
-            <header className="mb-8">
-                <h1 className="text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
-                <p className="text-gray-500 font-medium">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
+        <div className="p-3 sm:p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+            <header className="mb-4 sm:mb-8">
+                <h1 className="text-2xl sm:text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
+                <p className="text-gray-500 font-medium text-sm sm:text-base">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
             </header>
 
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
-                <div className="p-2 md:p-6 overflow-x-auto flex-1">
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[400px] sm:min-h-[500px]">
+                <div className="p-2 sm:p-4 md:p-6 overflow-x-auto flex-1">
                     {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
-                        <table className="w-full text-left min-w-[800px]">
+                        <table className="w-full text-left min-w-full sm:min-w-[800px]">
                             <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
                                 <tr>
-                                    <th className="py-4 px-6">ชื่อผู้ใช้ / Email</th>
-                                    <th className="py-4 px-6">ชื่อ-นามสกุล</th>
-                                    <th className="py-4 px-6 text-center">สถานะปัจจุบัน</th>
-                                    <th className="py-4 px-6 text-right">เปลี่ยนสิทธิ์</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6">ชื่อผู้ใช้ / Email</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 hidden sm:table-cell">ชื่อ-นามสกุล</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center hidden sm:table-cell">สถานะปัจจุบัน</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-right">เปลี่ยนสิทธิ์</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {paginatedUsers.map(u => (
                                     <tr key={u.id} className="hover:bg-gray-50 transition">
-                                        <td className="py-4 px-6 font-bold text-gray-700">{u.username}</td>
-                                        <td className="py-4 px-6 text-sm text-gray-600">{u.full_name || "-"}</td>
-                                        <td className="py-4 px-6 text-center">{getRoleBadge(u.role)}</td>
-                                        <td className="py-4 px-6 text-right">
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 font-bold text-xs sm:text-base text-gray-700">{u.username}</td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-sm text-gray-600 hidden sm:table-cell">{u.full_name || "-"}</td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center hidden sm:table-cell">{getRoleBadge(u.role)}</td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-right">
                                             <select 
                                                 className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${u.role === 'pending' ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200'}`}
                                                 value={u.role}
@@ -545,10 +801,10 @@ const UserManagementPage = ({ onNotify }) => {
 // HELPER COMPONENT: DETAIL LIST MODAL
 // -----------------------------------------------------------------------------
 const DetailListModal = ({ title, items, onClose, onEdit }) => (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                <h3 className="text-xl font-bold text-[#1a1c23]">{title}</h3>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 fade-in">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[90vh] animate-in zoom-in-95 duration-200">
+            <div className="p-3 sm:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 className="text-lg sm:text-xl font-bold text-[#1a1c23]">{title}</h3>
                 <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={24} className="text-slate-500"/></button>
             </div>
             <div className="p-0 overflow-y-auto flex-1">
@@ -791,10 +1047,10 @@ const DashboardPage = ({ onEdit }) => {
     const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
         <div 
             onClick={onClick}
-            className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
+            className={`bg-white p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-24 sm:h-28 md:h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
         >
-            <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
-            <div className={`text-4xl font-black ${color}`}>{value}</div>
+            <h3 className="text-gray-500 font-bold text-[10px] sm:text-xs md:text-sm line-clamp-2">{title}</h3>
+            <div className={`text-2xl sm:text-3xl md:text-4xl font-black ${color}`}>{value}</div>
         </div>
     );
 
@@ -809,7 +1065,7 @@ const DashboardPage = ({ onEdit }) => {
     };
 
     return (
-        <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
+        <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
             
             {/* Detail Order Modal */}
             {detailOrder && (
@@ -828,16 +1084,16 @@ const DashboardPage = ({ onEdit }) => {
 
             {/* Notifications Panel */}
             {notifications.length > 0 && (
-                <div className="mb-8 bg-white p-6 rounded-3xl shadow-sm border border-red-100">
-                    <h3 className="text-lg font-bold text-[#1a1c23] mb-4 flex items-center gap-2"><Bell className="text-rose-500"/> รายการที่ต้องติดตามด่วน</h3>
-                    <div className="space-y-3">
+                <div className="mb-4 sm:mb-6 md:mb-8 bg-white p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-red-100">
+                    <h3 className="text-sm sm:text-base md:text-lg font-bold text-[#1a1c23] mb-2 sm:mb-3 md:mb-4 flex items-center gap-2"><Bell className="text-rose-500" size={16}/> รายการที่ต้องติดตามด่วน</h3>
+                    <div className="space-y-2 sm:space-y-3">
                         {notifications.map((n, i) => (
-                            <div key={i} onClick={() => setDetailOrder(n.order)} className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer hover:bg-gray-50 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                                <div className="flex items-center gap-3">
-                                    {n.type === 'critical' ? <Flag size={18}/> : <Clock size={18}/>}
-                                    <span className="text-sm font-bold">{n.msg}</span>
+                            <div key={i} onClick={() => setDetailOrder(n.order)} className={`p-2 sm:p-3 rounded-lg sm:rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between cursor-pointer hover:bg-gray-50 gap-2 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    {n.type === 'critical' ? <Flag size={16}/> : <Clock size={16}/>}
+                                    <span className="text-xs sm:text-sm font-bold line-clamp-2">{n.msg}</span>
                                 </div>
-                                <span className="text-xs underline">ดูรายละเอียด</span>
+                                <span className="text-[10px] sm:text-xs underline self-end sm:self-auto whitespace-nowrap">ดูรายละเอียด</span>
                             </div>
                         ))}
                     </div>
@@ -846,16 +1102,16 @@ const DashboardPage = ({ onEdit }) => {
 
             {/* Queue Modal (Fixed Layout) */}
             {showQueueModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <div className="flex items-center gap-3">
-                                <Box className="text-[#1a1c23]" />
-                                <h3 className="text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div className="flex items-center gap-2 sm:gap-3">
+                                <Box className="text-[#1a1c23]" size={18} />
+                                <h3 className="text-base sm:text-lg md:text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3>
                             </div>
-                            <button onClick={() => setShowQueueModal(false)} className="bg-white p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={24} className="text-slate-500"/></button>
+                            <button onClick={() => setShowQueueModal(false)} className="bg-white p-1.5 sm:p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={20} className="sm:w-6 sm:h-6 text-slate-500"/></button>
                         </div>
-                        <div className="p-0 overflow-y-auto flex-1">
+                        <div className="p-0 overflow-x-auto overflow-y-auto flex-1">
                             <table className="w-full text-left table-fixed">
                                 <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                                     <tr>
@@ -897,46 +1153,48 @@ const DashboardPage = ({ onEdit }) => {
                 </div>
             )}
 
-            <header className="mb-8">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <header className="mb-4 sm:mb-6 md:mb-8">
+                <div className="flex flex-col gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
+                        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight">
                             Overview
                         </h1>
-                        <p className="text-gray-500">ภาพรวมร้านค้าของคุณ</p>
+                        <p className="text-xs sm:text-sm md:text-base text-gray-500">ภาพรวมร้านค้าของคุณ</p>
                     </div>
                     
                     {/* --- GLOBAL FILTER BAR --- */}
-                    <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 gap-1">
-                        {['today', 'week', 'month'].map(range => (
-                            <button
-                                key={range}
-                                onClick={() => setTimeRange(range)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
-                                    timeRange === range 
-                                    ? 'bg-[#1a1c23] text-white shadow-md' 
-                                    : 'text-gray-500 hover:bg-gray-100'
-                                }`}
+                    <div className="flex justify-center md:justify-start">
+                        <div className="flex flex-wrap bg-white p-1 sm:p-1.5 rounded-lg sm:rounded-xl shadow-sm border border-gray-200 gap-0.5 sm:gap-1">
+                            {['today', 'week', 'month'].map(range => (
+                                <button
+                                    key={range}
+                                    onClick={() => setTimeRange(range)}
+                                    className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition ${
+                                        timeRange === range 
+                                        ? 'bg-[#1a1c23] text-white shadow-md' 
+                                        : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
+                                </button>
+                            ))}
+                            <div className="w-px bg-gray-200 mx-0.5 sm:mx-1 hidden sm:block"></div>
+                            <select 
+                                className="bg-transparent text-[10px] sm:text-xs font-bold text-gray-700 outline-none px-1 sm:px-2 cursor-pointer hover:bg-gray-50 rounded-md sm:rounded-lg"
+                                value={brandFilter}
+                                onChange={(e) => setBrandFilter(e.target.value)}
                             >
-                                {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
-                            </button>
-                        ))}
-                        <div className="w-px bg-gray-200 mx-1"></div>
-                        <select 
-                            className="bg-transparent text-xs font-bold text-gray-700 outline-none px-2 cursor-pointer hover:bg-gray-50 rounded-lg"
-                            value={brandFilter}
-                            onChange={(e) => setBrandFilter(e.target.value)}
-                        >
-                            <option>All Outlets</option>
-                            <option>BG</option>
-                            <option>Jersey</option>
-                        </select>
+                                <option>All Outlets</option>
+                                <option>BG</option>
+                                <option>Jersey</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </header>
 
             {/* Metrics Grid (Dynamic based on Filter) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 md:mb-8">
                 <MetricCard 
                     title={`ออเดอร์ใหม่ (${timeRangeLabels[timeRange]})`}
                     value={metricLists.newOrders.length} 
@@ -963,31 +1221,31 @@ const DashboardPage = ({ onEdit }) => {
                 />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
                 {/* Calendar Panel */}
-                <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col">
-                    <div className="flex justify-between items-center mb-6">
+                <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 p-3 sm:p-4 md:p-6 flex flex-col">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-3 sm:mb-4 md:mb-6">
                         <div>
-                            <h3 className="text-xl font-bold text-[#1a1c23]">ตารางงาน</h3>
-                            <p className="text-xs text-gray-400">คลิกที่วันเพื่อดูรายละเอียด</p>
+                            <h3 className="text-base sm:text-lg md:text-xl font-bold text-[#1a1c23]">ตารางงาน</h3>
+                            <p className="text-[10px] sm:text-xs text-gray-400">คลิกที่วันเพื่อดูรายละเอียด</p>
                         </div>
-                        <div className="flex items-center space-x-2 bg-gray-50 rounded-lg p-1">
-                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronLeft size={16}/></button>
-                            <span className="text-sm font-bold text-gray-700 min-w-[100px] text-center">
+                        <div className="flex items-center space-x-1 sm:space-x-2 bg-gray-50 rounded-lg p-0.5 sm:p-1">
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1.5 sm:p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronLeft size={14} className="sm:w-4 sm:h-4"/></button>
+                            <span className="text-xs sm:text-sm font-bold text-gray-700 min-w-[80px] sm:min-w-[100px] text-center">
                                 {currentDate.toLocaleString('th-TH', { month: 'long', year: 'numeric' })}
                             </span>
-                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronRight size={16}/></button>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1.5 sm:p-2 hover:bg-white rounded-md shadow-sm transition"><ChevronRight size={14} className="sm:w-4 sm:h-4"/></button>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-x-auto">
-                        <div className="min-w-[600px]">
-                            <div className="grid grid-cols-7 mb-2">
+                        <div className="min-w-[280px] sm:min-w-[400px] md:min-w-[600px]">
+                            <div className="grid grid-cols-7 mb-1 sm:mb-2">
                                 {['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'].map(d => (
-                                    <div key={d} className="text-center text-xs font-bold text-gray-400 uppercase">{d}</div>
+                                    <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-gray-400 uppercase">{d}</div>
                                 ))}
                             </div>
-                            <div className="grid grid-cols-7 gap-2">
+                            <div className="grid grid-cols-7 gap-0.5 sm:gap-1 md:gap-2">
                                 {[...Array(firstDayOfMonth)].map((_, i) => <div key={`empty-${i}`} className="h-24"></div>)}
                                 {[...Array(daysInMonth)].map((_, i) => {
                                     const day = i + 1;
@@ -1005,13 +1263,13 @@ const DashboardPage = ({ onEdit }) => {
                                                     });
                                                 }
                                             }}
-                                            className={`h-24 border border-gray-100 rounded-xl p-2 relative transition group flex flex-col 
+                                            className={`h-14 sm:h-20 md:h-24 border border-gray-100 rounded-lg sm:rounded-xl p-1 sm:p-2 relative transition group flex flex-col 
                                                 ${isToday ? 'bg-blue-50/50 border-blue-200' : 'bg-white hover:border-blue-300 cursor-pointer'}
                                             `}
                                         >
-                                            <span className={`text-sm font-bold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}>{day}</span>
-                                            <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
-                                                {evts.map((e, idx) => {
+                                            <span className={`text-[10px] sm:text-xs md:text-sm font-bold mb-0.5 sm:mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`}>{day}</span>
+                                            <div className="flex-1 overflow-y-auto space-y-0.5 sm:space-y-1 custom-scrollbar">
+                                                {evts.slice(0, window.innerWidth < 640 ? 1 : 3).map((e, idx) => {
                                                     let bgClass = "bg-gray-100 text-gray-600";
                                                     if (e.status === 'designing') bgClass = "bg-purple-100 text-purple-700 border-purple-200";
                                                     if (e.status === 'waiting_approval') bgClass = "bg-yellow-100 text-yellow-700 border-yellow-200";
@@ -1021,11 +1279,14 @@ const DashboardPage = ({ onEdit }) => {
                                                     if (e.isUsageDate && e.status !== 'delivered') bgClass = "bg-rose-500 text-white font-bold shadow-md";
 
                                                     return (
-                                                        <div key={idx} className={`text-[10px] px-1.5 py-1 rounded truncate mb-1 border ${bgClass}`} title={e.title}>
+                                                        <div key={idx} className={`text-[8px] sm:text-[10px] px-0.5 sm:px-1.5 py-0.5 sm:py-1 rounded truncate mb-0.5 sm:mb-1 border ${bgClass}`} title={e.title}>
                                                             {e.isUsageDate ? "🚩 " : ""}{e.title}
                                                         </div>
                                                     );
                                                 })}
+                                                {evts.length > (window.innerWidth < 640 ? 1 : 3) && (
+                                                    <div className="text-[8px] sm:text-[10px] text-gray-400 text-center">+{evts.length - (window.innerWidth < 640 ? 1 : 3)}</div>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -1035,17 +1296,17 @@ const DashboardPage = ({ onEdit }) => {
                     </div>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-3 sm:space-y-4 md:space-y-6">
                     {/* Today's List Panel with Summary/Detail Filter */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 flex flex-col h-[400px]">
-                        <div className="mb-4 flex items-center justify-between">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 p-3 sm:p-4 md:p-6 flex flex-col h-[280px] sm:h-[320px] md:h-[400px]">
+                        <div className="mb-2 sm:mb-3 md:mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                              <div>
-                                 <h3 className="text-lg font-bold text-[#1a1c23]">รายการวันนี้</h3>
-                                 <p className="text-xs text-gray-400">{new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long'})}</p>
+                                 <h3 className="text-sm sm:text-base md:text-lg font-bold text-[#1a1c23]">รายการวันนี้</h3>
+                                 <p className="text-[10px] sm:text-xs text-gray-400">{new Date().toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long'})}</p>
                              </div>
                              {/* Filter Summary / Detail (Simulated by Type Filter) */}
                              <select 
-                                className="text-xs border rounded-lg p-1.5 bg-gray-50 focus:ring-1 focus:ring-[#1a1c23] outline-none"
+                                className="text-[10px] sm:text-xs border rounded-lg p-1 sm:p-1.5 bg-gray-50 focus:ring-1 focus:ring-[#1a1c23] outline-none w-full sm:w-auto"
                                 value={todayFilter}
                                 onChange={(e) => setTodayFilter(e.target.value)}
                              >
@@ -1056,52 +1317,52 @@ const DashboardPage = ({ onEdit }) => {
                              </select>
                         </div>
                         
-                        <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-2 sm:space-y-3 flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                             {filteredTodayList.length > 0 ? filteredTodayList.map((item, i) => (
-                                <div key={i} onClick={() => onEdit(item)} className="flex items-start space-x-3 p-3 bg-gray-50 hover:bg-blue-50 cursor-pointer rounded-xl border border-gray-100 transition group">
-                                    <div className={`p-2 rounded-full shrink-0 ${
+                                <div key={i} onClick={() => onEdit(item)} className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 bg-gray-50 hover:bg-blue-50 cursor-pointer rounded-lg sm:rounded-xl border border-gray-100 transition group">
+                                    <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${
                                         item.type === 'new' ? 'bg-blue-100 text-blue-500' : 
                                         item.type === 'usage' ? 'bg-rose-100 text-rose-500' : 'bg-amber-100 text-amber-500'
                                     }`}>
-                                        {item.type === 'new' ? <Plus size={16}/> : <AlertCircle size={16} />}
+                                        {item.type === 'new' ? <Plus size={14} className="sm:w-4 sm:h-4"/> : <AlertCircle size={14} className="sm:w-4 sm:h-4" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between">
-                                            <p className="text-sm font-bold text-gray-800 truncate">{item.customer_name}</p>
-                                            <span className="text-[10px] bg-white px-1.5 rounded border text-gray-500">{item.order_no}</span>
+                                        <div className="flex justify-between items-start gap-1">
+                                            <p className="text-xs sm:text-sm font-bold text-gray-800 truncate">{item.customer_name}</p>
+                                            <span className="text-[8px] sm:text-[10px] bg-white px-1 sm:px-1.5 rounded border text-gray-500 whitespace-nowrap">{item.order_no}</span>
                                         </div>
-                                        <p className="text-xs text-gray-500 truncate">{item.desc}</p>
+                                        <p className="text-[10px] sm:text-xs text-gray-500 truncate">{item.desc}</p>
                                     </div>
                                 </div>
                             )) : (
-                                <div className="text-center py-12 text-gray-300 text-sm flex flex-col items-center">
-                                    <CheckCircle size={32} className="mb-2 opacity-30"/>
+                                <div className="text-center py-6 sm:py-12 text-gray-300 text-xs sm:text-sm flex flex-col items-center">
+                                    <CheckCircle size={24} className="sm:w-8 sm:h-8 mb-2 opacity-30"/>
                                     ไม่มีรายการในช่วงนี้
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    <div className="bg-[#1a1c23] rounded-3xl shadow-lg p-6 text-white relative overflow-hidden">
+                    <div className="bg-[#1a1c23] rounded-2xl sm:rounded-3xl shadow-lg p-3 sm:p-4 md:p-6 text-white relative overflow-hidden">
                         <div className="relative z-10">
-                            <h3 className="text-lg font-bold mb-1">จัดการคิวงาน</h3>
-                            <p className="text-xs text-gray-400 mb-4">ตรวจสอบงานที่พร้อมส่งมอบ</p>
-                            <div className="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-sm mb-4">
-                                <div className="flex items-center space-x-3">
-                                    <Box size={20} className="text-blue-400"/>
-                                    <span className="text-sm font-medium">รอจัดส่ง</span>
+                            <h3 className="text-sm sm:text-base md:text-lg font-bold mb-0.5 sm:mb-1">จัดการคิวงาน</h3>
+                            <p className="text-[10px] sm:text-xs text-gray-400 mb-2 sm:mb-3 md:mb-4">ตรวจสอบงานที่พร้อมส่งมอบ</p>
+                            <div className="flex items-center justify-between bg-white/10 p-2 sm:p-3 rounded-lg sm:rounded-xl backdrop-blur-sm mb-2 sm:mb-3 md:mb-4">
+                                <div className="flex items-center space-x-2 sm:space-x-3">
+                                    <Box size={16} className="sm:w-5 sm:h-5 text-blue-400"/>
+                                    <span className="text-xs sm:text-sm font-medium">รอจัดส่ง</span>
                                 </div>
-                                <span className="text-xl font-bold">{metricLists.inProduction.length}</span>
+                                <span className="text-lg sm:text-xl font-bold">{metricLists.inProduction.length}</span>
                             </div>
                             <button 
                                 onClick={() => setShowQueueModal(true)}
-                                className="w-full bg-white text-[#1a1c23] py-2.5 rounded-xl text-sm font-bold hover:bg-gray-100 transition shadow-md"
+                                className="w-full bg-white text-[#1a1c23] py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold hover:bg-gray-100 transition shadow-md"
                             >
                                 ดูรายละเอียด
                             </button>
                         </div>
-                        <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-blue-500/20 rounded-full blur-2xl"></div>
-                        <div className="absolute bottom-[-10%] left-[-10%] w-24 h-24 bg-purple-500/20 rounded-full blur-2xl"></div>
+                        <div className="absolute top-[-20%] right-[-10%] w-20 sm:w-32 h-20 sm:h-32 bg-blue-500/20 rounded-full blur-2xl"></div>
+                        <div className="absolute bottom-[-10%] left-[-10%] w-16 sm:w-24 h-16 sm:h-24 bg-purple-500/20 rounded-full blur-2xl"></div>
                     </div>
                 </div>
             </div>
@@ -1139,9 +1400,62 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [pricingRules, setPricingRules] = useState([]);
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
-  // NEW: State for usageDate and status
-  const [usageDate, setUsageDate] = useState(""); 
+  // NEW: State for deliveryDate (renamed from usageDate) and status
+  const [deliveryDate, setDeliveryDate] = useState(""); 
   const [status, setStatus] = useState("draft");
+  
+  // NEW: Customer info fields
+  const [customerId, setCustomerId] = useState("");
+  const [graphicCode, setGraphicCode] = useState("");
+  
+  // NEW: Oversize/Shape state
+  const [isOversize, setIsOversize] = useState(false);
+  
+  // NEW: Add-on options state (object with boolean values)
+  const [addOnOptions, setAddOnOptions] = useState(
+    ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {})
+  );
+  
+  // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
+  
+  // NEW: Custom sizes state
+  const [customSizes, setCustomSizes] = useState([]);
+  const [allSizes] = useState(SIZES);
+  const [showAddSizeModal, setShowAddSizeModal] = useState(false);
+  const [newSizeInput, setNewSizeInput] = useState("");
+  
+  // Get available sizes to display (default sizes + custom sizes)
+  const displaySizes = [...allSizes, ...customSizes].sort((a, b) => {
+    const order = allSizes;
+    const aIndex = order.indexOf(a);
+    const bIndex = order.indexOf(b);
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
+    return 0;
+  });
+  
+  // Function to add a new custom size
+  const handleAddCustomSize = () => {
+    if (newSizeInput.trim() && !displaySizes.includes(newSizeInput.trim())) {
+      setCustomSizes([...customSizes, newSizeInput.trim()]);
+      setQuantities({...quantities, [newSizeInput.trim()]: 0});
+      setNewSizeInput("");
+      setShowAddSizeModal(false);
+    }
+  };
+  
+  const openAddSizeModal = () => {
+    setNewSizeInput("");
+    setShowAddSizeModal(true);
+  };
+  const [designFee, setDesignFee] = useState(0);
+  
+  // NEW: Factory View mode (hide prices)
+  const [isFactoryView, setIsFactoryView] = useState(false);
+  
+  // NEW: Custom status options
+  const [statusOptions, setStatusOptions] = useState(DEFAULT_STATUS_OPTIONS);
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -1159,8 +1473,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setDeposit1(editingOrder.deposit_1 || 0);
         setDeposit2(editingOrder.deposit_2 || 0);
         setNote(editingOrder.note || "");
-        setUsageDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
+        setDeliveryDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
+        setCustomerId(editingOrder.customer_id || "");
+        setGraphicCode(editingOrder.graphic_code || "");
+        setIsOversize(editingOrder.is_oversize || false);
+        setDesignFee(editingOrder.design_fee || 0);
     } else {
         setBrand(BRANDS[0]);
         setCustomerName("");
@@ -1170,8 +1488,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setDeposit2(0);
         setNote("");
         setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
-        setUsageDate("");
+      setCustomSizes([]);
+        setDeliveryDate("");
         setStatus("draft");
+        setCustomerId("");
+        setGraphicCode("");
+        setIsOversize(false);
+        setDesignFee(0);
+        setAddOnOptions(ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {}));
     }
   }, [editingOrder]);
 
@@ -1224,19 +1548,55 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
+  // NEW: Calculate quantities for oversize surcharge
+  const oversizeSurchargeQty = useMemo(() => {
+    if (isOversize) {
+      // Oversize: 2XL+ gets +100
+      return (quantities['2XL'] || 0) + (quantities['3XL'] || 0) + (quantities['4XL'] || 0) + (quantities['5XL'] || 0);
+    } else {
+      // Normal: 4XL+ gets +100
+      return (quantities['4XL'] || 0) + (quantities['5XL'] || 0);
+    }
+  }, [quantities, isOversize]);
+
+  // NEW: Auto-select ไหล่สโลป when Oversize is selected (for supported necks)
   useEffect(() => {
-      if (totalQty > 0 && selectedFabric && pricingRules.length > 0) {
-          const matchedRule = pricingRules.find(rule => 
-              rule.fabric_type === selectedFabric &&
-              totalQty >= rule.min_qty &&
-              totalQty <= rule.max_qty
-          );
-          if (matchedRule) setBasePrice(matchedRule.unit_price);
+    if (isOversize && SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n))) {
+      setAddOnOptions(prev => ({ ...prev, slopeShoulder: true }));
+    }
+  }, [isOversize, selectedNeck]);
+
+  // NEW: Step Pricing calculation based on qty and neck type
+  useEffect(() => {
+    if (totalQty >= 10) {
+      const isRoundVNeck = ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type));
+      const pricingTable = isRoundVNeck ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
+      
+      const matchedPrice = pricingTable.find(
+        tier => totalQty >= tier.minQty && totalQty <= tier.maxQty
+      );
+      
+      if (matchedPrice) {
+        setBasePrice(matchedPrice.price);
       }
-  }, [totalQty, selectedFabric, pricingRules]);
+    }
+  }, [totalQty, selectedNeck]);
+
+  // NEW: Calculate Add-on Options total
+  const addOnOptionsTotal = useMemo(() => {
+    return ADDON_OPTIONS.reduce((total, opt) => {
+      if (addOnOptions[opt.id]) {
+        return total + (opt.price * totalQty);
+      }
+      return total;
+    }, 0);
+  }, [addOnOptions, totalQty]);
+
+  // NEW: Calculate sizing surcharge
+  const sizingSurcharge = oversizeSurchargeQty * 100;
 
   const productSubtotal = totalQty * basePrice;
-  const totalBeforeCalc = productSubtotal + addOnCost + shippingCost - discount;
+  const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + addOnCost + shippingCost - discount;
     
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
@@ -1246,7 +1606,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     vatAmount = totalBeforeCalc * config.vat_rate;
     grandTotal = totalBeforeCalc + vatAmount;
   }
-  const balance = grandTotal - deposit;
+  
+  // NEW: 50/50 deposit calculation
+  const calculatedDeposit1 = Math.ceil(grandTotal / 2);
+  const calculatedDeposit2 = grandTotal - calculatedDeposit1 - designFee;
+  
+  const balance = grandTotal - deposit1 - deposit2;
 
   const generateOrderId = useCallback(() => {
     return editingOrder ? editingOrder.order_no : `PO-${Date.now().toString().slice(-6)}`;
@@ -1257,17 +1622,21 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         const orderData = {
             order_no: generateOrderId(),
             customer_name: customerName,
+            customer_id: customerId,
+            graphic_code: graphicCode,
             phone: phoneNumber,
             brand: brand,
             contact_channel: contactChannel,
             address: address,
             total_amount: grandTotal,
-            deposit: deposit,
+            deposit: deposit1 + deposit2,
             deposit_1: deposit1,
             deposit_2: deposit2,
+            design_fee: designFee,
+            is_oversize: isOversize,
             status: status,
             deadline: deadline ? new Date(deadline).toISOString() : null,
-            usage_date: usageDate ? new Date(usageDate).toISOString() : null,
+            usage_date: deliveryDate ? new Date(deliveryDate).toISOString() : null,
             note: note,
             items: []
         };
@@ -1291,16 +1660,24 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
+  // NEW: Updated urgency calculation for invoice colors
+  // Red: 3-5 days (critical), Yellow: 7-10 days (warning), Green: 10-14 days or no deadline (normal)
   useEffect(() => {
     if (!deadline) { setUrgencyStatus("normal"); return; }
-    const diffDays = Math.ceil(Math.abs(new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24)); 
-    setUrgencyStatus(diffDays <= 5 ? "critical" : diffDays <= 10 ? "warning" : "normal");
+    const diffDays = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24)); 
+    if (diffDays <= 5) {
+      setUrgencyStatus("critical");
+    } else if (diffDays <= 10) {
+      setUrgencyStatus("warning");
+    } else {
+      setUrgencyStatus("normal");
+    }
   }, [deadline]);
 
   const theme = {
-    critical: { border: "border-l-8 border-rose-500", header: "bg-rose-100 text-rose-800" },
-    warning: { border: "border-l-8 border-amber-500", header: "bg-amber-100 text-amber-800" },
-    normal: { border: "border-l-8 border-emerald-500", header: "bg-emerald-100 text-emerald-800" }
+    critical: { border: "border-l-8 border-rose-500", header: "bg-rose-500 text-white", invoiceBg: "bg-rose-500" },
+    warning: { border: "border-l-8 border-amber-500", header: "bg-amber-500 text-white", invoiceBg: "bg-amber-500" },
+    normal: { border: "border-l-8 border-emerald-500", header: "bg-emerald-500 text-white", invoiceBg: "bg-emerald-500" }
   };
 
   // Show loading state
@@ -1316,133 +1693,374 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   }
 
   return (
-    <div className="p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full">
-        {showPreview && <InvoiceModal data={{customerName, phoneNumber, contactChannel, address, deadline, brand, quantities, totalQty, basePrice, addOnCost, shippingCost, discount, isVatIncluded, vatAmount, grandTotal, deposit, balance, fabric: selectedFabric, neck: selectedNeck, sleeve: selectedSleeve, order_no: generateOrderId()}} onClose={() => setShowPreview(false)} />}
+    <div className="p-3 sm:p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full">
+        {showPreview && <InvoiceModal data={{
+            customerName, 
+            customerId,
+            graphicCode,
+            phoneNumber, 
+            contactChannel, 
+            address, 
+            deadline, 
+            deliveryDate,
+            brand, 
+            quantities, 
+            totalQty, 
+            basePrice, 
+            productSubtotal,
+            sizingSurcharge,
+            oversizeSurchargeQty,
+            addOnOptionsTotal,
+            selectedAddOns: ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]),
+            addOnCost, 
+            shippingCost, 
+            discount, 
+            isVatIncluded, 
+            vatAmount, 
+            grandTotal, 
+            deposit1,
+            deposit2,
+            designFee,
+            balance, 
+            fabric: selectedFabric, 
+            neck: selectedNeck, 
+            sleeve: selectedSleeve, 
+            order_no: generateOrderId(),
+            urgencyStatus,
+            isOversize,
+            isFactoryView
+        }} onClose={() => setShowPreview(false)} />}
         {showSuccess && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
-                <div className="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full">
-                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5"><CheckCircle size={48} className="text-emerald-500"/></div>
-                    <h3 className="text-2xl font-bold text-slate-800 mb-2">บันทึกสำเร็จ!</h3>
-                    <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full">
+                    <div className="w-16 sm:w-20 h-16 sm:h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5"><CheckCircle size={40} className="sm:w-12 sm:h-12 text-emerald-500"/></div>
+                    <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">บันทึกสำเร็จ!</h3>
+                    <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
                 </div>
             </div>
         )}
 
-        <header className={`mb-8 flex items-center gap-4`}>
-             <button onClick={() => onNavigate('order_list')} className="w-10 h-10 bg-white rounded-full flex items-center justify-center border hover:bg-gray-50 shadow-sm"><ArrowLeft size={20}/></button>
-             <h1 className="text-2xl font-black text-[#1a1c23]">{editingOrder ? "แก้ไขออเดอร์" : "สร้างออเดอร์ใหม่"}</h1>
-             <div className={`px-4 py-2 rounded-lg ml-auto ${theme[urgencyStatus].header}`}><AlertCircle size={20} className="inline mr-2"/>{urgencyStatus.toUpperCase()}</div>
+        {/* Add Custom Size Modal */}
+        {showAddSizeModal && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
+                <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl max-w-md w-full">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg sm:text-xl font-black text-[#1a1c23]">เพิ่มไซส์ใหม่</h3>
+                        <button 
+                            onClick={() => { setShowAddSizeModal(false); setNewSizeInput(""); }}
+                            className="text-gray-400 hover:text-gray-600 transition"
+                        >
+                            <X size={24} />
+                        </button>
+                    </div>
+                    
+                    <p className="text-sm text-gray-600 mb-4">ป้อนชื่อไซส์ที่ต้องการเพิ่ม เช่น 6XL, 7XL หรือขนาดอื่นๆ</p>
+                    
+                    <div className="mb-6">
+                        <label className="block text-xs font-bold text-gray-700 mb-2">ชื่อไซส์ใหม่</label>
+                        <input 
+                            type="text"
+                            className="w-full border-2 border-gray-200 p-3 rounded-lg bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition text-sm md:text-base"
+                            placeholder="เช่น 6XL, 7XL, ขนาดกำหนดเอง"
+                            value={newSizeInput}
+                            onChange={(e) => setNewSizeInput(e.target.value.toUpperCase())}
+                            onKeyPress={(e) => e.key === 'Enter' && handleAddCustomSize()}
+                            autoFocus
+                        />
+                    </div>
+
+                    {displaySizes.includes(newSizeInput.trim()) && newSizeInput.trim() && (
+                        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p className="text-xs text-yellow-800 font-semibold">⚠️ ไซส์นี้มีอยู่แล้ว</p>
+                        </div>
+                    )}
+
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => { setShowAddSizeModal(false); setNewSizeInput(""); }}
+                            className="flex-1 px-4 py-2.5 border-2 border-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition text-sm md:text-base"
+                        >
+                            ยกเลิก
+                        </button>
+                        <button 
+                            onClick={handleAddCustomSize}
+                            disabled={!newSizeInput.trim() || displaySizes.includes(newSizeInput.trim())}
+                            className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg transition text-sm md:text-base flex items-center justify-center gap-2"
+                        >
+                            <Plus size={18} />
+                            <span>เพิ่มไซส์</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        <header className="mb-6 sm:mb-8 flex items-center justify-between gap-3">
+             <div className="flex items-center gap-3">
+                 <button onClick={() => onNavigate('order_list')} className="w-10 h-10 bg-white rounded-full flex items-center justify-center border hover:bg-gray-50 shadow-sm"><ArrowLeft size={20}/></button>
+                 <h1 className="text-xl sm:text-2xl font-black text-[#1a1c23]">{editingOrder ? "แก้ไขออเดอร์" : "สร้างออเดอร์ใหม่"}</h1>
+             </div>
+             <div className={`px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-bold ${theme[urgencyStatus].header}`}><AlertCircle size={16} className="inline mr-1 sm:mr-2"/>{urgencyStatus.toUpperCase()}</div>
         </header>
 
-        <div className="grid grid-cols-12 gap-8">
-            <div className="col-span-12 lg:col-span-8 space-y-6">
-                <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><User className="mr-2" size={18}/> ข้อมูลลูกค้า</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-                        <input type="text" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
-                        <select className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
-                        <input type="date" className="border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-                        <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
-                        <textarea className="col-span-2 border-gray-200 border p-3 rounded-xl bg-yellow-50 focus:bg-white transition" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
+            <div className="lg:col-span-2 space-y-4 md:space-y-6">
+                <section className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100">
+                    <h3 className="text-base md:text-lg font-bold mb-4 md:mb-6 flex items-center text-gray-800"><User className="mr-2" size={18}/> ข้อมูลลูกค้า</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
+                        
+                        {/* NEW: Customer ID and Graphic Code */}
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสลูกค้า (Customer ID)" value={customerId} onChange={e => setCustomerId(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสกราฟิก (Graphic Code)" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
+                        
+                        <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
+                        <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+                        <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
+                        <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-yellow-50 focus:bg-white transition text-sm md:text-base" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
                     
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">วันที่ใช้งาน</label>
-                            <input type="date" className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50" value={usageDate} onChange={(e) => setUsageDate(e.target.value)} />
+                            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">วันที่จัดส่งออก</label>
+                            <input type="date" className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-white focus:ring-2 focus:ring-[#1a1c23]" value={status} onChange={(e) => setStatus(e.target.value)}>
-                                <option value="แบบร่าง">แบบร่าง</option>
-                                <option value="กำลังออกแบบ">กำลังออกแบบ</option>
-                                <option value="รอแบบอนุมัติ">รอแบบอนุมัติ</option>
-                                <option value="กำลังผลิต">กำลังผลิต</option>
-                                <option value="shipping">เตรียมจัดส่ง</option>
-                                <option value="delivered">ส่งมอบแล้ว</option>
+                            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-white focus:ring-2 focus:ring-[#1a1c23] text-sm md:text-base" value={status} onChange={(e) => setStatus(e.target.value)}>
+                                {statusOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
                 </section>
 
-                <section className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-bold mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <section className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100">
+                    <h3 className="text-base md:text-lg font-bold mb-4 md:mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
                         <div>
-                            <label className="block text-sm mb-1 text-gray-500">แบรนด์</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={brand} onChange={e => setBrand(e.target.value)}>
+                            <label className="block text-xs md:text-sm mb-1 text-gray-500">แบรนด์</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={brand} onChange={e => setBrand(e.target.value)}>
                                 {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
                             </select>
                         </div>
                          <div>
-                            <label className="block text-sm mb-1 text-gray-500">ชนิดผ้า</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
+                            <label className="block text-xs md:text-sm mb-1 text-gray-500">ชนิดผ้า</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedFabric} onChange={e => setSelectedFabric(e.target.value)}>
                                 <option value="">-- เลือกผ้า --</option>
                                 {fabrics.map(f => <option key={f.id} value={f.name}>{f.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm mb-1 text-gray-500">คอเสื้อ</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
+                            <label className="block text-xs md:text-sm mb-1 text-gray-500">คอเสื้อ</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
                                 <option value="">-- เลือกคอ --</option>
                                 {necks.map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm mb-1 text-gray-500">แขนเสื้อ</label>
-                            <select className="w-full border-gray-200 border p-3 rounded-xl bg-gray-50 focus:bg-white transition" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
+                            <label className="block text-xs md:text-sm mb-1 text-gray-500">แขนเสื้อ</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
                                 <option value="">-- เลือกแขน --</option>
                                 {sleeves.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                             </select>
                         </div>
                     </div>
-                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                        <label className="block text-sm font-bold text-gray-700 mb-4">ระบุจำนวน</label>
-                        <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
-                            {SIZES.map((size) => (
-                                <div key={size} className="text-center">
-                                    <label className="text-xs font-bold text-gray-400 mb-1 block">{size}</label>
-                                    <input type="number" min="0" className="w-full text-center border-gray-200 border rounded-lg p-2 focus:ring-2 focus:ring-[#1a1c23]" placeholder="0"
-                                        onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})} />
-                                </div>
+                    
+                    {/* NEW: Oversize Checkbox */}
+                    <div className="mb-4 p-3 md:p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                        <label className="flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                className="mr-3 w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500" 
+                                checked={isOversize} 
+                                onChange={e => setIsOversize(e.target.checked)}
+                            />
+                            <div>
+                                <span className="font-bold text-sm md:text-base text-gray-800">ทรง Oversize</span>
+                                <p className="text-xs text-gray-500">ไซส์ 2XL ขึ้นไป +100 บาท/ตัว (ปกติ 4XL ขึ้นไป +100)</p>
+                            </div>
+                        </label>
+                        {isOversize && (
+                            <div className="mt-2 text-xs text-blue-700 bg-blue-100 p-2 rounded">
+                                <Info size={12} className="inline mr-1"/> ไหล่สโลป จะถูกเลือกอัตโนมัติ (เฉพาะคอกลม, คอวี, คอวีตัด, คอวีปก)
+                            </div>
+                        )}
+                    </div>
+
+                    {/* NEW: Add-on Options */}
+                    <div className="mb-4 p-3 md:p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                        <label className="block text-xs md:text-sm font-bold text-gray-700 mb-3">ตัวเลือกเพิ่มเติม (Add-on Options)</label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
+                            {ADDON_OPTIONS.map(opt => (
+                                <label key={opt.id} className={`flex items-center p-2 md:p-3 rounded-lg border cursor-pointer transition ${addOnOptions[opt.id] ? 'bg-purple-100 border-purple-400' : 'bg-white border-gray-200 hover:border-purple-300'}`}>
+                                    <input 
+                                        type="checkbox" 
+                                        className="mr-2 rounded text-purple-600" 
+                                        checked={addOnOptions[opt.id] || false}
+                                        disabled={opt.id === 'slopeShoulder' && isOversize && SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n))}
+                                        onChange={e => setAddOnOptions({...addOnOptions, [opt.id]: e.target.checked})}
+                                    />
+                                    <div>
+                                        <span className="text-xs md:text-sm font-medium text-gray-700">{opt.name}</span>
+                                        <span className="block text-[10px] md:text-xs text-purple-600">+{opt.price} บาท/ตัว</span>
+                                    </div>
+                                </label>
                             ))}
                         </div>
+                        {addOnOptionsTotal > 0 && (
+                            <div className="mt-3 text-sm font-bold text-purple-700">
+                                รวม Add-on: {addOnOptionsTotal.toLocaleString()} บาท ({totalQty} ตัว)
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <label className="block text-xs md:text-sm font-bold text-gray-700">ระบุจำนวน</label>
+                            <button
+                                type="button"
+                                onClick={openAddSizeModal}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition"
+                            >
+                                <Plus size={16} />
+                                <span>เพิ่มไซส์</span>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-4 md:grid-cols-8 gap-2 md:gap-4">
+                            {displaySizes.map((size) => {
+                                const isSurcharge = isOversize 
+                                    ? ['2XL', '3XL', '4XL', '5XL'].includes(size)
+                                    : ['4XL', '5XL'].includes(size);
+                                return (
+                                    <div key={size} className="text-center">
+                                        <label className={`text-xs font-bold mb-1 block ${isSurcharge ? 'text-orange-500' : 'text-gray-400'}`}>
+                                            {size} {isSurcharge && <span className="text-[10px]">+100</span>}
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            min="0" 
+                                            className={`w-full text-center border rounded-lg p-1.5 md:p-2 focus:ring-2 focus:ring-[#1a1c23] text-xs md:text-base ${isSurcharge ? 'border-orange-300 bg-orange-50' : 'border-gray-200'}`} 
+                                            placeholder="0"
+                                            value={quantities[size] || ''}
+                                            onChange={(e) => setQuantities({...quantities, [size]: parseInt(e.target.value) || 0})} 
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {sizingSurcharge > 0 && (
+                            <div className="mt-3 text-sm font-bold text-orange-600">
+                                ค่าไซส์พิเศษ: +{sizingSurcharge.toLocaleString()} บาท ({oversizeSurchargeQty} ตัว)
+                            </div>
+                        )}
                     </div>
                 </section>
             </div>
 
-            <div className="col-span-12 lg:col-span-4 space-y-6">
-                <div className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 sticky top-6">
-                    <h3 className="text-xl font-black text-[#1a1c23] mb-6 pb-4 border-b border-gray-100">สรุปยอด</h3>
-                    <div className="space-y-4 mb-8 text-sm text-gray-600">
-                        <div className="flex justify-between"><span>จำนวนรวม</span><span className="font-bold text-gray-800">{totalQty} ตัว</span></div>
-                        <div className="flex justify-between items-center"><span>ราคาขาย/ตัว</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={basePrice} onChange={e => setBasePrice(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center"><span>ค่าบล็อก/ค่าออกแบบเพิ่ม</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-20 text-right border-gray-200 border rounded p-1 bg-gray-50" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
-                        <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-20 text-right border-rose-200 border rounded p-1 bg-rose-50 text-rose-600" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
-                        
-                        <div className="flex justify-between items-center py-2 border-t border-dashed">
-                            <label className="flex items-center text-xs cursor-pointer">
-                                <input type="checkbox" className="mr-2 rounded text-[#1a1c23]" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
-                                ราคารวม VAT ({config.vat_rate*100}%) แล้ว
-                            </label>
-                            <span className="text-xs text-gray-400">VAT: {vatAmount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</span>
-                        </div>
-
-                        <div className="flex justify-between font-black text-2xl text-[#1a1c23] mt-4 pt-4 border-t border-gray-100"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
-                        
-                        <div className="bg-emerald-50 p-3 rounded space-y-2 mt-2">
-                            <div className="flex justify-between items-center text-xs"><span>มัดจำ 1</span><input type="number" className="w-16 border text-right border-gray-200 rounded p-1 bg-white" value={deposit1} onChange={e=>setDeposit1(Number(e.target.value))}/></div>
-                            <div className="flex justify-between items-center text-xs"><span>มัดจำ 2</span><input type="number" className="w-16 border text-right border-gray-200 rounded p-1 bg-white" value={deposit2} onChange={e=>setDeposit2(Number(e.target.value))}/></div>
-                            <div className="flex justify-between font-bold text-emerald-700"><span>ค้างชำระ</span><span>{(grandTotal - deposit1 - deposit2).toLocaleString()}</span></div>
-                        </div>
+            <div className="lg:col-span-1">
+                <div className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-lg border border-gray-100 sticky top-6">
+                    <div className="flex justify-between items-center mb-4 md:mb-6 pb-3 md:pb-4 border-b border-gray-100">
+                        <h3 className="text-lg md:text-xl font-black text-[#1a1c23]">สรุปยอด</h3>
+                        {/* Factory View Toggle */}
+                        <label className="flex items-center cursor-pointer text-xs">
+                            <input type="checkbox" className="mr-1 rounded" checked={isFactoryView} onChange={e => setIsFactoryView(e.target.checked)}/>
+                            <span className="text-gray-500">Factory View</span>
+                        </label>
                     </div>
-                    <button className="w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center transition" onClick={handleSaveOrder}>
+                    <div className="space-y-3 md:space-y-4 mb-6 md:mb-8 text-xs md:text-sm text-gray-600">
+                        <div className="flex justify-between"><span>จำนวนรวม</span><span className="font-bold text-gray-800">{totalQty} ตัว</span></div>
+                        
+                        {!isFactoryView && (
+                            <>
+                                <div className="flex justify-between items-center">
+                                    <span>ราคาขาย/ตัว <span className="text-[10px] text-gray-400">(Step Price)</span></span>
+                                    <input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={basePrice} onChange={e => setBasePrice(Number(e.target.value))}/>
+                                </div>
+                                
+                                {/* Show pricing breakdown */}
+                                <div className="text-[10px] text-gray-400 -mt-2 pl-2">
+                                    ยอดสินค้า: {productSubtotal.toLocaleString()} บาท
+                                </div>
+                                
+                                {sizingSurcharge > 0 && (
+                                    <div className="flex justify-between text-orange-600">
+                                        <span>ค่าไซส์พิเศษ ({oversizeSurchargeQty} ตัว)</span>
+                                        <span>+{sizingSurcharge.toLocaleString()}</span>
+                                    </div>
+                                )}
+                                
+                                {addOnOptionsTotal > 0 && (
+                                    <div className="flex justify-between text-purple-600">
+                                        <span>ค่า Add-on Options</span>
+                                        <span>+{addOnOptionsTotal.toLocaleString()}</span>
+                                    </div>
+                                )}
+                                
+                                <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
+                                <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
+                                <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-16 md:w-20 text-right border-rose-200 border rounded p-1 bg-rose-50 text-rose-600 text-xs md:text-base" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
+                                
+                                <div className="flex justify-between items-center py-2 md:py-3 border-t border-dashed">
+                                    <label className="flex items-center text-xs cursor-pointer">
+                                        <input type="checkbox" className="mr-2 rounded text-[#1a1c23]" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
+                                        ราคารวม VAT ({config.vat_rate*100}%)
+                                    </label>
+                                </div>
+
+                                <div className="flex justify-between font-black text-lg md:text-2xl text-[#1a1c23] mt-3 md:mt-4 pt-3 md:pt-4 border-t border-gray-100"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
+                                
+                                {/* 50/50 Deposit Section with Design Fee */}
+                                <div className="bg-emerald-50 p-2.5 md:p-3 rounded-xl space-y-2 md:space-y-3 mt-2 border border-emerald-200">
+                                    <div className="text-xs font-bold text-emerald-800 mb-2">💰 การชำระเงิน (50/50)</div>
+                                    
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span>มัดจำ 1 (50%)</span>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-[10px] text-gray-400">แนะนำ: {calculatedDeposit1.toLocaleString()}</span>
+                                            <input type="number" className="w-16 md:w-20 border text-right border-gray-200 rounded p-1 bg-white text-xs md:text-base" value={deposit1} onChange={e=>setDeposit1(Number(e.target.value))}/>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span>ค่าขึ้นแบบ (หักจากมัดจำ 2)</span>
+                                        <input type="number" className="w-16 md:w-20 border text-right border-amber-200 rounded p-1 bg-amber-50 text-amber-700 text-xs md:text-base" value={designFee} onChange={e=>setDesignFee(Number(e.target.value))}/>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span>มัดจำ 2 (หลังหักค่าขึ้นแบบ)</span>
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-[10px] text-gray-400">แนะนำ: {calculatedDeposit2.toLocaleString()}</span>
+                                            <input type="number" className="w-16 md:w-20 border text-right border-gray-200 rounded p-1 bg-white text-xs md:text-base" value={deposit2} onChange={e=>setDeposit2(Number(e.target.value))}/>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="border-t border-emerald-300 pt-2 mt-2">
+                                        <div className="flex justify-between font-bold text-emerald-700 text-xs md:text-sm">
+                                            <span>ค้างชำระ</span>
+                                            <span>{balance.toLocaleString()} บาท</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        
+                        {isFactoryView && (
+                            <div className="bg-gray-100 p-4 rounded-xl text-center text-gray-500">
+                                <Box size={32} className="mx-auto mb-2 opacity-50"/>
+                                <p className="text-sm font-bold">Factory View Mode</p>
+                                <p className="text-xs">ราคาถูกซ่อน สำหรับส่งโรงงาน</p>
+                            </div>
+                        )}
+                    </div>
+                    <button className="w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-2.5 md:py-4 rounded-xl shadow-lg flex justify-center items-center transition text-sm md:text-base" onClick={handleSaveOrder}>
                         <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
                     </button>
-                    <div className="grid grid-cols-2 gap-3 mt-4">
-                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={() => setShowPreview(true)}>ดูตัวอย่าง</button>
-                        <button className="py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={handleCopySummary}>คัดลอก</button>
+                    <div className="grid grid-cols-3 gap-2 md:gap-3 mt-3 md:mt-4">
+                        <button className="py-1.5 md:py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={() => { setIsFactoryView(false); setShowPreview(true); }}>ดูตัวอย่าง</button>
+                        <button className="py-1.5 md:py-2 text-xs font-bold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50" onClick={() => { setIsFactoryView(true); setShowPreview(true); }}>ใบโรงงาน</button>
+                        <button className="py-1.5 md:py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={handleCopySummary}>คัดลอก</button>
                     </div>
                 </div>
             </div>
@@ -1547,11 +2165,11 @@ const ProductPage = () => {
   const paginatedItems = items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
       {/* Add/Edit Modal */}
       {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
                   <h3 className="text-lg font-bold mb-4">
                       {modalMode === "add" ? "เพิ่มข้อมูล" : "แก้ไขข้อมูล"} ({activeTab})
                   </h3>
@@ -1640,22 +2258,22 @@ const ProductPage = () => {
           </div>
       )}
 
-      <header className="mb-8 flex justify-between items-end">
+      <header className="mb-4 sm:mb-6 md:mb-8 flex flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
-            <h1 className="text-3xl font-black text-[#1a1c23]">สินค้า</h1>
-            <p className="text-gray-500 font-medium">จัดการผ้าและวัตถุดิบ</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">สินค้า</h1>
+            <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการผ้าและวัตถุดิบ</p>
         </div>
-        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg">
-            <Plus size={18} className="mr-2"/> เพิ่มสินค้า
+        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
+            <Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> เพิ่มสินค้า
         </button>
       </header>
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
         <div className="flex border-b border-gray-100 overflow-x-auto">
             <TabButton id="ชนิดผ้า" label="ชนิดผ้า" />
             <TabButton id="รูปแบบคอ" label="รูปแบบคอ" />
             <TabButton id="รูปแบบแขน" label="รูปแบบแขน" />
         </div>
-        <div className="p-2 md:p-6 flex-1 overflow-x-auto">
+        <div className="p-1 sm:p-2 md:p-6 flex-1 overflow-x-auto">
             {loading ? <p className="p-10 text-center text-gray-400">Loading...</p> : (
                 <table className="w-full text-left">
                     <thead>
@@ -1799,11 +2417,11 @@ const CustomerPage = () => {
   const paginatedCustomers = customers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
       {/* Modal Form: ปรับ Layout ให้ดู Balance ขึ้น */}
       {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-              <div className="bg-white p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
+              <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
                   <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
                       <h3 className="text-xl font-black text-[#1a1c23]">
                           {modalMode === 'add' ? 'เพิ่มลูกค้าใหม่' : 'แก้ไขข้อมูลลูกค้า'}
@@ -1896,17 +2514,17 @@ const CustomerPage = () => {
           </div>
       )}
 
-      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      <header className="mb-4 sm:mb-6 md:mb-8 flex flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
-            <h1 className="text-3xl font-black text-[#1a1c23]">ลูกค้า</h1>
-            <p className="text-gray-500 font-medium">จัดการฐานข้อมูลลูกค้า</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">ลูกค้า</h1>
+            <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการฐานข้อมูลลูกค้า</p>
         </div>
-        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-6 py-3 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
-            <Plus size={20} className="mr-2"/> เพิ่มลูกค้าใหม่
+        <button onClick={openAddModal} className="bg-[#1a1c23] text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
+            <Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> เพิ่มลูกค้า
         </button>
       </header>
         
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
         <div className="p-0 overflow-x-auto flex-1">
             {loading ? (
                 <div className="h-full flex flex-col items-center justify-center text-gray-400">
@@ -2148,60 +2766,61 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
   const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
       {detailOrder && (
           <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
       )}
       
       {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
-                  <div className="flex items-center mb-4">
-                      <AlertCircle className="text-rose-500 mr-3" size={24} />
-                      <h3 className="text-lg font-bold">ยืนยันการลบออเดอร์</h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
+                  <div className="flex items-center mb-3 sm:mb-4">
+                      <AlertCircle className="text-rose-500 mr-2 sm:mr-3" size={20} />
+                      <h3 className="text-base sm:text-lg font-bold">ยืนยันการลบออเดอร์</h3>
                   </div>
-                  <p className="text-slate-600 mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
+                  <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
                   <div className="flex justify-end gap-2">
-                      <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
-                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
+                      <button onClick={() => setDeleteConfirm(null)} className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-3 sm:px-4 py-2 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
                   </div>
               </div>
           </div>
       )}
 
-      <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-            <h1 className="text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
-            <p className="text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-            <div className="relative flex-1 md:w-64">
-                <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-                <input 
-                    type="text" 
-                    placeholder="ค้นหา..." 
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+      <header className="mb-4 sm:mb-6 md:mb-8">
+        <div className="flex flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+            <div>
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
+                <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
             </div>
 
             <div className="flex gap-2">
-                <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap">
-                    <Download size={18} className="mr-2"/> Export
+                <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
+                    <Download size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> Export
                 </button>
-                <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-6 py-2.5 rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap">
-                    <Plus size={18} className="mr-2"/> สร้างใหม่
+                <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
+                    <Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> สร้างใหม่
                 </button>
             </div>
         </div>
+
+        {/* Search bar below header */}
+        <div className="relative mt-3 sm:mt-4">
+            <Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} />
+            <input 
+                type="text" 
+                placeholder="ค้นหา..." 
+                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+            />
+        </div>
       </header>
         
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
-        <div className="p-0 md:p-2 overflow-x-auto flex-1">
-            {loading ? <p className="text-center text-slate-500 py-10">Loading...</p> : (
-                <table className="w-full text-left min-w-[800px] table-fixed">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
+        <div className="p-0 sm:p-1 md:p-2 overflow-x-auto flex-1">
+            {loading ? <p className="text-center text-slate-500 py-6 sm:py-10 text-sm">Loading...</p> : (
+                <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed">
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <th className="py-4 px-6 w-1/6">เลขที่</th>
@@ -2365,11 +2984,11 @@ const SettingsPage = ({ onNotify }) => {
   }
 
   return (
-    <div className="p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       {/* Delete Modal */}
       {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded-xl w-96 shadow-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
                   <div className="flex items-center mb-4">
                       <AlertCircle className="text-rose-500 mr-3" size={24} />
                       <h3 className="text-lg font-bold">ยืนยันการลบ?</h3>
@@ -2383,17 +3002,17 @@ const SettingsPage = ({ onNotify }) => {
           </div>
       )}
 
-      <header className="mb-8">
-        <h1 className="text-3xl font-black text-[#1a1c23]">ตั้งค่าระบบ</h1>
-        <p className="text-gray-500 font-medium">กำหนดราคาและค่าเริ่มต้นของระบบ</p>
+      <header className="mb-4 sm:mb-6 md:mb-8">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">ตั้งค่าระบบ</h1>
+        <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">กำหนดราคาและค่าเริ่มต้นของระบบ</p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[500px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-8 lg:h-[500px]">
               {/* Left Column: Form + VAT */}
-              <div className="space-y-4 overflow-y-auto pr-2">
+              <div className="space-y-3 sm:space-y-4 overflow-y-auto pr-0 lg:pr-2">
                   {/* Form เพิ่มกฎ */}
-                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
-                      <h3 className="font-bold text-base mb-3 text-[#1a1c23]">เพิ่มเงื่อนไขราคา</h3>
+                  <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100">
+                      <h3 className="font-bold text-sm sm:text-base mb-2 sm:mb-3 text-[#1a1c23]">เพิ่มเงื่อนไขราคา</h3>
                       <div className="space-y-2.5">
                           <div>
                               <label className="block text-xs font-medium mb-0.5">ชนิดผ้า</label>
@@ -2581,11 +3200,11 @@ const App = () => {
   const NavItem = ({ id, icon: Icon, label, active }) => (
       <button 
         onClick={() => handleNavigate(id)} 
-        className={`w-full flex items-center space-x-4 p-3 rounded-xl transition duration-200 group relative ${active ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+        className={`w-full flex items-center space-x-3 sm:space-x-4 p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition duration-200 group relative ${active ? 'text-white' : 'text-gray-500 hover:text-white'}`}
       >
-          {active && <div className="absolute left-0 w-1 h-8 bg-[#d4e157] rounded-r-full shadow-[0_0_10px_rgba(212,225,87,0.5)]"></div>}
-          <Icon size={20} className={`transition ${active ? 'text-[#d4e157]' : 'text-gray-500 group-hover:text-white'}`}/>
-          <span className="font-medium text-sm tracking-wide">{label}</span>
+          {active && <div className="absolute left-0 w-1 h-6 sm:h-8 bg-[#d4e157] rounded-r-full shadow-[0_0_10px_rgba(212,225,87,0.5)]"></div>}
+          <Icon size={18} className={`sm:w-5 sm:h-5 transition ${active ? 'text-[#d4e157]' : 'text-gray-500 group-hover:text-white'}`}/>
+          <span className="font-medium text-xs sm:text-sm tracking-wide">{label}</span>
       </button>
   );
 
@@ -2593,33 +3212,33 @@ const App = () => {
     <div className="min-h-screen bg-[#f0f2f5] font-sans text-slate-800 flex flex-col md:flex-row relative">
        {/* Toast Notification */}
        {notification && (
-           <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-5 ${notification.type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white'}`}>
-               {notification.type === 'success' ? <CheckCircle size={24} className="text-emerald-400" /> : <AlertCircle size={24} className="text-white" />}
-               <span className="font-medium text-lg">{notification.message}</span>
+           <div className={`fixed top-3 sm:top-6 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2 sm:py-4 rounded-lg sm:rounded-xl shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-5 max-w-[90vw] sm:max-w-none ${notification.type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white'}`}>
+               {notification.type === 'success' ? <CheckCircle size={18} className="sm:w-6 sm:h-6 text-emerald-400 shrink-0" /> : <AlertCircle size={18} className="sm:w-6 sm:h-6 text-white shrink-0" />}
+               <span className="font-medium text-sm sm:text-base md:text-lg line-clamp-2">{notification.message}</span>
            </div>
        )}
 
        {/* Mobile Header */}
-       <div className="md:hidden bg-[#1a1c23] text-white p-4 flex justify-between items-center sticky top-0 z-30 shadow-lg">
+       <div className="md:hidden bg-[#1a1c23] text-white p-3 sm:p-4 flex justify-center items-center sticky top-0 z-30 shadow-lg relative">
+           <button onClick={() => setIsSidebarOpen(true)} className="absolute left-3 sm:left-4"><Menu size={22} className="sm:w-6 sm:h-6" /></button>
            <div className="flex items-center gap-2">
-                <img src={LOGO_URL} alt="Logo" className="w-8 h-8 rounded-full"/>
-                <span className="font-bold text-lg tracking-tight">B-LOOK</span>
+                <img src={LOGO_URL} alt="Logo" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full"/>
+                <span className="font-bold text-base sm:text-lg tracking-tight">B-LOOK</span>
            </div>
-           <button onClick={() => setIsSidebarOpen(true)}><Menu size={24} /></button>
        </div>
        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
 
        {/* Sidebar (Dark Theme) */}
-       <aside className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-[#1a1c23] text-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col shadow-2xl border-r border-gray-800 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-            <div className="p-8 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <img src={LOGO_URL} alt="Logo" className="w-10 h-10 rounded-full border-2 border-white/20"/>
-                    <span className="font-black text-xl tracking-tight text-white">B-LOOK</span>
+       <aside className={`fixed md:sticky top-0 left-0 h-screen w-56 sm:w-60 md:w-64 bg-[#1a1c23] text-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col shadow-2xl border-r border-gray-800 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+            <div className="p-4 sm:p-6 md:p-8 flex items-center justify-between">
+                <div className="flex items-center gap-2 sm:gap-3">
+                    <img src={LOGO_URL} alt="Logo" className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/20"/>
+                    <span className="font-black text-lg sm:text-xl tracking-tight text-white">B-LOOK</span>
                 </div>
-                <button className="md:hidden text-gray-500 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={24}/></button>
+                <button className="md:hidden text-gray-500 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={22}/></button>
             </div>
             
-            <nav className="flex-1 px-4 space-y-2 mt-4">
+            <nav className="flex-1 px-2 sm:px-3 md:px-4 space-y-1 sm:space-y-2 mt-2 sm:mt-4">
                 <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} />
                 <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} />
                 <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} />
@@ -2635,23 +3254,23 @@ const App = () => {
             </nav>
 
             {/* Profile Section */}
-            <div className="p-6 border-t border-gray-800">
+            <div className="p-3 sm:p-4 md:p-6 border-t border-gray-800">
                 <div className="flex items-center justify-between cursor-pointer group" onClick={() => { localStorage.removeItem('access_token'); localStorage.removeItem('user_role'); setIsLoggedIn(false); }}>
-                    <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-[#d4e157] rounded-full flex items-center justify-center text-[#1a1c23] font-bold text-sm shadow-md group-hover:scale-105 transition">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-[#d4e157] rounded-full flex items-center justify-center text-[#1a1c23] font-bold text-xs sm:text-sm shadow-md group-hover:scale-105 transition">
                             {userRole.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <div className="text-sm font-bold text-white group-hover:text-[#d4e157] transition capitalize">{userRole}</div>
-                            <div className="text-[10px] text-gray-500">ออกจากระบบ</div>
+                            <div className="text-xs sm:text-sm font-bold text-white group-hover:text-[#d4e157] transition capitalize">{userRole}</div>
+                            <div className="text-[9px] sm:text-[10px] text-gray-500">ออกจากระบบ</div>
                         </div>
                     </div>
-                    <ChevronDown size={16} className="text-gray-500"/>
+                    <ChevronDown size={14} className="sm:w-4 sm:h-4 text-gray-500"/>
                 </div>
             </div>
        </aside>
 
-       <main className="flex-1 overflow-auto h-[calc(100vh-60px)] md:h-screen w-full relative">{renderContent()}</main>
+       <main className="flex-1 overflow-auto h-[calc(100vh-52px)] sm:h-[calc(100vh-56px)] md:h-screen w-full relative">{renderContent()}</main>
     </div>
   );
 };
