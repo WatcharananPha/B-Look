@@ -1047,10 +1047,10 @@ const DashboardPage = ({ onEdit }) => {
     const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
         <div 
             onClick={onClick}
-            className={`bg-white p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-24 sm:h-28 md:h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
+            className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
         >
-            <h3 className="text-gray-500 font-bold text-[10px] sm:text-xs md:text-sm line-clamp-2">{title}</h3>
-            <div className={`text-2xl sm:text-3xl md:text-4xl font-black ${color}`}>{value}</div>
+            <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
+            <div className={`text-4xl font-black ${color}`}>{value}</div>
         </div>
     );
 
@@ -1065,7 +1065,7 @@ const DashboardPage = ({ onEdit }) => {
     };
 
     return (
-        <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
+        <div className="p-6 md:p-10 fade-in h-full flex flex-col bg-[#f0f2f5] overflow-y-auto">
             
             {/* Detail Order Modal */}
             {detailOrder && (
@@ -1084,16 +1084,16 @@ const DashboardPage = ({ onEdit }) => {
 
             {/* Notifications Panel */}
             {notifications.length > 0 && (
-                <div className="mb-4 sm:mb-6 md:mb-8 bg-white p-3 sm:p-4 md:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-red-100">
-                    <h3 className="text-sm sm:text-base md:text-lg font-bold text-[#1a1c23] mb-2 sm:mb-3 md:mb-4 flex items-center gap-2"><Bell className="text-rose-500" size={16}/> รายการที่ต้องติดตามด่วน</h3>
-                    <div className="space-y-2 sm:space-y-3">
+                <div className="mb-8 bg-white p-6 rounded-3xl shadow-sm border border-red-100">
+                    <h3 className="text-lg font-bold text-[#1a1c23] mb-4 flex items-center gap-2"><Bell className="text-rose-500"/> รายการที่ต้องติดตามด่วน</h3>
+                    <div className="space-y-3">
                         {notifications.map((n, i) => (
-                            <div key={i} onClick={() => setDetailOrder(n.order)} className={`p-2 sm:p-3 rounded-lg sm:rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between cursor-pointer hover:bg-gray-50 gap-2 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                                <div className="flex items-center gap-2 sm:gap-3">
-                                    {n.type === 'critical' ? <Flag size={16}/> : <Clock size={16}/>}
-                                    <span className="text-xs sm:text-sm font-bold line-clamp-2">{n.msg}</span>
+                            <div key={i} onClick={() => setDetailOrder(n.order)} className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer hover:bg-gray-50 ${n.type === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                                <div className="flex items-center gap-3">
+                                    {n.type === 'critical' ? <Flag size={18}/> : <Clock size={18}/>}
+                                    <span className="text-sm font-bold">{n.msg}</span>
                                 </div>
-                                <span className="text-[10px] sm:text-xs underline self-end sm:self-auto whitespace-nowrap">ดูรายละเอียด</span>
+                                <span className="text-xs underline">ดูรายละเอียด</span>
                             </div>
                         ))}
                     </div>
@@ -1102,16 +1102,16 @@ const DashboardPage = ({ onEdit }) => {
 
             {/* Queue Modal (Fixed Layout) */}
             {showQueueModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4">
-                    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
-                        <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <div className="flex items-center gap-2 sm:gap-3">
-                                <Box className="text-[#1a1c23]" size={18} />
-                                <h3 className="text-base sm:text-lg md:text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div className="flex items-center gap-3">
+                                <Box className="text-[#1a1c23]" />
+                                <h3 className="text-xl font-bold text-[#1a1c23]">รายการรอจัดส่ง</h3>
                             </div>
-                            <button onClick={() => setShowQueueModal(false)} className="bg-white p-1.5 sm:p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={20} className="sm:w-6 sm:h-6 text-slate-500"/></button>
+                            <button onClick={() => setShowQueueModal(false)} className="bg-white p-2 rounded-full border shadow-sm hover:bg-gray-100 transition"><XCircle size={24} className="text-slate-500"/></button>
                         </div>
-                        <div className="p-0 overflow-x-auto overflow-y-auto flex-1">
+                        <div className="p-0 overflow-y-auto flex-1">
                             <table className="w-full text-left table-fixed">
                                 <thead className="bg-white text-xs font-bold text-gray-500 uppercase sticky top-0 shadow-sm z-10">
                                     <tr>
@@ -1153,42 +1153,40 @@ const DashboardPage = ({ onEdit }) => {
                 </div>
             )}
 
-            <header className="mb-4 sm:mb-6 md:mb-8">
-                <div className="flex flex-col gap-3 sm:gap-4">
+            <header className="mb-8">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
-                        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight">
+                        <h1 className="text-3xl md:text-4xl font-black text-[#1a1c23] tracking-tight leading-tight mb-2">
                             Overview
                         </h1>
-                        <p className="text-xs sm:text-sm md:text-base text-gray-500">ภาพรวมร้านค้าของคุณ</p>
+                        <p className="text-gray-500">ภาพรวมร้านค้าของคุณ</p>
                     </div>
                     
                     {/* --- GLOBAL FILTER BAR --- */}
-                    <div className="flex justify-center md:justify-start">
-                        <div className="flex flex-wrap bg-white p-1 sm:p-1.5 rounded-lg sm:rounded-xl shadow-sm border border-gray-200 gap-0.5 sm:gap-1">
-                            {['today', 'week', 'month'].map(range => (
-                                <button
-                                    key={range}
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold transition ${
-                                        timeRange === range 
-                                        ? 'bg-[#1a1c23] text-white shadow-md' 
-                                        : 'text-gray-500 hover:bg-gray-100'
-                                    }`}
-                                >
-                                    {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
-                                </button>
-                            ))}
-                            <div className="w-px bg-gray-200 mx-0.5 sm:mx-1 hidden sm:block"></div>
-                            <select 
-                                className="bg-transparent text-[10px] sm:text-xs font-bold text-gray-700 outline-none px-1 sm:px-2 cursor-pointer hover:bg-gray-50 rounded-md sm:rounded-lg"
-                                value={brandFilter}
-                                onChange={(e) => setBrandFilter(e.target.value)}
+                    <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 gap-1">
+                        {['today', 'week', 'month'].map(range => (
+                            <button
+                                key={range}
+                                onClick={() => setTimeRange(range)}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition ${
+                                    timeRange === range 
+                                    ? 'bg-[#1a1c23] text-white shadow-md' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
                             >
-                                <option>All Outlets</option>
-                                <option>BG</option>
-                                <option>Jersey</option>
-                            </select>
-                        </div>
+                                {range === 'today' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
+                            </button>
+                        ))}
+                        <div className="w-px bg-gray-200 mx-1"></div>
+                        <select 
+                            className="bg-transparent text-xs font-bold text-gray-700 outline-none px-2 cursor-pointer hover:bg-gray-50 rounded-lg"
+                            value={brandFilter}
+                            onChange={(e) => setBrandFilter(e.target.value)}
+                        >
+                            <option>All Outlets</option>
+                            <option>BG</option>
+                            <option>Jersey</option>
+                        </select>
                     </div>
                 </div>
             </header>
@@ -1386,7 +1384,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [addOnCost, setAddOnCost] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
   const [discount, setDiscount] = useState(0);
-  const [isVatIncluded, setIsVatIncluded] = useState(false);
+  const [isVatIncluded, setIsVatIncluded] = useState(true);
   const [deposit, setDeposit] = useState(0);
   const [deposit1, setDeposit1] = useState(0);
   const [deposit2, setDeposit2] = useState(0);
@@ -1600,11 +1598,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     
   let vatAmount = 0, grandTotal = 0;
   if (isVatIncluded) {
-    grandTotal = totalBeforeCalc;
-    vatAmount = (totalBeforeCalc * (config.vat_rate * 100)) / (100 + (config.vat_rate * 100));
-  } else {
+    // When including VAT: add VAT to the subtotal
     vatAmount = totalBeforeCalc * config.vat_rate;
     grandTotal = totalBeforeCalc + vatAmount;
+  } else {
+    // When not including VAT: show VAT amount but don't add to grandTotal
+    vatAmount = totalBeforeCalc * config.vat_rate;
+    grandTotal = totalBeforeCalc;
   }
   
   // NEW: 50/50 deposit calculation
