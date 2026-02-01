@@ -23,14 +23,16 @@ const STEP_PRICING = {
     { minQty: 10, maxQty: 30, price: 240 },
     { minQty: 31, maxQty: 50, price: 220 },
     { minQty: 51, maxQty: 100, price: 190 },
-    { minQty: 101, maxQty: 300, price: 180 }
+    { minQty: 101, maxQty: 300, price: 180 },
+    { minQty: 301, maxQty: 99999, price: 170 } // > 300 ตัว
   ],
   // คอปก/อื่นๆ - Collar/Others
   collarOthers: [
     { minQty: 10, maxQty: 30, price: 300 },
     { minQty: 31, maxQty: 50, price: 260 },
     { minQty: 51, maxQty: 100, price: 240 },
-    { minQty: 101, maxQty: 300, price: 220 }
+    { minQty: 101, maxQty: 300, price: 220 },
+    { minQty: 301, maxQty: 99999, price: 200 } // > 300 ตัว
   ],
   // กางเกงกีฬา - Sports Pants
   sportsPants: 210,
@@ -49,10 +51,115 @@ const ADDON_OPTIONS = [
   { id: 'oversizeSlopeShoulder', name: 'ทรงโอเวอร์ไซส์ไหล่สโลป', price: 60 }
 ];
 
-// Necks that support คอกลม/วี pricing
-const ROUND_V_NECK_TYPES = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'];
+// Default Shipping Cost Table by Quantity (บาทรวม)
+const DEFAULT_SHIPPING_COST_TABLE = [
+  { minQty: 10, maxQty: 15, cost: 60 },
+  { minQty: 16, maxQty: 20, cost: 80 },
+  { minQty: 21, maxQty: 30, cost: 100 },
+  { minQty: 31, maxQty: 40, cost: 120 },
+  { minQty: 41, maxQty: 50, cost: 180 },
+  { minQty: 51, maxQty: 70, cost: 200 },
+  { minQty: 80, maxQty: 100, cost: 230 }
+];
 
-// Necks that support ไหล่สโลป option
+// Helper: Load Shipping Table from localStorage or default
+const getShippingCostTable = () => {
+  try {
+    const stored = localStorage.getItem('shippingCostTable');
+    if (stored) return JSON.parse(stored);
+  } catch (e) { console.error(e); }
+  return DEFAULT_SHIPPING_COST_TABLE;
+};
+
+// Helper: Get extra cost per unit for qty > 100
+const getExtraShippingCost = () => {
+  try {
+    const stored = localStorage.getItem('extraShippingCostPerUnit');
+    if (stored) return JSON.parse(stored);
+  } catch (e) { console.error(e); }
+  return 50; // default
+};
+
+// Helper function: Calculate Shipping Cost
+const calculateShippingCost = (qty) => {
+  if (qty < 10) return 0; // ไม่มีค่าขนส่ง ต่ำกว่า 10 ตัว
+  
+  const table = getShippingCostTable();
+  const extraPerUnit = getExtraShippingCost();
+  
+  // ค้นหาตามตารางปกติ
+  const shippingTier = table.find(tier => qty >= tier.minQty && qty <= tier.maxQty);
+  if (shippingTier) return shippingTier.cost;
+  
+  // ช่วง 71-79 ใช้ราคา 51-70 (200)
+  if (qty >= 71 && qty <= 79) return 200;
+  
+  // ถ้า > 100 ตัว: ราคา 100 ตัว + (qty - 100) * extraPerUnit
+  if (qty > 100) {
+    const baseCost = 230; // ค่าขนส่ง 100 ตัว
+    const extraQty = qty - 100;
+    return baseCost + (extraQty * extraPerUnit);
+  }
+  
+  return 0;
+};
+
+// Default Neck Types with prices (from image)
+const DEFAULT_NECK_TYPES = [
+  // แถวที่ 1 - ราคาปกติ
+  { id: 1, name: 'คอกลม', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
+  { id: 2, name: 'คอวีชน', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
+  { id: 3, name: 'คอวีโชว์', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
+  { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
+  { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true },
+  // แถวที่ 2 - บางตัว +40
+  { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 8, name: 'คอหยดน้ำ', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+  // แถวที่ 3
+  { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 14, name: 'คอวาย', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+  { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+];
+
+// Helper: Load Neck Types from localStorage or default
+const getNeckTypes = () => {
+  try {
+    const stored = localStorage.getItem('neckTypes');
+    if (stored) return JSON.parse(stored);
+  } catch (e) { console.error(e); }
+  return DEFAULT_NECK_TYPES;
+};
+
+// Helper: Get neck extra price
+const getNeckExtraPrice = (neckName) => {
+  const neckTypes = getNeckTypes();
+  const neck = neckTypes.find(n => neckName.includes(n.name) || n.name.includes(neckName));
+  return neck?.extraPrice || 0;
+};
+
+// Helper: Get neck price group
+const getNeckPriceGroup = (neckName) => {
+  const neckTypes = getNeckTypes();
+  const neck = neckTypes.find(n => neckName.includes(n.name) || n.name.includes(neckName));
+  return neck?.priceGroup || 'collarOthers';
+};
+
+// Helper: Check if neck supports slope shoulder
+const neckSupportsSlope = (neckName) => {
+  const neckTypes = getNeckTypes();
+  const neck = neckTypes.find(n => neckName.includes(n.name) || n.name.includes(neckName));
+  return neck?.supportSlope || false;
+};
+
+// Necks that support คอกลม/วี pricing (now dynamic)
+const ROUND_V_NECK_TYPES = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีชน', 'คอวีโชว์'];
+
+// Necks that support ไหล่สโลป option (now dynamic based on supportSlope field)
 const SLOPE_SHOULDER_SUPPORTED_NECKS = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'];
 
 // Custom Status Options (editable)
@@ -491,6 +598,18 @@ const InvoiceModal = ({ data, onClose }) => {
                         <h4 className="text-xs font-bold text-emerald-800 mb-2">💰 การชำระเงิน</h4>
                         <div className="space-y-1 text-sm">
                             <div className="flex justify-between"><span>มัดจำ 1 (Confirm Order)</span><span className="font-bold">{(data.deposit1 || 0).toLocaleString()} บาท</span></div>
+                            {(data.designFee || 0) > 0 && (
+                              <>
+                                <div className="flex justify-between text-gray-600 text-xs bg-white/50 px-2 py-1 rounded">
+                                  <span>ยอดสุทธิ - มัดจำ 1</span>
+                                  <span>{((data.grandTotal || 0) - (data.deposit1 || 0)).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-amber-600 text-xs bg-white/50 px-2 py-1 rounded">
+                                  <span>ลบ: ค่าขึ้นแบบ</span>
+                                  <span>-{(data.designFee || 0).toLocaleString()}</span>
+                                </div>
+                              </>
+                            )}
                             <div className="flex justify-between"><span>มัดจำ 2 (Final Payment)</span><span className="font-bold">{(data.deposit2 || 0).toLocaleString()} บาท</span></div>
                             <div className="flex justify-between pt-2 border-t border-emerald-300 text-emerald-800 font-bold"><span>ค้างชำระ</span><span className="text-base">{(data.balance || 0).toLocaleString()} บาท</span></div>
                         </div>
@@ -1414,6 +1533,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {})
   );
   
+  // NEW: Neck Extra Price (ราคาเพิ่มเติมจากประเภทคอ)
+  const [neckExtraPrice, setNeckExtraPrice] = useState(0);
+  
+  // NEW: Available neck types from localStorage
+  const [availableNeckTypes, setAvailableNeckTypes] = useState(getNeckTypes());
+  
   // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
   
   // NEW: Custom sizes state
@@ -1528,7 +1653,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                   if (fData?.length > 0) setSelectedFabric(fData[0].name);
                   else setSelectedFabric("");
                   
-                  if (nData?.length > 0) setSelectedNeck(nData[0].name);
+                  // Use availableNeckTypes from localStorage for default selection
+                  const neckTypesFromStorage = getNeckTypes();
+                  if (neckTypesFromStorage?.length > 0) setSelectedNeck(neckTypesFromStorage[0].name);
+                  else if (nData?.length > 0) setSelectedNeck(nData[0].name);
                   else setSelectedNeck("");
                   
                   if (sData?.length > 0) setSelectedSleeve(sData[0].name);
@@ -1565,20 +1693,38 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   }, [isOversize, selectedNeck]);
 
   // NEW: Step Pricing calculation based on qty and neck type
+  // ถ้ามีคำว่า "ปก" ในชื่อคอ = ใช้ราคา collarOthers
   useEffect(() => {
+    const hasCollarWord = selectedNeck.includes('ปก');
+    const isRoundVNeck = !hasCollarWord && ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type));
+    const pricingTable = isRoundVNeck ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
+    
+    // Get extra price from neck type and add to base price
+    const extraPrice = getNeckExtraPrice(selectedNeck);
+    
     if (totalQty >= 10) {
-      const isRoundVNeck = ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type));
-      const pricingTable = isRoundVNeck ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
-      
       const matchedPrice = pricingTable.find(
         tier => totalQty >= tier.minQty && totalQty <= tier.maxQty
       );
       
       if (matchedPrice) {
-        setBasePrice(matchedPrice.price);
+        // รวม extraPrice เข้ากับ basePrice เลย
+        setBasePrice(matchedPrice.price + extraPrice);
       }
+    } else {
+      // ถ้าต่ำกว่า 10 ตัว ใช้ราคาสูงสุด (10-30 ตัว) + extraPrice
+      setBasePrice((isRoundVNeck ? 240 : 300) + extraPrice);
     }
   }, [totalQty, selectedNeck]);
+
+  // NEW: Auto-calculate Shipping Cost based on total quantity
+  useEffect(() => {
+    const calculatedCost = calculateShippingCost(totalQty);
+    setShippingCost(calculatedCost);
+  }, [totalQty]);
+
+  // neckExtraPrice ตอนนี้รวมเข้า basePrice แล้ว ไม่ต้อง setNeckExtraPrice แยก
+  // แต่ยังเก็บไว้สำหรับแสดง UI
 
   // NEW: Calculate Add-on Options total
   const addOnOptionsTotal = useMemo(() => {
@@ -1594,6 +1740,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const sizingSurcharge = oversizeSurchargeQty * 100;
 
   const productSubtotal = totalQty * basePrice;
+  // neckExtraPrice รวมเข้า basePrice แล้ว ไม่ต้องบวกแยก
   const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + addOnCost + shippingCost - discount;
     
   let vatAmount = 0, grandTotal = 0;
@@ -1634,6 +1781,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             deposit_2: deposit2,
             design_fee: designFee,
             is_oversize: isOversize,
+            shipping_cost: shippingCost,
             status: status,
             deadline: deadline ? new Date(deadline).toISOString() : null,
             usage_date: deliveryDate ? new Date(deliveryDate).toISOString() : null,
@@ -1660,8 +1808,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
-  // NEW: Updated urgency calculation for invoice colors
-  // Red: 3-5 days (critical), Yellow: 7-10 days (warning), Green: 10-14 days or no deadline (normal)
   useEffect(() => {
     if (!deadline) { setUrgencyStatus("normal"); return; }
     const diffDays = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24)); 
@@ -1856,8 +2002,22 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">คอเสื้อ</label>
                             <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
                                 <option value="">-- เลือกคอ --</option>
-                                {necks.map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
+                                {availableNeckTypes.map(n => (
+                                    <option key={n.id} value={n.name}>
+                                        {n.name} {n.extraPrice > 0 ? `(+${n.extraPrice} รวมใน basePrice)` : ''}
+                                    </option>
+                                ))}
                             </select>
+                            {neckExtraPrice > 0 && (
+                                <div className="mt-1 text-xs text-orange-600 font-medium">
+                                    📍 ราคาคอ +{neckExtraPrice} บาท/ตัว (รวมใน basePrice แล้ว)
+                                </div>
+                            )}
+                            {selectedNeck.includes('ปก') && (
+                                <div className="mt-1 text-xs text-purple-600 font-medium">
+                                    🏷️ ใช้เรทราคา: คอปก/อื่นๆ
+                                </div>
+                            )}
                         </div>
                         <div>
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">แขนเสื้อ</label>
@@ -1884,14 +2044,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </label>
                         {isOversize && (
                             <div className="mt-2 text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                                <Info size={12} className="inline mr-1"/> ไหล่สโลป จะถูกเลือกอัตโนมัติ (เฉพาะคอกลม, คอวี, คอวีตัด, คอวีปก)
+                                <Info size={12} className="inline mr-1"/> ไหล่สโลป จะถูกเลือกอัตโนมัติ (เฉพาะคอกลม, คอวี, คอวีตัด)
                             </div>
                         )}
                     </div>
 
                     {/* NEW: Add-on Options */}
                     <div className="mb-4 p-3 md:p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                        <label className="block text-xs md:text-sm font-bold text-gray-700 mb-3">ตัวเลือกเพิ่มเติม (Add-on Options)</label>
+                        <label className="block text-xs md:text-sm font-bold text-gray-700 mb-3">ตัวเลือกเพิ่มเติม</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
                             {ADDON_OPTIONS.map(opt => (
                                 <label key={opt.id} className={`flex items-center p-2 md:p-3 rounded-lg border cursor-pointer transition ${addOnOptions[opt.id] ? 'bg-purple-100 border-purple-400' : 'bg-white border-gray-200 hover:border-purple-300'}`}>
@@ -1974,13 +2134,49 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         
                         {!isFactoryView && (
                             <>
-                                <div className="flex justify-between items-center">
-                                    <span>ราคาขาย/ตัว <span className="text-[10px] text-gray-400">(Step Price)</span></span>
-                                    <input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={basePrice} onChange={e => setBasePrice(Number(e.target.value))}/>
+                                <div className="flex justify-between items-center bg-blue-50 px-2 py-1.5 rounded-lg border border-blue-200">
+                                    <div className="flex flex-col">
+                                        <span className="font-semibold text-blue-700">💰 ราคาขาย/ตัว (อัตโนมัติ)</span>
+                                        <span className="text-[10px] text-blue-500">
+                                            {selectedNeck.includes('ปก') ? 'เรท: คอปก/คออื่นๆ' : (ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type)) ? 'เรท: คอกลม/คอวี' : 'เรท: คอปก/คออื่นๆ')}
+                                            {neckExtraPrice > 0 && ` (+${neckExtraPrice} บาท/ตัว)`}
+                                        </span>
+                                    </div>
+                                    <span className="font-bold text-blue-700 text-lg">{basePrice.toLocaleString()} ฿</span>
+                                </div>
+                                
+                                {/* Pricing Reference Table */}
+                                <div className="text-[10px] text-gray-500 bg-gray-50 px-2 py-1.5 rounded -mt-1 border border-gray-100">
+                                    <div className="font-bold mb-1">📊 ตารางเรทราคา: {neckExtraPrice > 0 && <span className="text-orange-500">(+{neckExtraPrice} บาท/ตัว สำหรับคอนี้)</span>}</div>
+                                    <div className="grid grid-cols-3 gap-1">
+                                        <span className="font-semibold">จำนวน</span>
+                                        <span className="text-center">คอกลม/วี</span>
+                                        <span className="text-right">คอปก/อื่นๆ</span>
+                                        
+                                        <span className={totalQty >= 10 && totalQty <= 30 ? 'font-bold text-blue-600' : ''}>10-30</span>
+                                        <span className={`text-center ${totalQty >= 10 && totalQty <= 30 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>240</span>
+                                        <span className={`text-right ${totalQty >= 10 && totalQty <= 30 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>300</span>
+                                        
+                                        <span className={totalQty >= 31 && totalQty <= 50 ? 'font-bold text-blue-600' : ''}>31-50</span>
+                                        <span className={`text-center ${totalQty >= 31 && totalQty <= 50 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>220</span>
+                                        <span className={`text-right ${totalQty >= 31 && totalQty <= 50 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>260</span>
+                                        
+                                        <span className={totalQty >= 51 && totalQty <= 100 ? 'font-bold text-blue-600' : ''}>51-100</span>
+                                        <span className={`text-center ${totalQty >= 51 && totalQty <= 100 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>190</span>
+                                        <span className={`text-right ${totalQty >= 51 && totalQty <= 100 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>240</span>
+                                        
+                                        <span className={totalQty >= 101 && totalQty <= 300 ? 'font-bold text-blue-600' : ''}>101-300</span>
+                                        <span className={`text-center ${totalQty >= 101 && totalQty <= 300 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>180</span>
+                                        <span className={`text-right ${totalQty >= 101 && totalQty <= 300 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>220</span>
+                                        
+                                        <span className={totalQty > 300 ? 'font-bold text-blue-600' : ''}>300+</span>
+                                        <span className={`text-center ${totalQty > 300 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>170</span>
+                                        <span className={`text-right ${totalQty > 300 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>200</span>
+                                    </div>
                                 </div>
                                 
                                 {/* Show pricing breakdown */}
-                                <div className="text-[10px] text-gray-400 -mt-2 pl-2">
+                                <div className="text-[10px] text-gray-400 pl-2">
                                     ยอดสินค้า: {productSubtotal.toLocaleString()} บาท
                                 </div>
                                 
@@ -1998,8 +2194,23 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                     </div>
                                 )}
                                 
+                                {/* neckExtraPrice รวมเข้า basePrice แล้ว แสดงเป็น info */}
+                                {neckExtraPrice > 0 && (
+                                    <div className="text-[10px] text-orange-500 pl-2">
+                                        (รวมค่าคอเสื้อ +{neckExtraPrice} บาท/ตัว ใน basePrice แล้ว)
+                                    </div>
+                                )}
+                                
                                 <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
-                                <div className="flex justify-between items-center"><span>ค่าขนส่ง</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={shippingCost} onChange={e => setShippingCost(Number(e.target.value))}/></div>
+                                <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                                  <span className="font-semibold">📦 ค่าขนส่ง (อัตโนมัติ)</span>
+                                  <span className="font-bold">{shippingCost.toLocaleString()} ฿</span>
+                                </div>
+                                {totalQty > 100 && (
+                                  <div className="text-xs text-emerald-600 px-2 -mt-1">
+                                    = 230 + ({totalQty - 100} × {getExtraShippingCost()}) ฿
+                                  </div>
+                                )}
                                 <div className="flex justify-between items-center text-red-500"><span>ส่วนลด</span><input type="number" className="w-16 md:w-20 text-right border-rose-200 border rounded p-1 bg-rose-50 text-rose-600 text-xs md:text-base" value={discount} onChange={e => setDiscount(Number(e.target.value))}/></div>
                                 
                                 <div className="flex justify-between items-center py-2 md:py-3 border-t border-dashed">
@@ -2183,15 +2394,15 @@ const ProductPage = () => {
                               onChange={e=>setNewItem({...newItem, name: e.target.value})}
                           />
                       </div>
-                      <div>
+                      <div className="hidden">
                           <label className="block text-sm font-medium text-slate-700 mb-1">จำนวน (คงเหลือ)</label>
                           <input 
                               type="number" 
                               min="0"
                               className="w-full border border-slate-300 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
                               placeholder="0" 
-                              value={newItem.quantity} 
-                              onChange={e=>setNewItem({...newItem, quantity: parseInt(e.target.value) || 0})}
+                              value={0}
+                              onChange={() => {}}
                           />
                       </div>
                       <div>
@@ -2279,7 +2490,6 @@ const ProductPage = () => {
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <th className="py-4 px-6">ชื่อรายการ</th>
-                            <th className="py-4 px-6 text-center">จำนวน (คงเหลือ)</th>
                             <th className="py-4 px-6 text-right">ราคาต้นทุน</th>
                             <th className="py-4 px-6 text-right">จัดการ</th>
                         </tr>
@@ -2288,15 +2498,6 @@ const ProductPage = () => {
                         {paginatedItems.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50 transition group">
                                 <td className="py-4 px-6 font-bold text-gray-700">{item.name}</td>
-                                <td className="py-4 px-6 text-center">
-                                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                                        (item.quantity || 0) > 50 ? 'bg-emerald-100 text-emerald-700' :
-                                        (item.quantity || 0) > 20 ? 'bg-amber-100 text-amber-700' :
-                                        'bg-rose-100 text-rose-700'
-                                    }`}>
-                                        {item.quantity || 0}
-                                    </span>
-                                </td>
                                 <td className="py-4 px-6 text-right text-gray-600 font-medium">
                                     {item.cost_price ? `฿${parseFloat(item.cost_price).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
                                 </td>
@@ -2322,7 +2523,7 @@ const ProductPage = () => {
                         ))}
                         {items.length === 0 && (
                             <tr>
-                                <td colSpan="4" className="py-12 text-center">
+                                <td colSpan="3" className="py-12 text-center">
                                     <div className="flex flex-col items-center justify-center text-slate-400">
                                         <Box size={48} className="mb-3 opacity-50" />
                                         <p className="text-lg font-medium">ไม่พบข้อมูล</p>
@@ -2911,6 +3112,17 @@ const SettingsPage = ({ onNotify }) => {
   // Global Config State
   const [globalConfig, setGlobalConfig] = useState({ vat_rate: 7, default_shipping_cost: 0 });
 
+  // Shipping Cost Table State
+  const [shippingTable, setShippingTable] = useState(getShippingCostTable());
+  const [extraShippingCost, setExtraShippingCost] = useState(getExtraShippingCost());
+  const [newShippingRow, setNewShippingRow] = useState({ minQty: 0, maxQty: 0, cost: 0 });
+  const [editingShippingRow, setEditingShippingRow] = useState(null);
+
+  // Neck Types State
+  const [neckTypes, setNeckTypes] = useState(getNeckTypes());
+  const [newNeckType, setNewNeckType] = useState({ name: '', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false });
+  const [editingNeckId, setEditingNeckId] = useState(null);
+
   const fetchRulesAndMasters = async () => {
     setLoading(true);
     try {
@@ -2983,6 +3195,84 @@ const SettingsPage = ({ onNotify }) => {
       } catch(e) { onNotify("บันทึกการตั้งค่าไม่สำเร็จ: " + e.message, "error"); }
   }
 
+  // Shipping Cost Table functions
+  const handleAddShippingRow = () => {
+    if (newShippingRow.minQty <= 0 || newShippingRow.maxQty <= 0 || newShippingRow.cost <= 0) {
+      onNotify("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
+      return;
+    }
+    const updatedTable = [...shippingTable, newShippingRow].sort((a, b) => a.minQty - b.minQty);
+    setShippingTable(updatedTable);
+    localStorage.setItem('shippingCostTable', JSON.stringify(updatedTable));
+    setNewShippingRow({ minQty: 0, maxQty: 0, cost: 0 });
+    onNotify("เพิ่มเงื่อนไขค่าขนส่งสำเร็จ", "success");
+  };
+
+  const handleDeleteShippingRow = (index) => {
+    const updatedTable = shippingTable.filter((_, i) => i !== index);
+    setShippingTable(updatedTable);
+    localStorage.setItem('shippingCostTable', JSON.stringify(updatedTable));
+    onNotify("ลบเงื่อนไขค่าขนส่งสำเร็จ", "success");
+  };
+
+  const handleUpdateShippingRow = (index, field, value) => {
+    const updatedTable = [...shippingTable];
+    updatedTable[index][field] = parseInt(value) || 0;
+    setShippingTable(updatedTable);
+    localStorage.setItem('shippingCostTable', JSON.stringify(updatedTable));
+  };
+
+  const handleSaveExtraShippingCost = () => {
+    localStorage.setItem('extraShippingCostPerUnit', JSON.stringify(extraShippingCost));
+    onNotify("บันทึกค่าขนส่งเพิ่มเติมสำเร็จ", "success");
+  };
+
+  const handleResetShippingTable = () => {
+    setShippingTable(DEFAULT_SHIPPING_COST_TABLE);
+    setExtraShippingCost(50);
+    localStorage.setItem('shippingCostTable', JSON.stringify(DEFAULT_SHIPPING_COST_TABLE));
+    localStorage.setItem('extraShippingCostPerUnit', JSON.stringify(50));
+    onNotify("รีเซ็ตตารางค่าขนส่งเป็นค่าเริ่มต้น", "success");
+  };
+
+  // Neck Types Management Functions
+  const handleAddNeckType = () => {
+    if (!newNeckType.name.trim()) {
+      onNotify("กรุณากรอกชื่อประเภทคอ", "error");
+      return;
+    }
+    const newId = Math.max(...neckTypes.map(n => n.id), 0) + 1;
+    const updatedTypes = [...neckTypes, { ...newNeckType, id: newId }];
+    setNeckTypes(updatedTypes);
+    localStorage.setItem('neckTypes', JSON.stringify(updatedTypes));
+    setNewNeckType({ name: '', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false });
+    onNotify("เพิ่มประเภทคอสำเร็จ", "success");
+  };
+
+  const handleUpdateNeckType = (id, field, value) => {
+    const updatedTypes = neckTypes.map(n => {
+      if (n.id === id) {
+        return { ...n, [field]: value };
+      }
+      return n;
+    });
+    setNeckTypes(updatedTypes);
+    localStorage.setItem('neckTypes', JSON.stringify(updatedTypes));
+  };
+
+  const handleDeleteNeckType = (id) => {
+    const updatedTypes = neckTypes.filter(n => n.id !== id);
+    setNeckTypes(updatedTypes);
+    localStorage.setItem('neckTypes', JSON.stringify(updatedTypes));
+    onNotify("ลบประเภทคอสำเร็จ", "success");
+  };
+
+  const handleResetNeckTypes = () => {
+    setNeckTypes(DEFAULT_NECK_TYPES);
+    localStorage.setItem('neckTypes', JSON.stringify(DEFAULT_NECK_TYPES));
+    onNotify("รีเซ็ตประเภทคอเป็นค่าเริ่มต้น", "success");
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       {/* Delete Modal */}
@@ -3050,9 +3340,9 @@ const SettingsPage = ({ onNotify }) => {
                   <div className="bg-white p-4 rounded-3xl shadow-sm border border-gray-100">
                       <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
                           <Calculator size={18} className="mr-2 text-gray-400"/>
-                          ตั้งค่า VAT และค่าส่ง
+                          ตั้งค่า VAT
                       </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                           <div>
                               <label className="block text-xs font-bold text-slate-700 mb-1">อัตรา VAT (%)</label>
                               <div className="relative">
@@ -3066,26 +3356,288 @@ const SettingsPage = ({ onNotify }) => {
                                   <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">%</span>
                               </div>
                           </div>
-
-                          <div>
-                              <label className="block text-xs font-bold text-slate-700 mb-1">ค่าส่งเริ่มต้น (บาท)</label>
-                              <div className="relative">
-                                  <input 
-                                      type="number" 
-                                      className="w-full border border-gray-200 p-1.5 rounded-xl pl-8 text-sm" 
-                                      placeholder="0" 
-                                      value={globalConfig.default_shipping_cost}
-                                      onChange={e => setGlobalConfig({...globalConfig, default_shipping_cost: parseFloat(e.target.value)})}
-                                  />
-                                  <DollarSign className="absolute left-2.5 top-1.5 text-slate-400" size={16} />
-                              </div>
-                          </div>
                       </div>
                       <button 
                           onClick={handleSaveConfig}
                           className="bg-[#1a1c23] text-white font-bold py-2 px-6 text-sm rounded-xl hover:bg-slate-800 transition mt-3 shadow-lg mx-auto block"
                       >
                           บันทึกการตั้งค่า
+                      </button>
+                  </div>
+
+                  {/* Shipping Cost Table Section */}
+                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-emerald-200">
+                      <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
+                          <Truck size={18} className="mr-2 text-emerald-500"/>
+                          📦 ตารางค่าขนส่งอัตโนมัติ
+                      </h3>
+                      
+                      {/* Shipping Table */}
+                      <div className="max-h-48 overflow-y-auto mb-3">
+                          <table className="w-full text-xs">
+                              <thead className="bg-emerald-50 sticky top-0">
+                                  <tr>
+                                      <th className="p-2 text-left">จำนวน (ตัว)</th>
+                                      <th className="p-2 text-right">ค่าขนส่ง (บาท)</th>
+                                      <th className="p-2 text-center w-16">จัดการ</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {shippingTable.map((row, index) => (
+                                      <tr key={index} className="hover:bg-gray-50">
+                                          <td className="p-2">
+                                              <span className="bg-emerald-100 px-2 py-0.5 rounded text-emerald-700 font-mono">
+                                                  {row.minQty} - {row.maxQty}
+                                              </span>
+                                          </td>
+                                          <td className="p-2 text-right font-bold">{row.cost} ฿</td>
+                                          <td className="p-2 text-center">
+                                              <button 
+                                                  onClick={() => handleDeleteShippingRow(index)}
+                                                  className="text-gray-400 hover:text-rose-500 transition"
+                                              >
+                                                  <Trash2 size={14}/>
+                                              </button>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+
+                      {/* Add New Shipping Row */}
+                      <div className="bg-emerald-50 p-3 rounded-xl mb-3">
+                          <div className="grid grid-cols-3 gap-2 mb-2">
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">ขั้นต่ำ</label>
+                                  <input 
+                                      type="number" 
+                                      className="w-full border p-1.5 rounded-lg text-xs" 
+                                      placeholder="10"
+                                      value={newShippingRow.minQty || ''}
+                                      onChange={e => setNewShippingRow({...newShippingRow, minQty: parseInt(e.target.value) || 0})}
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">สูงสุด</label>
+                                  <input 
+                                      type="number" 
+                                      className="w-full border p-1.5 rounded-lg text-xs" 
+                                      placeholder="15"
+                                      value={newShippingRow.maxQty || ''}
+                                      onChange={e => setNewShippingRow({...newShippingRow, maxQty: parseInt(e.target.value) || 0})}
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">ค่าขนส่ง</label>
+                                  <input 
+                                      type="number" 
+                                      className="w-full border p-1.5 rounded-lg text-xs" 
+                                      placeholder="60"
+                                      value={newShippingRow.cost || ''}
+                                      onChange={e => setNewShippingRow({...newShippingRow, cost: parseInt(e.target.value) || 0})}
+                                  />
+                              </div>
+                          </div>
+                          <button 
+                              onClick={handleAddShippingRow}
+                              className="w-full bg-emerald-600 text-white font-bold py-1.5 text-xs rounded-lg hover:bg-emerald-700 transition"
+                          >
+                              + เพิ่มช่วงราคา
+                          </button>
+                      </div>
+
+                      {/* Extra cost for > 100 */}
+                      <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 mb-3">
+                          <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-amber-800">📦 ค่าขนส่งเพิ่มเติม (เกิน 100 ตัว)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <span className="text-xs text-amber-700">ค่าขนส่ง = 230 + (จำนวนเกิน × </span>
+                              <input 
+                                  type="number" 
+                                  className="w-16 border border-amber-300 p-1 rounded text-center text-xs font-bold"
+                                  value={extraShippingCost}
+                                  onChange={e => setExtraShippingCost(parseInt(e.target.value) || 0)}
+                              />
+                              <span className="text-xs text-amber-700">บาท)</span>
+                              <button 
+                                  onClick={handleSaveExtraShippingCost}
+                                  className="bg-amber-600 text-white text-xs px-2 py-1 rounded hover:bg-amber-700"
+                              >
+                                  บันทึก
+                              </button>
+                          </div>
+                      </div>
+
+                      {/* Reset Button */}
+                      <button 
+                          onClick={handleResetShippingTable}
+                          className="w-full bg-gray-100 text-gray-600 font-bold py-1.5 text-xs rounded-xl hover:bg-gray-200 transition"
+                      >
+                          🔄 รีเซ็ตเป็นค่าเริ่มต้น
+                      </button>
+                  </div>
+
+                  {/* Neck Types Management Section */}
+                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-indigo-200">
+                      <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
+                          <Tag size={18} className="mr-2 text-indigo-500"/>
+                          👕 ประเภทคอเสื้อ
+                      </h3>
+                      
+                      {/* Neck Types Table */}
+                      <div className="max-h-48 overflow-y-auto mb-3">
+                          <table className="w-full text-xs">
+                              <thead className="bg-indigo-50 sticky top-0">
+                                  <tr>
+                                      <th className="p-2 text-left">ชื่อประเภทคอ</th>
+                                      <th className="p-2 text-center">ราคาเพิ่ม</th>
+                                      <th className="p-2 text-center">กลุ่มราคา</th>
+                                      <th className="p-2 text-center">รองรับสโลป</th>
+                                      <th className="p-2 text-center w-16">จัดการ</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                  {neckTypes.map((neck) => (
+                                      <tr key={neck.id} className="hover:bg-gray-50">
+                                          <td className="p-2">
+                                              {editingNeckId === neck.id ? (
+                                                  <input
+                                                      type="text"
+                                                      className="w-full border p-1 rounded text-xs"
+                                                      value={neck.name}
+                                                      onChange={e => handleUpdateNeckType(neck.id, 'name', e.target.value)}
+                                                  />
+                                              ) : (
+                                                  <span className="font-medium">{neck.name}</span>
+                                              )}
+                                          </td>
+                                          <td className="p-2 text-center">
+                                              {editingNeckId === neck.id ? (
+                                                  <input
+                                                      type="number"
+                                                      className="w-16 border p-1 rounded text-xs text-center"
+                                                      value={neck.extraPrice}
+                                                      onChange={e => handleUpdateNeckType(neck.id, 'extraPrice', parseInt(e.target.value) || 0)}
+                                                  />
+                                              ) : (
+                                                  <span className={`px-2 py-0.5 rounded ${neck.extraPrice > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                                                      {neck.extraPrice > 0 ? `+${neck.extraPrice}` : '0'} ฿
+                                                  </span>
+                                              )}
+                                          </td>
+                                          <td className="p-2 text-center">
+                                              {editingNeckId === neck.id ? (
+                                                  <select
+                                                      className="border p-1 rounded text-xs"
+                                                      value={neck.priceGroup}
+                                                      onChange={e => handleUpdateNeckType(neck.id, 'priceGroup', e.target.value)}
+                                                  >
+                                                      <option value="roundVNeck">คอกลม/วี</option>
+                                                      <option value="collarOthers">คอปก/อื่นๆ</option>
+                                                  </select>
+                                              ) : (
+                                                  <span className={`px-2 py-0.5 rounded text-xs ${neck.priceGroup === 'roundVNeck' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                                      {neck.priceGroup === 'roundVNeck' ? 'คอกลม/วี' : 'คอปก/อื่นๆ'}
+                                                  </span>
+                                              )}
+                                          </td>
+                                          <td className="p-2 text-center">
+                                              {editingNeckId === neck.id ? (
+                                                  <input
+                                                      type="checkbox"
+                                                      checked={neck.supportSlope}
+                                                      onChange={e => handleUpdateNeckType(neck.id, 'supportSlope', e.target.checked)}
+                                                  />
+                                              ) : (
+                                                  <span className={`px-2 py-0.5 rounded text-xs ${neck.supportSlope ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                      {neck.supportSlope ? '✓' : '-'}
+                                                  </span>
+                                              )}
+                                          </td>
+                                          <td className="p-2 text-center">
+                                              <div className="flex gap-1 justify-center">
+                                                  <button 
+                                                      onClick={() => setEditingNeckId(editingNeckId === neck.id ? null : neck.id)}
+                                                      className={`transition ${editingNeckId === neck.id ? 'text-green-500 hover:text-green-700' : 'text-gray-400 hover:text-blue-500'}`}
+                                                  >
+                                                      {editingNeckId === neck.id ? <CheckCircle size={14}/> : <Edit size={14}/>}
+                                                  </button>
+                                                  <button 
+                                                      onClick={() => handleDeleteNeckType(neck.id)}
+                                                      className="text-gray-400 hover:text-rose-500 transition"
+                                                  >
+                                                      <Trash2 size={14}/>
+                                                  </button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))}
+                              </tbody>
+                          </table>
+                      </div>
+
+                      {/* Add New Neck Type */}
+                      <div className="bg-indigo-50 p-3 rounded-xl mb-3">
+                          <div className="grid grid-cols-4 gap-2 mb-2">
+                              <div className="col-span-2">
+                                  <label className="block text-xs font-medium mb-0.5">ชื่อประเภทคอ</label>
+                                  <input 
+                                      type="text" 
+                                      className="w-full border p-1.5 rounded-lg text-xs" 
+                                      placeholder="คอวาย"
+                                      value={newNeckType.name}
+                                      onChange={e => setNewNeckType({...newNeckType, name: e.target.value})}
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">ราคาเพิ่ม (฿)</label>
+                                  <input 
+                                      type="number" 
+                                      className="w-full border p-1.5 rounded-lg text-xs" 
+                                      placeholder="0"
+                                      value={newNeckType.extraPrice || ''}
+                                      onChange={e => setNewNeckType({...newNeckType, extraPrice: parseInt(e.target.value) || 0})}
+                                  />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-medium mb-0.5">กลุ่มราคา</label>
+                                  <select 
+                                      className="w-full border p-1.5 rounded-lg text-xs"
+                                      value={newNeckType.priceGroup}
+                                      onChange={e => setNewNeckType({...newNeckType, priceGroup: e.target.value})}
+                                  >
+                                      <option value="roundVNeck">คอกลม/วี</option>
+                                      <option value="collarOthers">คอปก/อื่นๆ</option>
+                                  </select>
+                              </div>
+                          </div>
+                          <div className="flex items-center gap-3 mb-2">
+                              <label className="flex items-center text-xs cursor-pointer">
+                                  <input 
+                                      type="checkbox" 
+                                      className="mr-2 rounded"
+                                      checked={newNeckType.supportSlope}
+                                      onChange={e => setNewNeckType({...newNeckType, supportSlope: e.target.checked})}
+                                  />
+                                  รองรับทรง Oversize/ไหล่สโลป
+                              </label>
+                          </div>
+                          <button 
+                              onClick={handleAddNeckType}
+                              className="w-full bg-indigo-600 text-white font-bold py-1.5 text-xs rounded-lg hover:bg-indigo-700 transition"
+                          >
+                              + เพิ่มประเภทคอ
+                          </button>
+                      </div>
+
+                      {/* Reset Button */}
+                      <button 
+                          onClick={handleResetNeckTypes}
+                          className="w-full bg-gray-100 text-gray-600 font-bold py-1.5 text-xs rounded-xl hover:bg-gray-200 transition"
+                      >
+                          🔄 รีเซ็ตเป็นค่าเริ่มต้น
                       </button>
                   </div>
               </div>
