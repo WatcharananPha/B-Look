@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Any
 import uuid
 from decimal import Decimal
+import json
 
 from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
@@ -42,6 +43,19 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
                 o_dict["contact_channel"] = o.customer.channel
             if not o_dict.get("address"):
                 o_dict["address"] = o.customer.address
+        
+        # Parse quantity_matrix from JSON string to dict for each item
+        if o.items:
+            items_list = []
+            for item in o.items:
+                item_dict = item.__dict__.copy()
+                if item_dict.get('quantity_matrix'):
+                    try:
+                        item_dict['quantity_matrix'] = json.loads(item_dict['quantity_matrix'])
+                    except (json.JSONDecodeError, TypeError):
+                        item_dict['quantity_matrix'] = {}
+                items_list.append(item_dict)
+            o_dict['items'] = items_list
 
         results.append(o_dict)
 
@@ -55,6 +69,11 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"Received order creation request: {order_in.model_dump()}")
+
     # ✅ Robust Logic: Support both contact_channel and channel fields
     incoming_channel = getattr(order_in, "channel", None)
     final_channel = incoming_channel if incoming_channel else order_in.contact_channel
@@ -189,13 +208,21 @@ def create_order(
     # 4. Save Order Items
     for item_data in order_items_data:
         src = item_data["data"]
+
+        # Convert quantity_matrix dict to JSON string
+        quantity_matrix_json = (
+            json.dumps(src.quantity_matrix)
+            if isinstance(src.quantity_matrix, dict)
+            else src.quantity_matrix
+        )
+
         new_item = OrderItemModel(
             order_id=new_order.id,
             product_name=src.product_name,
             fabric_type=src.fabric_type,
             neck_type=src.neck_type,
             sleeve_type=src.sleeve_type,
-            quantity_matrix=src.quantity_matrix,
+            quantity_matrix=quantity_matrix_json,
             total_qty=item_data["qty"],
             price_per_unit=src.base_price,
             total_price=item_data["total_price"],

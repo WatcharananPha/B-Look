@@ -183,10 +183,23 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+    // Handle authentication errors (401 and 403 with credential issues)
     if (response.status === 401) {
         localStorage.removeItem('access_token');
+        localStorage.removeItem('user_role');
         window.location.reload();
         return null;
+    }
+    if (response.status === 403) {
+        const errorData = await response.json().catch(() => ({}));
+        // If it's a credential validation error, treat it like 401
+        if (errorData.detail && errorData.detail.includes('Could not validate credentials')) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_role');
+            window.location.reload();
+            return null;
+        }
+        throw new Error(errorData.detail || 'Access forbidden');
     }
     if (!response.ok && response.status !== 404) {
         const errorData = await response.json().catch(() => ({}));
@@ -1589,32 +1602,85 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   // Initialize form when editing an order
   useEffect(() => {
     if (editingOrder) {
+        // Basic Info
         setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
+        setCustomerId(editingOrder.customer_id || "");
+        setPhoneNumber(editingOrder.phone || "");
+        setContactChannel(editingOrder.contact_channel || "LINE OA");
+        setAddress(editingOrder.address || "");
+        
+        // Dates & Status
         setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
-        setDeposit(editingOrder.deposit || 0);
-        setDeposit1(editingOrder.deposit_1 || 0);
-        setDeposit2(editingOrder.deposit_2 || 0);
-        setNote(editingOrder.note || "");
         setDeliveryDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
-        setCustomerId(editingOrder.customer_id || "");
+        setUrgencyStatus(editingOrder.urgency_level || "normal");
+        
+        // Financial Info
+        setDeposit(editingOrder.deposit_amount || 0);
+        setDeposit1(editingOrder.deposit_1 || 0);
+        setDeposit2(editingOrder.deposit_2 || 0);
+        setShippingCost(editingOrder.shipping_cost || 0);
+        setAddOnCost(editingOrder.add_on_cost || 0);
+        setDiscount(editingOrder.discount_amount || 0);
+        setIsVatIncluded(editingOrder.is_vat_included || false);
+        
+        // Notes
+        setNote(editingOrder.note || "");
+        
+        // Items - populate from first item if available
+        if (editingOrder.items && editingOrder.items.length > 0) {
+            const firstItem = editingOrder.items[0];
+            
+            // Set product details
+            setSelectedFabric(firstItem.fabric_type || "");
+            setSelectedNeck(firstItem.neck_type || "");
+            setSelectedSleeve(firstItem.sleeve_type || "");
+            setBasePrice(firstItem.price_per_unit || 0);
+            
+            // Parse and set quantities
+            if (firstItem.quantity_matrix) {
+                try {
+                    const matrix = typeof firstItem.quantity_matrix === 'string' 
+                        ? JSON.parse(firstItem.quantity_matrix) 
+                        : firstItem.quantity_matrix;
+                    setQuantities(matrix);
+                } catch (e) {
+                    console.error('Error parsing quantity_matrix:', e);
+                }
+            }
+        }
+        
+        // Legacy fields (if they exist in order)
         setGraphicCode(editingOrder.graphic_code || "");
         setIsOversize(editingOrder.is_oversize || false);
         setDesignFee(editingOrder.design_fee || 0);
     } else {
+        // Reset form for new order
         setBrand(BRANDS[0]);
         setCustomerName("");
+        setCustomerId("");
+        setPhoneNumber("");
+        setContactChannel("LINE OA");
+        setAddress("");
         setDeadline("");
+        setDeliveryDate("");
+        setStatus("draft");
+        setUrgencyStatus("normal");
         setDeposit(0);
         setDeposit1(0);
         setDeposit2(0);
+        setShippingCost(0);
+        setAddOnCost(0);
+        setDiscount(0);
+        setIsVatIncluded(true);
         setNote("");
         setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
-      setCustomSizes([]);
-        setDeliveryDate("");
-        setStatus("draft");
-        setCustomerId("");
+        setCustomSizes([]);
+        setSelectedFabric("");
+        setSelectedNeck("");
+        setSelectedSleeve("");
+        setBasePrice(150);
         setGraphicCode("");
         setIsOversize(false);
         setDesignFee(0);
@@ -1758,6 +1824,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const calculatedDeposit1 = Math.ceil(grandTotal / 2);
   const calculatedDeposit2 = grandTotal - calculatedDeposit1 - designFee;
   
+  // Auto-set deposit1 to 50% when grandTotal changes (only for new orders)
+  useEffect(() => {
+    if (!editingOrder) {
+      setDeposit1(calculatedDeposit1);
+    }
+  }, [calculatedDeposit1, editingOrder]);
+  
   const balance = grandTotal - deposit1 - deposit2;
 
   const generateOrderId = useCallback(() => {
@@ -1765,39 +1838,81 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   }, [editingOrder]);
 
   const handleSaveOrder = async () => {
+    // Validation: Check if customer name is provided
+    if (!customerName || customerName.trim() === "") {
+        onNotify("กรุณากรอกชื่อลูกค้า", "error");
+        return;
+    }
+
+    // Validation: Check if at least one quantity is > 0
+    const hasQuantity = Object.values(quantities).some(qty => qty > 0);
+    if (!hasQuantity) {
+        onNotify("กรุณากรอกจำนวนสินค้าอย่างน้อย 1 ชิ้น", "error");
+        return;
+    }
+
     try {
+        // Build order items from current form data
+        const orderItems = [];
+        if (totalQty > 0) {
+            orderItems.push({
+                product_name: `${selectedNeck || 'เสื้อ'} ${selectedSleeve || ''}`.trim(),
+                fabric_type: selectedFabric || null,
+                neck_type: selectedNeck || null,
+                sleeve_type: selectedSleeve || null,
+                quantity_matrix: quantities,
+                total_qty: totalQty,
+                price_per_unit: Number(basePrice) || 0,
+                total_price: Number(productSubtotal) || 0,
+                cost_per_unit: 0,
+                total_cost: 0
+            });
+        }
+
         const orderData = {
-            order_no: generateOrderId(),
-            customer_name: customerName,
-            customer_id: customerId,
-            graphic_code: graphicCode,
-            phone: phoneNumber,
+            customer_name: customerName.trim(),
+            customer_id: customerId && customerId !== "" ? Number(customerId) : null,
+            phone: phoneNumber && phoneNumber.trim() !== "" ? phoneNumber.trim() : null,
             brand: brand,
             contact_channel: contactChannel,
-            address: address,
-            total_amount: grandTotal,
-            deposit: deposit1 + deposit2,
-            deposit_1: deposit1,
-            deposit_2: deposit2,
-            design_fee: designFee,
-            is_oversize: isOversize,
-            shipping_cost: shippingCost,
-            status: status,
-            deadline: deadline ? new Date(deadline).toISOString() : null,
-            usage_date: deliveryDate ? new Date(deliveryDate).toISOString() : null,
-            note: note,
-            items: []
+            address: address && address.trim() !== "" ? address.trim() : null,
+            shipping_cost: Number(shippingCost) || 0,
+            add_on_cost: Number(addOnCost) || 0,
+            discount_type: "THB",
+            discount_value: Number(discount) || 0,
+            discount_amount: Number(discount) || 0,
+            deposit_1: Number(deposit1) || 0,
+            deposit_2: Number(deposit2) || 0,
+            deposit_amount: Number(deposit1 + deposit2) || 0,
+            is_vat_included: Boolean(isVatIncluded),
+            status: status || "draft",
+            urgency_level: urgencyStatus || "normal",
+            deadline: deadline && deadline.trim() !== "" ? new Date(deadline).toISOString() : null,
+            usage_date: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
+            note: note && note.trim() !== "" ? note.trim() : null,
+            items: orderItems
         };
+
+        console.log("Sending order data:", JSON.stringify(orderData, null, 2));
 
         const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders/';
         const method = editingOrder ? 'PUT' : 'POST';
         
-        await fetchWithAuth(url, {
+        const response = await fetchWithAuth(url, {
             method: method,
             body: JSON.stringify(orderData)
         });
+        
+        console.log("Order saved successfully:", response);
+        onNotify(editingOrder ? "แก้ไขออเดอร์สำเร็จ" : "สร้างออเดอร์สำเร็จ", "success");
         setShowSuccess(true);
+        
+        // Navigate back to order list after 1.5 seconds
+        setTimeout(() => {
+            onNavigate('order_list');
+        }, 1500);
     } catch (e) {
+        console.error("Order save error:", e);
         onNotify("บันทึกไม่สำเร็จ: " + e.message, "error");
     }
   };
@@ -2490,7 +2605,7 @@ const ProductPage = () => {
                     <thead>
                         <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             <th className="py-4 px-6">ชื่อรายการ</th>
-                            <th className="py-4 px-6 text-right">ราคาต้นทุน</th>
+                            <th className="py-4 px-6 text-right">ราคา Add-on</th>
                             <th className="py-4 px-6 text-right">จัดการ</th>
                         </tr>
                     </thead>
@@ -2968,10 +3083,83 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+      {/* Invoice Modal for Order Detail */}
       {detailOrder && (
-          <OrderDetailModal order={detailOrder} onClose={() => setDetailOrder(null)} />
+        <InvoiceModal 
+          data={{
+            order_no: detailOrder.order_no,
+            customerName: detailOrder.customer_name,
+            customer_name: detailOrder.customer_name,
+            phoneNumber: detailOrder.phone,
+            phone: detailOrder.phone,
+            contactChannel: detailOrder.contact_channel,
+            address: detailOrder.address,
+            brand: detailOrder.brand,
+            deadline: detailOrder.deadline,
+            deliveryDate: detailOrder.usage_date,
+            // Calculate total quantity from items
+            totalQty: (() => {
+              if (!detailOrder.items || detailOrder.items.length === 0) return 0;
+              return detailOrder.items.reduce((sum, item) => {
+                if (item.quantity_matrix) {
+                  try {
+                    const matrix = typeof item.quantity_matrix === 'string' 
+                      ? JSON.parse(item.quantity_matrix) 
+                      : item.quantity_matrix;
+                    return sum + Object.values(matrix).reduce((a, b) => a + (parseInt(b) || 0), 0);
+                  } catch (e) {
+                    return sum + (item.total_qty || 0);
+                  }
+                }
+                return sum + (item.total_qty || 0);
+              }, 0);
+            })(),
+            // Build quantities object from items
+            quantities: (() => {
+              if (!detailOrder.items || detailOrder.items.length === 0) return {};
+              const result = {};
+              detailOrder.items.forEach(item => {
+                if (item.quantity_matrix) {
+                  try {
+                    const matrix = typeof item.quantity_matrix === 'string' 
+                      ? JSON.parse(item.quantity_matrix) 
+                      : item.quantity_matrix;
+                    Object.keys(matrix).forEach(size => {
+                      result[size] = (result[size] || 0) + (parseInt(matrix[size]) || 0);
+                    });
+                  } catch (e) {
+                    console.error('Error parsing quantity_matrix:', e);
+                  }
+                }
+              });
+              return result;
+            })(),
+            neck: detailOrder.items?.[0]?.neck_type || '-',
+            sleeve: detailOrder.items?.[0]?.sleeve_type || '-',
+            fabric: detailOrder.items?.[0]?.fabric_type || '-',
+            basePrice: detailOrder.items?.[0]?.price_per_unit || 0,
+            productSubtotal: (() => {
+              if (!detailOrder.items || detailOrder.items.length === 0) {
+                // Fallback: use grand_total - other costs
+                return (detailOrder.grand_total || 0) - (detailOrder.vat_amount || 0) - (detailOrder.shipping_cost || 0) - (detailOrder.add_on_cost || 0);
+              }
+              return detailOrder.items.reduce((sum, item) => sum + (parseFloat(item.total_price) || 0), 0);
+            })(),
+            addOnCost: detailOrder.add_on_cost || 0,
+            shippingCost: detailOrder.shipping_cost || 0,
+            discount: detailOrder.discount_amount || 0,
+            vatAmount: detailOrder.vat_amount || 0,
+            grandTotal: detailOrder.grand_total || 0,
+            deposit1: detailOrder.deposit_1 || 0,
+            deposit2: detailOrder.deposit_2 || 0,
+            balance: (detailOrder.grand_total || 0) - (detailOrder.deposit_1 || 0) - (detailOrder.deposit_2 || 0),
+            note: detailOrder.note,
+            status: detailOrder.status
+          }}
+          onClose={() => setDetailOrder(null)}
+        />
       )}
-      
+
       {deleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
               <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
@@ -3034,7 +3222,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {paginatedOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={() => setDetailOrder(order)}>
+                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
                                 <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate">{order.order_no}</td>
                                 <td className="py-4 px-6 text-gray-700 truncate">
                                     <div className="font-medium truncate">{order.customer_name}</div>

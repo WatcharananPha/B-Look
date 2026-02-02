@@ -57,17 +57,18 @@ class OrderBase(BaseModel):
     discount_value: Decimal = 0
     discount_amount: Decimal = 0
 
-    deposit_amount: Decimal = Field(0, alias="deposit")
+    deposit_amount: Decimal = 0
     deposit_1: Decimal = 0
     deposit_2: Decimal = 0
 
     note: Optional[str] = None
 
-    # ✅ FIX 2: Validator รวมร่าง (ไม่ว่าจะส่งชื่อไหนมา ให้รวมไปที่ contact_channel)
+    # Validator รวมร่าง (ไม่ว่าจะส่งชื่อไหนมา ให้รวมไปที่ contact_channel)
     @model_validator(mode="before")
-    def sync_channels(cls, values):
+    def sync_channels_and_deposits(cls, values):
         # กรณีรับเป็น dict (ตอนรับ Request)
         if isinstance(values, dict):
+            # Handle channel sync
             c_channel = values.get("contact_channel")
             channel = values.get("channel")
 
@@ -77,6 +78,32 @@ class OrderBase(BaseModel):
             # ถ้ามี contact_channel แต่ไม่มี channel -> copy ไปเผื่อ
             elif c_channel and not channel:
                 values["channel"] = c_channel
+
+            # Handle deposit sync (support both "deposit" and "deposit_amount")
+            deposit = values.get("deposit")
+            deposit_amount = values.get("deposit_amount", 0)
+            deposit_1 = values.get("deposit_1", 0)
+            deposit_2 = values.get("deposit_2", 0)
+
+            # Convert to Decimal for comparison
+            try:
+                deposit_amount_val = (
+                    Decimal(str(deposit_amount)) if deposit_amount else Decimal(0)
+                )
+                deposit_1_val = Decimal(str(deposit_1)) if deposit_1 else Decimal(0)
+                deposit_2_val = Decimal(str(deposit_2)) if deposit_2 else Decimal(0)
+
+                # If "deposit" is provided but not "deposit_amount", use it
+                if deposit is not None and deposit_amount_val == 0:
+                    values["deposit_amount"] = deposit
+                # If deposit_amount is 0 but we have deposit_1 or deposit_2, calculate it
+                elif deposit_amount_val == 0 and (
+                    deposit_1_val > 0 or deposit_2_val > 0
+                ):
+                    values["deposit_amount"] = deposit_1_val + deposit_2_val
+            except (ValueError, TypeError) as e:
+                # If conversion fails, just use the values as-is
+                pass
 
         return values
 
