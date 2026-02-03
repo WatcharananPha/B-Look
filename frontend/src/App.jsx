@@ -929,9 +929,7 @@ const UserManagementPage = ({ onNotify }) => {
     );
 };
 
-// -----------------------------------------------------------------------------
 // HELPER COMPONENT: DETAIL LIST MODAL
-// -----------------------------------------------------------------------------
 const DetailListModal = ({ title, items, onClose, onEdit }) => (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-4 fade-in">
         <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[90vh] animate-in zoom-in-95 duration-200">
