@@ -870,22 +870,22 @@ const UserManagementPage = ({ onNotify }) => {
             <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[400px] sm:min-h-[500px]">
                 <div className="p-2 sm:p-4 md:p-6 overflow-x-auto flex-1">
                     {loading ? <p className="text-center py-10 text-gray-400">Loading...</p> : (
-                        <table className="w-full text-left min-w-full sm:min-w-[800px]">
-                            <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                        <table className="w-full text-left min-w-full sm:min-w-[800px] border-collapse">
+                            <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200">
                                 <tr>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6">ชื่อผู้ใช้ / Email</th>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 hidden sm:table-cell">ชื่อ-นามสกุล</th>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center hidden sm:table-cell">สถานะปัจจุบัน</th>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-right">เปลี่ยนสิทธิ์</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%] border-r border-gray-200">ชื่อผู้ใช้ / Email</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%] border-r border-gray-200 hidden sm:table-cell">ชื่อ-นามสกุล</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%] border-r border-gray-200 hidden sm:table-cell">สถานะปัจจุบัน</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%]">เปลี่ยนสิทธิ์</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody className="divide-y divide-gray-200">
                                 {paginatedUsers.map(u => (
-                                    <tr key={u.id} className="hover:bg-gray-50 transition">
-                                        <td className="py-2 sm:py-4 px-2 sm:px-6 font-bold text-xs sm:text-base text-gray-700">{u.username}</td>
-                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-sm text-gray-600 hidden sm:table-cell">{u.full_name || "-"}</td>
-                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center hidden sm:table-cell">{getRoleBadge(u.role)}</td>
-                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-right">
+                                    <tr key={u.id} className="hover:bg-gray-50 transition border-b border-gray-200">
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 font-bold text-xs sm:text-base text-gray-700 text-center border-r border-gray-200">{u.username}</td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-sm text-gray-600 text-center border-r border-gray-200 hidden sm:table-cell">{u.full_name || "-"}</td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center border-r border-gray-200 hidden sm:table-cell">{getRoleBadge(u.role)}</td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center">
                                             <select 
                                                 className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${u.role === 'pending' ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200'}`}
                                                 value={u.role}
@@ -2251,7 +2251,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                             <>
                                 <div className="flex justify-between items-center bg-blue-50 px-2 py-1.5 rounded-lg border border-blue-200">
                                     <div className="flex flex-col">
-                                        <span className="font-semibold text-blue-700">💰 ราคาขาย/ตัว (อัตโนมัติ)</span>
+                                        <span className="font-semibold text-blue-700">ราคาขาย/ตัว (อัตโนมัติ)</span>
                                         <span className="text-[10px] text-blue-500">
                                             {selectedNeck.includes('ปก') ? 'เรท: คอปก/คออื่นๆ' : (ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type)) ? 'เรท: คอกลม/คอวี' : 'เรท: คอปก/คออื่นๆ')}
                                             {neckExtraPrice > 0 && ` (+${neckExtraPrice} บาท/ตัว)`}
@@ -2262,7 +2262,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                 
                                 {/* Pricing Reference Table */}
                                 <div className="text-[10px] text-gray-500 bg-gray-50 px-2 py-1.5 rounded -mt-1 border border-gray-100">
-                                    <div className="font-bold mb-1">📊 ตารางเรทราคา: {neckExtraPrice > 0 && <span className="text-orange-500">(+{neckExtraPrice} บาท/ตัว สำหรับคอนี้)</span>}</div>
+                                    <div className="font-bold mb-1">ตารางเรทราคา: {neckExtraPrice > 0 && <span className="text-orange-500">(+{neckExtraPrice} บาท/ตัว สำหรับคอนี้)</span>}</div>
                                     <div className="grid grid-cols-3 gap-1">
                                         <span className="font-semibold">จำนวน</span>
                                         <span className="text-center">คอกลม/วี</span>
@@ -2318,7 +2318,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                 
                                 <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
                                 <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                                  <span className="font-semibold">📦 ค่าขนส่ง (อัตโนมัติ)</span>
+                                  <span className="font-semibold">ค่าขนส่ง (อัตโนมัติ)</span>
                                   <span className="font-bold">{shippingCost.toLocaleString()} ฿</span>
                                 </div>
                                 {totalQty > 100 && (
@@ -2339,7 +2339,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                 
                                 {/* 50/50 Deposit Section with Design Fee */}
                                 <div className="bg-emerald-50 p-2.5 md:p-3 rounded-xl space-y-2 md:space-y-3 mt-2 border border-emerald-200">
-                                    <div className="text-xs font-bold text-emerald-800 mb-2">💰 การชำระเงิน (50/50)</div>
+                                    <div className="text-xs font-bold text-emerald-800 mb-2">การชำระเงิน (50/50)</div>
                                     
                                     <div className="flex justify-between items-center text-xs">
                                         <span>มัดจำ 1 (50%)</span>
@@ -2601,23 +2601,23 @@ const ProductPage = () => {
         </div>
         <div className="p-1 sm:p-2 md:p-6 flex-1 overflow-x-auto">
             {loading ? <p className="p-10 text-center text-gray-400">Loading...</p> : (
-                <table className="w-full text-left">
+                <table className="w-full text-left border-collapse">
                     <thead>
-                        <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6">ชื่อรายการ</th>
-                            <th className="py-4 px-6 text-right">ราคา Add-on</th>
-                            <th className="py-4 px-6 text-right">จัดการ</th>
+                        <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="py-4 px-6 w-[50%] text-center border-r border-gray-200">ชื่อรายการ</th>
+                            <th className="py-4 px-6 w-[30%] text-center border-r border-gray-200">ราคา Add-on</th>
+                            <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-200">
                         {paginatedItems.map((item) => (
-                            <tr key={item.id} className="hover:bg-gray-50 transition group">
-                                <td className="py-4 px-6 font-bold text-gray-700">{item.name}</td>
-                                <td className="py-4 px-6 text-right text-gray-600 font-medium">
+                            <tr key={item.id} className="hover:bg-gray-50 transition group border-b border-gray-200">
+                                <td className="py-4 px-6 font-bold text-gray-700 text-center border-r border-gray-200">{item.name}</td>
+                                <td className="py-4 px-6 text-center text-gray-600 font-medium border-r border-gray-200">
                                     {item.cost_price ? `฿${parseFloat(item.cost_price).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
                                 </td>
-                                <td className="py-4 px-6 text-right">
-                                    <div className="flex justify-end gap-3">
+                                <td className="py-4 px-6 text-center">
+                                    <div className="flex justify-center gap-3">
                                         <button 
                                             onClick={() => openEditModal(item)}
                                             className="text-gray-400 hover:text-[#1a1c23] transition"
@@ -2850,21 +2850,21 @@ const CustomerPage = () => {
             ) : (
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-gray-50/50 sticky top-0 z-10">
-                        <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
                             {/* Adjusted Alignment */}
-                            <th className="py-5 px-6 text-left w-[30%]">ชื่อลูกค้า</th>
-                            <th className="py-5 px-6 text-center w-[20%]">ช่องทาง</th>
-                            <th className="py-5 px-6 text-center w-[25%]">เบอร์โทร</th>
-                            <th className="py-5 px-6 text-right w-[25%]">จัดการ</th>
+                            <th className="py-5 px-6 text-center w-[30%] border-r border-gray-200">ชื่อลูกค้า</th>
+                            <th className="py-5 px-6 text-center w-[20%] border-r border-gray-200">ช่องทาง</th>
+                            <th className="py-5 px-6 text-center w-[25%] border-r border-gray-200">เบอร์โทร</th>
+                            <th className="py-5 px-6 text-center w-[25%]">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-200">
                         {paginatedCustomers.map((cust) => (
-                            <tr key={cust.id} className="hover:bg-blue-50/30 transition duration-150 group">
-                                <td className="py-4 px-6 font-bold text-gray-700 group-hover:text-[#1a1c23]">
+                            <tr key={cust.id} className="hover:bg-blue-50/30 transition duration-150 group border-b border-gray-200">
+                                <td className="py-4 px-6 font-bold text-gray-700 group-hover:text-[#1a1c23] text-center border-r border-gray-200">
                                     {cust.name}
                                 </td>
-                                <td className="py-4 px-6 text-center">
+                                <td className="py-4 px-6 text-center border-r border-gray-200">
                                     <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold border ${
                                         (cust.channel || cust.contact_channel) === 'LINE OA' ? 'bg-green-50 text-green-700 border-green-200' :
                                         (cust.channel || cust.contact_channel) === 'Facebook' ? 'bg-blue-50 text-blue-700 border-blue-200' :
@@ -2873,11 +2873,11 @@ const CustomerPage = () => {
                                         {cust.channel || cust.contact_channel || '-'}
                                     </span>
                                 </td>
-                                <td className="py-4 px-6 text-center text-sm text-gray-600 font-mono tracking-wide">
+                                <td className="py-4 px-6 text-center text-sm text-gray-600 font-mono tracking-wide border-r border-gray-200">
                                     {cust.phone || '-'}
                                 </td>
-                                <td className="py-4 px-6 text-right">
-                                    <div className="flex justify-end gap-2">
+                                <td className="py-4 px-6 text-center">
+                                    <div className="flex justify-center gap-2">
                                         <button 
                                             onClick={() => openEditModal(cust)} 
                                             className="p-2 text-gray-400 hover:text-[#1a1c23] hover:bg-gray-100 rounded-lg transition" 
@@ -3177,13 +3177,24 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
       )}
 
       <header className="mb-4 sm:mb-6 md:mb-8">
-        <div className="flex flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
             <div>
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
                 <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-row gap-2 w-full sm:w-auto">
+                {/* Search bar */}
+                <div className="relative flex-1 sm:min-w-[200px]">
+                    <Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} />
+                    <input 
+                        type="text" 
+                        placeholder="ค้นหา..." 
+                        className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
                 <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
                     <Download size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> Export
                 </button>
@@ -3192,47 +3203,35 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                 </button>
             </div>
         </div>
-
-        {/* Search bar below header */}
-        <div className="relative mt-3 sm:mt-4">
-            <Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} />
-            <input 
-                type="text" 
-                placeholder="ค้นหา..." 
-                className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
-        </div>
       </header>
         
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
         <div className="p-0 sm:p-1 md:p-2 overflow-x-auto flex-1">
             {loading ? <p className="text-center text-slate-500 py-6 sm:py-10 text-sm">Loading...</p> : (
-                <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed">
+                <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed border-collapse">
                     <thead>
-                        <tr className="border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 w-1/6">เลขที่</th>
-                            <th className="py-4 px-6 w-1/6">ลูกค้า</th>
-                            <th className="py-4 px-6 w-1/6">กำหนดส่ง</th>
-                            <th className="py-4 px-6 w-1/6 text-right">ยอดรวม</th>
-                            <th className="py-4 px-6 w-1/6 text-center">สถานะ</th>
-                            <th className="py-4 px-6 w-1/6 text-right">จัดการ</th>
+                        <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">เลขที่</th>
+                            <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
+                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
+                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
+                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">สถานะ</th>
+                            <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50">
+                    <tbody className="divide-y divide-gray-200">
                         {paginatedOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
-                                <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate">{order.order_no}</td>
-                                <td className="py-4 px-6 text-gray-700 truncate">
+                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer border-b border-gray-200" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
+                                <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
+                                <td className="py-4 px-6 text-gray-700 truncate text-center border-r border-gray-200">
                                     <div className="font-medium truncate">{order.customer_name}</div>
                                     <div className="text-xs text-gray-400">{order.contact_channel}</div>
                                 </td>
-                                <td className="py-4 px-6 text-gray-500 text-sm">
+                                <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">
                                     {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
                                 </td>
-                                <td className="py-4 px-6 text-right font-bold text-gray-700">{order.grand_total?.toLocaleString()}</td>
-                                <td className="py-4 px-6 text-center">
+                                <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
+                                <td className="py-4 px-6 text-center border-r border-gray-200">
                                     <select 
                                         value={order.status || 'draft'}
                                         onClick={(e) => e.stopPropagation()}
@@ -3247,8 +3246,8 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                         <option value="ส่งแล้ว">ส่งแล้ว</option>
                                     </select>
                                 </td>
-                                <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex justify-end gap-3">
+                                <td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex justify-center gap-3">
                                         <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}>
                                             <Edit size={16}/>
                                         </button>
@@ -3485,9 +3484,9 @@ const SettingsPage = ({ onNotify }) => {
         <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">กำหนดราคาและค่าเริ่มต้นของระบบ</p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-8 lg:h-[500px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-8">
               {/* Left Column: Form + VAT */}
-              <div className="space-y-3 sm:space-y-4 overflow-y-auto pr-0 lg:pr-2">
+              <div className="space-y-3 sm:space-y-4 pr-0 lg:pr-2">
                   {/* Form เพิ่มกฎ */}
                   <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100">
                       <h3 className="font-bold text-sm sm:text-base mb-2 sm:mb-3 text-[#1a1c23]">เพิ่มเงื่อนไขราคา</h3>
@@ -3557,7 +3556,7 @@ const SettingsPage = ({ onNotify }) => {
                   <div className="bg-white p-4 rounded-3xl shadow-sm border border-emerald-200">
                       <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
                           <Truck size={18} className="mr-2 text-emerald-500"/>
-                          📦 ตารางค่าขนส่งอัตโนมัติ
+                          ตารางค่าขนส่งอัตโนมัติ
                       </h3>
                       
                       {/* Shipping Table */}
@@ -3638,7 +3637,7 @@ const SettingsPage = ({ onNotify }) => {
                       {/* Extra cost for > 100 */}
                       <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 mb-3">
                           <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-bold text-amber-800">📦 ค่าขนส่งเพิ่มเติม (เกิน 100 ตัว)</span>
+                              <span className="text-xs font-bold text-amber-800">ค่าขนส่งเพิ่มเติม (เกิน 100 ตัว)</span>
                           </div>
                           <div className="flex items-center gap-2">
                               <span className="text-xs text-amber-700">ค่าขนส่ง = 230 + (จำนวนเกิน × </span>
@@ -3663,7 +3662,7 @@ const SettingsPage = ({ onNotify }) => {
                           onClick={handleResetShippingTable}
                           className="w-full bg-gray-100 text-gray-600 font-bold py-1.5 text-xs rounded-xl hover:bg-gray-200 transition"
                       >
-                          🔄 รีเซ็ตเป็นค่าเริ่มต้น
+                          รีเซ็ตเป็นค่าเริ่มต้น
                       </button>
                   </div>
 
@@ -3671,7 +3670,7 @@ const SettingsPage = ({ onNotify }) => {
                   <div className="bg-white p-4 rounded-3xl shadow-sm border border-indigo-200">
                       <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
                           <Tag size={18} className="mr-2 text-indigo-500"/>
-                          👕 ประเภทคอเสื้อ
+                          ประเภทคอเสื้อ
                       </h3>
                       
                       {/* Neck Types Table */}
@@ -3825,7 +3824,7 @@ const SettingsPage = ({ onNotify }) => {
                           onClick={handleResetNeckTypes}
                           className="w-full bg-gray-100 text-gray-600 font-bold py-1.5 text-xs rounded-xl hover:bg-gray-200 transition"
                       >
-                          🔄 รีเซ็ตเป็นค่าเริ่มต้น
+                          รีเซ็ตเป็นค่าเริ่มต้น
                       </button>
                   </div>
               </div>

@@ -43,19 +43,21 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
                 o_dict["contact_channel"] = o.customer.channel
             if not o_dict.get("address"):
                 o_dict["address"] = o.customer.address
-        
+
         # Parse quantity_matrix from JSON string to dict for each item
         if o.items:
             items_list = []
             for item in o.items:
                 item_dict = item.__dict__.copy()
-                if item_dict.get('quantity_matrix'):
+                if item_dict.get("quantity_matrix"):
                     try:
-                        item_dict['quantity_matrix'] = json.loads(item_dict['quantity_matrix'])
+                        item_dict["quantity_matrix"] = json.loads(
+                            item_dict["quantity_matrix"]
+                        )
                     except (json.JSONDecodeError, TypeError):
-                        item_dict['quantity_matrix'] = {}
+                        item_dict["quantity_matrix"] = {}
                 items_list.append(item_dict)
-            o_dict['items'] = items_list
+            o_dict["items"] = items_list
 
         results.append(o_dict)
 
