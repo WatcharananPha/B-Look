@@ -43,7 +43,8 @@ class OrderItem(OrderItemBase):
 class OrderBase(BaseModel):
     order_no: Optional[str] = None
     customer_id: Optional[int] = None
-    customer_name: Optional[str] = "Unknown"
+    customer_name: Optional[str] = None
+    advance_hold: Decimal = 0
     brand: Optional[str] = "BG"
     phone: Optional[str] = None
     customer_code: Optional[str] = None
@@ -123,7 +124,8 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(OrderBase):
-    customer_name: str
+    # customer_name is optional now; backend will default to 'Unknown' if missing
+    customer_name: Optional[str] = None
     items: List[OrderItemCreate] = []
 
 

@@ -2136,6 +2136,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             deadline: deadline && deadline.trim() !== "" ? new Date(deadline).toISOString() : null,
             usage_date: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             note: note && note.trim() !== "" ? note.trim() : null,
+            advance_hold: Number(advanceHold) || 0,
             items: finalItems
         };
 

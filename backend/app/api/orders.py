@@ -312,6 +312,11 @@ def create_order(
     shipping = Decimal(str(order_in.shipping_cost))
     addon_manual = Decimal(str(order_in.add_on_cost))
     design_fee = Decimal(str(order_in.design_fee))
+    # Prior advance/hold paid by customer (e.g., 500 or 1000) — optional
+    try:
+        advance_hold = Decimal(str(getattr(order_in, "advance_hold", 0) or 0))
+    except Exception:
+        advance_hold = Decimal(0)
 
     computed_addon_total = sum(
         (it.get("item_addon_total") or Decimal(0)) for it in order_items_data
@@ -374,14 +379,14 @@ def create_order(
         # deposit_1 = ceil(grand_total / 2)
         half = grand_total / Decimal(2)
         dep1 = half.quantize(Decimal("1"), rounding=ROUND_UP)
-        # deposit_2 = remaining (grand_total - dep1 - design_fee)
-        dep2 = grand_total - dep1 - design_fee
+        # deposit_2 = remaining (grand_total - dep1 - design_fee - advance_hold)
+        dep2 = grand_total - dep1 - design_fee - advance_hold
         if dep2 < 0:
             dep2 = Decimal(0)
     else:
         # If one side missing, fill deposit_2 as remainder minus design_fee
         if not raw_dep2 or Decimal(str(raw_dep2)) == 0:
-            dep2 = grand_total - dep1 - design_fee
+            dep2 = grand_total - dep1 - design_fee - advance_hold
             if dep2 < 0:
                 dep2 = Decimal(0)
 
