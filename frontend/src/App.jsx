@@ -568,10 +568,10 @@ const InvoiceModal = ({ data, onClose }) => {
                         <span className="text-gray-500 text-xs">ลูกค้า:</span>
                         <p className="font-bold">{data.customerName || data.customer_name || "-"}</p>
                     </div>
-                    {data.customerCode && (
+                    {data.graphicCode && (
                         <div>
-                            <span className="text-gray-500 text-xs">รหัสลูกค้า:</span>
-                            <p className="font-bold">{data.customerCode}</p>
+                            <span className="text-gray-500 text-xs">Admin:</span>
+                            <p className="font-bold">{data.graphicCode}</p>
                         </div>
                     )}
                 </div>
@@ -626,11 +626,7 @@ const InvoiceModal = ({ data, onClose }) => {
                         </div>
                     </div>
                 </div>
-                {data.graphicCode && (
-                    <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-200">
-                        <span className="text-xs text-amber-700">Admin <strong>{data.graphicCode}</strong></span>
-                    </div>
-                )}
+                {/* graphic code removed from UI */}
             </div>
             
             {/* Right: Size Breakdown & Totals */}
@@ -1556,7 +1552,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [deadline, setDeadline] = useState("");
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
   const [customerName, setCustomerName] = useState("");
-    const [customerCode, setCustomerCode] = useState("");
   const [contactChannel, setContactChannel] = useState("LINE OA");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
@@ -1582,12 +1577,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [deliveryDate, setDeliveryDate] = useState(""); 
   const [status, setStatus] = useState("draft");
   
-  // NEW: Customer info fields
-  const [customerId, setCustomerId] = useState("");
-  const [graphicCode, setGraphicCode] = useState("");
+    // NEW: Customer info fields
+    const [customerId, setCustomerId] = useState("");
+    const [graphicCode, setGraphicCode] = useState("");
   
   // NEW: Oversize/Shape state
   const [isOversize, setIsOversize] = useState(false);
+
+    // NEW: Advance hold (e.g. 500 or 1000) that was paid earlier and should be
+    // deducted from deposit_2. This implements the customer's request.
+    const [advanceHold, setAdvanceHold] = useState(0);
   
   // NEW: Add-on options state (object with boolean values)
   const [addOnOptions, setAddOnOptions] = useState(
@@ -1702,7 +1701,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         // Basic Info
         setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
-        setCustomerCode(editingOrder.customer_code || "");
         setCustomerId(editingOrder.order_no || "");
         setPhoneNumber(editingOrder.phone || "");
         setContactChannel(editingOrder.contact_channel || "LINE OA");
@@ -1771,11 +1769,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         // Reset form for new order
         setBrand(BRANDS[0]);
         setCustomerName("");
-        setCustomerCode("");
         setCustomerId("");
         setPhoneNumber("");
         setContactChannel("LINE OA");
         setAddress("");
+        setGraphicCode("");
         setDeadline("");
         setDeliveryDate("");
         setStatus("draft");
@@ -1794,7 +1792,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setSelectedNeck("");
         setSelectedSleeve("");
         setBasePrice(150);
-        setGraphicCode("");
+        // graphic code intentionally ignored in UI
         setIsOversize(false);
         setDesignFee(0);
         setAddOnOptions(ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {}));
@@ -2025,7 +2023,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   
   // NEW: 50/50 deposit calculation
   const calculatedDeposit1 = Math.ceil(grandTotal / 2);
-  const calculatedDeposit2 = grandTotal - calculatedDeposit1 - designFee;
+    // Include any previously paid advance hold (e.g. 500/1000) deducted from deposit 2
+    const calculatedDeposit2 = grandTotal - calculatedDeposit1 - designFee - advanceHold;
   
   // Auto-set deposit1 to 50% when grandTotal changes (only for new orders)
   useEffect(() => {
@@ -2117,14 +2116,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
         const orderData = {
             order_no: customerId.trim(),
-            customer_code: customerCode && customerCode.trim() !== "" ? customerCode.trim() : null,
-            customer_name: customerName.trim(),
-            customer_id: null,
-            phone: phoneNumber && phoneNumber.trim() !== "" ? phoneNumber.trim() : null,
-            brand: brand,
-            contact_channel: contactChannel,
-            address: address && address.trim() !== "" ? address.trim() : null,
             graphic_code: graphicCode && graphicCode.trim() !== "" ? graphicCode.trim() : null,
+            brand: brand,
             design_fee: Number(designFee) || 0,
             product_type: productType,
             shipping_cost: Number(shippingCost) || 0,
@@ -2210,18 +2203,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   return (
     <div className="p-3 sm:p-6 md:p-10 fade-in overflow-y-auto bg-[#f0f2f5] h-full">
         {showPreview && <InvoiceModal data={{
-            customerName, 
+            customerName,
             customerId,
             graphicCode,
-            phoneNumber, 
-            contactChannel, 
-            address, 
-            deadline, 
+            phoneNumber,
+            contactChannel,
+            address,
+            deadline,
             deliveryDate,
-            brand, 
-            quantities, 
-            totalQty, 
-            basePrice, 
+            brand,
+            quantities,
+            totalQty,
+            basePrice,
             productSubtotal,
             sizingSurcharge,
             oversizeSurchargeQty,
@@ -2326,10 +2319,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="ชื่อลูกค้า" value={customerName} onChange={e => setCustomerName(e.target.value)} />
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
                         
-                        {/* NEW: Customer ID and Graphic Code */}
-                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสลูกค้า" value={customerCode} onChange={e => setCustomerCode(e.target.value)} />
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสงาน" value={customerId} onChange={e => setCustomerId(e.target.value)} />
-                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสกราฟิก" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="แอดมิน" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
                         
                         <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
                         <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
@@ -2337,7 +2328,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-yellow-50 focus:bg-white transition text-sm md:text-base" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
                     
                         <div>
-                            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">วันที่จัดส่งออก</label>
+                            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">วันที่จัดส่ง</label>
                             <input type="date" className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                         </div>
 
@@ -2356,15 +2347,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     <h3 className="text-base md:text-lg font-bold mb-4 md:mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
                         <div>
-                            <label className="block text-xs md:text-sm mb-1 text-gray-500">ประเภทสินค้า</label>
-                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={productType} onChange={e => setProductType(e.target.value)}>
-                                {PRODUCT_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                            </select>
-                        </div>
-                        <div>
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">แบรนด์</label>
                             <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={brand} onChange={e => setBrand(e.target.value)}>
                                 {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs md:text-sm mb-1 text-gray-500">ประเภทสินค้า</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={productType} onChange={e => setProductType(e.target.value)}>
+                                {PRODUCT_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
                             </select>
                         </div>
                          <div>
@@ -2643,6 +2634,21 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                             <span className="text-[10px] text-gray-400">แนะนำ: {calculatedDeposit2.toLocaleString()}</span>
                                             <input type="number" className="w-16 md:w-20 border text-right border-gray-200 rounded p-1 bg-white text-xs md:text-base" value={deposit2} onChange={e=>setDeposit2(Number(e.target.value))}/>
                                         </div>
+                                    </div>
+                                    
+                                    {/* Quick-select advance hold (500/1000) to subtract from deposit 2 */}
+                                    <div className="flex items-center gap-2 text-xs mt-1">
+                                        <span className="text-gray-600">มัดจำจองเดิม:</span>
+                                        <div className="flex items-center gap-2">
+                                            {[0,500,1000].map(v => (
+                                                <button
+                                                    key={v}
+                                                    onClick={() => setAdvanceHold(v)}
+                                                    className={`px-2 py-1 text-xs rounded-lg border ${advanceHold === v ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                                                >{v === 0 ? 'ไม่หัก' : v}</button>
+                                            ))}
+                                        </div>
+                                        <div className="text-[11px] text-gray-500">(จะถูกหักจากมัดจำ 2 อัตโนมัติ)</div>
                                     </div>
                                     
                                     <div className="border-t border-emerald-300 pt-2 mt-2">
