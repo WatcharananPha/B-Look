@@ -471,13 +471,17 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
             item_dict = item.__dict__.copy()
             if item_dict.get("quantity_matrix"):
                 try:
-                    item_dict["quantity_matrix"] = json.loads(item_dict["quantity_matrix"])
+                    item_dict["quantity_matrix"] = json.loads(
+                        item_dict["quantity_matrix"]
+                    )
                 except (json.JSONDecodeError, TypeError):
                     item_dict["quantity_matrix"] = {}
 
             if item_dict.get("selected_add_ons"):
                 try:
-                    item_dict["selected_add_ons"] = json.loads(item_dict["selected_add_ons"])
+                    item_dict["selected_add_ons"] = json.loads(
+                        item_dict["selected_add_ons"]
+                    )
                 except (json.JSONDecodeError, TypeError):
                     if not isinstance(item_dict.get("selected_add_ons"), list):
                         item_dict["selected_add_ons"] = []
