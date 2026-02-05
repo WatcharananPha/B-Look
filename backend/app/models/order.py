@@ -41,6 +41,8 @@ class Order(Base):
     is_vat_included = Column(Boolean, default=True)
     shipping_cost = Column(DECIMAL(10, 2), default=0)
     add_on_cost = Column(DECIMAL(10, 2), default=0)
+    sizing_surcharge = Column(DECIMAL(10, 2), default=0)
+    add_on_options_total = Column(DECIMAL(10, 2), default=0)
 
     discount_type = Column(String, default="THB")  # THB or PERCENT
     discount_value = Column(DECIMAL(10, 2), default=0)

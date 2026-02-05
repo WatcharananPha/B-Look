@@ -4,6 +4,7 @@ from typing import List, Any
 import uuid
 from decimal import Decimal
 import json
+import logging
 
 from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
@@ -14,6 +15,9 @@ from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
 
 router = APIRouter()
+
+# Module-level logger for all functions
+logger = logging.getLogger(__name__)
 
 
 # --- 1. GET ALL ORDERS ---
@@ -71,14 +75,7 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    import logging
-
-    logger = logging.getLogger(__name__)
     logger.info(f"Received order creation request: {order_in.model_dump()}")
-
-    if not order_in.order_no or not order_in.order_no.strip():
-        raise HTTPException(status_code=400, detail="order_no is required")
-    order_no = order_in.order_no.strip()
 
     # ✅ Robust Logic: Support both contact_channel and channel fields
     incoming_channel = getattr(order_in, "channel", None)
@@ -131,8 +128,23 @@ def create_order(
 
     for item in order_in.items:
         qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-        base_price = Decimal(str(item.base_price))
+        base_price_input = (
+            item.base_price
+            if item.base_price not in (None, 0, "")
+            else item.price_per_unit
+        )
+        base_price = Decimal(str(base_price_input or 0))
         cost_per_unit = Decimal(str(item.cost_per_unit))
+
+        # ⚠️ CRITICAL VALIDATION: Prevent obviously wrong prices
+        if base_price < Decimal("50") or base_price > Decimal("1000"):
+            logger.warning(
+                f"⛔ SUSPICIOUS PRICE DETECTED: {base_price} for {item.product_name}"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"ราคาต่อหน่วยผิดปกติ: {base_price} บาท (ควรอยู่ระหว่าง 50-1000 บาท)",
+            )
 
         line_price = base_price * qty
         line_cost = cost_per_unit * qty
@@ -144,6 +156,7 @@ def create_order(
             {
                 "data": item,
                 "qty": qty,
+                "base_price": base_price,
                 "total_price": line_price,
                 "total_cost": line_cost,
             }
@@ -152,6 +165,8 @@ def create_order(
     # Financials
     shipping = Decimal(str(order_in.shipping_cost))
     addon = Decimal(str(order_in.add_on_cost))
+    sizing_surcharge = Decimal(str(order_in.sizing_surcharge))
+    add_on_options_total = Decimal(str(order_in.add_on_options_total))
 
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount))
@@ -160,7 +175,14 @@ def create_order(
     dep2 = Decimal(str(order_in.deposit_2))
     total_deposit = dep1 + dep2
 
-    total_before_vat = items_total_price + addon + shipping - discount_amt
+    total_before_vat = (
+        items_total_price
+        + addon
+        + shipping
+        + sizing_surcharge
+        + add_on_options_total
+        - discount_amt
+    )
 
     vat_amount = Decimal(0)
     grand_total = Decimal(0)
@@ -178,7 +200,7 @@ def create_order(
 
     # 3. Save Order Header
     new_order = OrderModel(
-        order_no=order_no,
+        order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
         brand=order_in.brand,
         customer_id=customer.id,
         # ✅ FIX: Save customer_name snapshot
@@ -194,6 +216,8 @@ def create_order(
         is_vat_included=order_in.is_vat_included,
         shipping_cost=shipping,
         add_on_cost=addon,
+        sizing_surcharge=sizing_surcharge,
+        add_on_options_total=add_on_options_total,
         discount_type=order_in.discount_type,
         discount_value=discount_val,
         discount_amount=discount_amt,
@@ -230,7 +254,7 @@ def create_order(
             sleeve_type=src.sleeve_type,
             quantity_matrix=quantity_matrix_json,
             total_qty=item_data["qty"],
-            price_per_unit=src.base_price,
+            price_per_unit=item_data["base_price"],
             total_price=item_data["total_price"],
             cost_per_unit=src.cost_per_unit,
             total_cost=item_data["total_cost"],
@@ -339,8 +363,23 @@ def update_order(
 
     for item in order_in.items:
         qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-        base_price = Decimal(str(item.base_price))
+        base_price_input = (
+            item.base_price
+            if item.base_price not in (None, 0, "")
+            else item.price_per_unit
+        )
+        base_price = Decimal(str(base_price_input or 0))
         cost_per_unit = Decimal(str(item.cost_per_unit))
+
+        # ⚠️ CRITICAL VALIDATION: Prevent obviously wrong prices
+        if base_price < Decimal("50") or base_price > Decimal("1000"):
+            logger.warning(
+                f"⛔ SUSPICIOUS PRICE DETECTED: {base_price} for {item.product_name}"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"ราคาต่อหน่วยผิดปกติ: {base_price} บาท (ควรอยู่ระหว่าง 50-1000 บาท)",
+            )
 
         line_price = base_price * qty
         line_cost = cost_per_unit * qty
@@ -352,6 +391,7 @@ def update_order(
             {
                 "data": item,
                 "qty": qty,
+                "base_price": base_price,
                 "total_price": line_price,
                 "total_cost": line_cost,
             }
@@ -360,6 +400,8 @@ def update_order(
     # Financials
     shipping = Decimal(str(order_in.shipping_cost))
     addon = Decimal(str(order_in.add_on_cost))
+    sizing_surcharge = Decimal(str(order_in.sizing_surcharge))
+    add_on_options_total = Decimal(str(order_in.add_on_options_total))
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount))
 
@@ -367,7 +409,14 @@ def update_order(
     dep2 = Decimal(str(order_in.deposit_2))
     total_deposit = dep1 + dep2
 
-    total_before_vat = items_total_price + addon + shipping - discount_amt
+    total_before_vat = (
+        items_total_price
+        + addon
+        + shipping
+        + sizing_surcharge
+        + add_on_options_total
+        - discount_amt
+    )
 
     vat_amount = Decimal(0)
     grand_total = Decimal(0)
@@ -384,8 +433,6 @@ def update_order(
     balance = grand_total - total_deposit
 
     # Update Order Fields
-    if order_in.order_no and order_in.order_no.strip():
-        order.order_no = order_in.order_no.strip()
     order.customer_id = customer.id
     order.customer_name = clean_name
     order.contact_channel = final_channel
@@ -401,6 +448,8 @@ def update_order(
     order.is_vat_included = order_in.is_vat_included
     order.shipping_cost = shipping
     order.add_on_cost = addon
+    order.sizing_surcharge = sizing_surcharge
+    order.add_on_options_total = add_on_options_total
 
     order.discount_type = order_in.discount_type
     order.discount_value = discount_val
@@ -423,15 +472,20 @@ def update_order(
 
     for item_data in order_items_data:
         src = item_data["data"]
+        quantity_matrix_json = (
+            json.dumps(src.quantity_matrix)
+            if isinstance(src.quantity_matrix, dict)
+            else src.quantity_matrix
+        )
         new_item = OrderItemModel(
             order_id=order.id,
             product_name=src.product_name,
             fabric_type=src.fabric_type,
             neck_type=src.neck_type,
             sleeve_type=src.sleeve_type,
-            quantity_matrix=src.quantity_matrix,
+            quantity_matrix=quantity_matrix_json,
             total_qty=item_data["qty"],
-            price_per_unit=src.base_price,
+            price_per_unit=item_data["base_price"],
             total_price=item_data["total_price"],
             cost_per_unit=src.cost_per_unit,
             total_cost=item_data["total_cost"],

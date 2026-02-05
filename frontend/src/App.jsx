@@ -6,11 +6,35 @@ import {
   LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
   Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag
 } from 'lucide-react';
-import { jwtDecode } from 'jwt-decode';
 import LoginPage from './login';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const LOGO_URL = "/logo.jpg"; 
+
+// 🆕 Application version for cache busting
+const APP_VERSION = "2024.02.05.1";
+
+// 🆕 Check and clear localStorage if version mismatch (run once on load)
+(() => {
+    const storedVersion = localStorage.getItem('appVersion');
+    if (storedVersion !== APP_VERSION) {
+        console.log('🔄 Version update detected. Clearing potentially corrupted cache...');
+        console.log(`   Old: ${storedVersion} → New: ${APP_VERSION}`);
+        
+        // Remove potentially corrupted data
+        const itemsToRemove = ['neckTypes', 'fabricTypes', 'sleeveTypes'];
+        itemsToRemove.forEach(item => {
+            if (localStorage.getItem(item)) {
+                console.log(`   ✓ Removed: ${item}`);
+                localStorage.removeItem(item);
+            }
+        });
+        
+        // Update version
+        localStorage.setItem('appVersion', APP_VERSION);
+        console.log('✅ Cache cleaned. Please refresh if you see old data.');
+    }
+})();
 
 // --- CONSTANTS ---
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
@@ -106,58 +130,101 @@ const calculateShippingCost = (qty) => {
 
 // Default Neck Types with prices (from image)
 const DEFAULT_NECK_TYPES = [
-  // แถวที่ 1 - ราคาปกติ
-  { id: 1, name: 'คอกลม', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
-  { id: 2, name: 'คอวีชน', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
-  { id: 3, name: 'คอวีโชว์', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
-  { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
-  { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true },
-  // แถวที่ 2 - บางตัว +40
-  { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 8, name: 'คอหยดน้ำ', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-  // แถวที่ 3
-  { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 14, name: 'คอวาย', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-  { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 1, name: 'คอกลม', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
+    { id: 2, name: 'คอวีชน', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
+    { id: 3, name: 'คอวีไขว้', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
+    { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
+    { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true },
+    { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 8, name: 'คอหยดนํ้า', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 14, name: 'คอวาย', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
 ];
 
-// Helper: Load Neck Types from localStorage or default
+// Helper: Normalize neck name for matching
+const normalizeNeckName = (name) => (name || "").replace("นํ้า", "น้ำ").trim();
+
+// Helper: Load Neck Types from localStorage or default (merge to keep new items/prices)
 const getNeckTypes = () => {
-  try {
-    const stored = localStorage.getItem('neckTypes');
-    if (stored) return JSON.parse(stored);
-  } catch (e) { console.error(e); }
-  return DEFAULT_NECK_TYPES;
+    try {
+        const stored = localStorage.getItem('neckTypes');
+        if (stored) {
+            const storedList = JSON.parse(stored);
+            
+            // ⚠️ VALIDATION: Check if any neck has corrupted extraPrice (> 100)
+            const hasCorruptData = storedList.some(item => 
+                item?.extraPrice && item.extraPrice > 100
+            );
+            
+            if (hasCorruptData) {
+                console.error("🧹 Detected corrupt neckTypes data in localStorage. Cleaning...");
+                localStorage.removeItem('neckTypes');
+                return DEFAULT_NECK_TYPES;
+            }
+            
+            const merged = [...DEFAULT_NECK_TYPES];
+
+            storedList.forEach((item) => {
+                const storedName = normalizeNeckName(item?.name);
+                const existingIndex = merged.findIndex(
+                    (n) => normalizeNeckName(n.name) === storedName
+                );
+
+                if (existingIndex >= 0) {
+                    merged[existingIndex] = {
+                        ...merged[existingIndex],
+                        ...item,
+                        name: merged[existingIndex].name,
+                        // ⚠️ Clamp extraPrice to safe range (0-100)
+                        extraPrice: Math.min(Math.max(item.extraPrice || 0, 0), 100)
+                    };
+                } else if (item?.name) {
+                    merged.push({
+                        ...item,
+                        extraPrice: Math.min(Math.max(item.extraPrice || 0, 0), 100)
+                    });
+                }
+            });
+
+            return merged;
+        }
+    } catch (e) { 
+        console.error("Error loading neckTypes:", e);
+        localStorage.removeItem('neckTypes');
+    }
+    return DEFAULT_NECK_TYPES;
 };
 
 // Helper: Get neck extra price
 const getNeckExtraPrice = (neckName) => {
-  const neckTypes = getNeckTypes();
-  const neck = neckTypes.find(n => neckName.includes(n.name) || n.name.includes(neckName));
-  return neck?.extraPrice || 0;
+    const neckTypes = getNeckTypes();
+    const needle = normalizeNeckName(neckName);
+    const neck = neckTypes.find((n) => {
+        const hay = normalizeNeckName(n.name);
+        return needle.includes(hay) || hay.includes(needle);
+    });
+    
+    // ⚠️ SANITY CHECK: extraPrice should never exceed 100 THB
+    const extraPrice = neck?.extraPrice || 0;
+    if (extraPrice > 100) {
+        console.error("🚨 CORRUPT DATA: extraPrice =", extraPrice, "for neck:", neckName);
+        console.error("This indicates localStorage corruption. Cleaning up...");
+        localStorage.removeItem('neckTypes');
+        return 0; // Return safe default
+    }
+    
+    return extraPrice;
 };
 
-// Helper: Get neck price group
-const getNeckPriceGroup = (neckName) => {
-  const neckTypes = getNeckTypes();
-  const neck = neckTypes.find(n => neckName.includes(n.name) || n.name.includes(neckName));
-  return neck?.priceGroup || 'collarOthers';
-};
-
-// Helper: Check if neck supports slope shoulder
-const neckSupportsSlope = (neckName) => {
-  const neckTypes = getNeckTypes();
-  const neck = neckTypes.find(n => neckName.includes(n.name) || n.name.includes(neckName));
-  return neck?.supportSlope || false;
-};
 
 // Necks that support คอกลม/วี pricing (now dynamic)
-const ROUND_V_NECK_TYPES = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีชน', 'คอวีโชว์'];
+const ROUND_V_NECK_TYPES = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีชน', 'คอวีไขว้'];
 
 // Necks that support ไหล่สโลป option (now dynamic based on supportSlope field)
 const SLOPE_SHOULDER_SUPPORTED_NECKS = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'];
@@ -344,6 +411,7 @@ const InvoiceModal = ({ data, onClose }) => {
   const [image3DFront, setImage3DFront] = useState("");
   const [image3DBack, setImage3DBack] = useState("");
   const [showImageInput, setShowImageInput] = useState(false);
+    const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
   
   if (!data) {
     return (
@@ -356,33 +424,6 @@ const InvoiceModal = ({ data, onClose }) => {
     );
   }
   
-  const handlePrint = () => {
-    const invoiceElement = document.getElementById('invoice-content');
-    if (!invoiceElement) return;
-    
-    const printWindow = window.open('', '', 'height=297mm,width=210mm');
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          @page { size: A4; margin: 0; }
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: sans-serif; }
-          #print-content { width: 210mm; height: 297mm; overflow: hidden; }
-        </style>
-      </head>
-      <body>
-        <div id="print-content">${invoiceElement.innerHTML}</div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
-  };
-
   const handleDownloadPDF = async () => {
     const invoiceElement = document.getElementById('invoice-content');
     if (!invoiceElement) return;
@@ -391,7 +432,12 @@ const InvoiceModal = ({ data, onClose }) => {
       // Dynamically import html2pdf
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.onload = () => {
+            script.onload = () => {
+                const html2pdfLib = window.html2pdf;
+                if (!html2pdfLib) {
+                    alert('ไม่สามารถดาวน์โหลด PDF ได้');
+                    return;
+                }
         const element = invoiceElement.cloneNode(true);
         element.style.margin = '0';
         element.style.padding = '0';
@@ -404,7 +450,7 @@ const InvoiceModal = ({ data, onClose }) => {
           jsPDF: { format: 'a4', orientation: 'portrait', compress: true }
         };
         
-        html2pdf().set(opt).from(element).save();
+                html2pdfLib().set(opt).from(element).save();
       };
       document.head.appendChild(script);
     } catch (error) {
@@ -605,12 +651,25 @@ const InvoiceModal = ({ data, onClose }) => {
                             <tr className="border-t-2 border-gray-300"><td className="py-2 font-bold text-base">ยอดสุทธิ</td><td className="py-2 text-right font-black text-lg">{(data.grandTotal || 0).toLocaleString()} บาท</td></tr>
                         </tbody>
                     </table>
+
+                    {canViewCost && (data.totalCost != null || data.estimatedProfit != null) && (
+                        <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded">
+                            <div className="flex justify-between text-xs text-slate-600">
+                                <span>ต้นทุนรวม</span>
+                                <span className="font-semibold">{(data.totalCost || 0).toLocaleString()} บาท</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-600 mt-1">
+                                <span>กำไรประมาณการ</span>
+                                <span className="font-semibold">{(data.estimatedProfit || 0).toLocaleString()} บาท</span>
+                            </div>
+                        </div>
+                    )}
                     
                     {/* Payment Box */}
                     <div className="mt-4 p-3 bg-emerald-50 border-2 border-emerald-300 rounded-lg">
-                        <h4 className="text-xs font-bold text-emerald-800 mb-2">💰 การชำระเงิน</h4>
+                        <h4 className="text-xs font-bold text-emerald-800 mb-2">การชำระเงิน</h4>
                         <div className="space-y-1 text-sm">
-                            <div className="flex justify-between"><span>มัดจำ 1 (Confirm Order)</span><span className="font-bold">{(data.deposit1 || 0).toLocaleString()} บาท</span></div>
+                            <div className="flex justify-between"><span>มัดจำ 1</span><span className="font-bold">{(data.deposit1 || 0).toLocaleString()} บาท</span></div>
                             {(data.designFee || 0) > 0 && (
                               <>
                                 <div className="flex justify-between text-gray-600 text-xs bg-white/50 px-2 py-1 rounded">
@@ -623,8 +682,8 @@ const InvoiceModal = ({ data, onClose }) => {
                                 </div>
                               </>
                             )}
-                            <div className="flex justify-between"><span>มัดจำ 2 (Final Payment)</span><span className="font-bold">{(data.deposit2 || 0).toLocaleString()} บาท</span></div>
-                            <div className="flex justify-between pt-2 border-t border-emerald-300 text-emerald-800 font-bold"><span>ค้างชำระ</span><span className="text-base">{(data.balance || 0).toLocaleString()} บาท</span></div>
+                            <div className="flex justify-between"><span>มัดจำ 2</span><span className="font-bold">{(data.deposit2 || 0).toLocaleString()} บาท</span></div>
+                            <div className="flex justify-between pt-2 border-t border-emerald-300 text-emerald-800 font-bold"><span>ค้างชำระ</span><span className="text-base">{Math.abs(data.balance || 0).toLocaleString()} บาท</span></div>
                         </div>
                     </div>
                 </div>
@@ -656,42 +715,84 @@ const InvoiceModal = ({ data, onClose }) => {
   );
 };
 
-// Helper function to build order data for display
-const buildOrderDisplayData = (order) => {
-  if (!order) return null;
-  
-  // Calculate totals from order
-  const baseAmount = (order.total_qty || 0) * (order.base_price || 0);
-  const addOnShipping = (order.add_on_cost || 0) + (order.shipping_cost || 0);
-  const discountAmount = order.discount || 0;
-  const vatAmount = order.vat_amount || 0;
-  const grandTotal = order.grand_total || 0;
-  
-  return {
-    order_no: order.order_no,
-    customerName: order.customer_name,
-    phoneNumber: order.phone,
-    contactChannel: order.contact_channel,
-    address: order.address,
-    deadline: order.deadline,
-    brand: order.brand || "-",
-    quantities: order.quantities || {},
-    totalQty: order.total_qty || 0,
-    basePrice: order.base_price || 0,
-    addOnCost: order.add_on_cost || 0,
-    shippingCost: order.shipping_cost || 0,
-    discount: discountAmount,
-    discountAmount: discountAmount,
-    isVatIncluded: order.is_vat_included || false,
-    vatAmount: vatAmount,
-    grandTotal: grandTotal,
-    deposit: order.deposit || 0,
-    balance: order.balance || (grandTotal - (order.deposit || 0)),
-    fabric: order.fabric || "-",
-    neck: order.neck || "-",
-    sleeve: order.sleeve || "-",
-    note: order.note || ""
-  };
+// Helper function to build invoice data from order
+const buildInvoiceDataFromOrder = (order) => {
+    if (!order) return null;
+
+    return {
+        order_no: order.order_no,
+        customerName: order.customer_name,
+        customer_name: order.customer_name,
+        phoneNumber: order.phone,
+        phone: order.phone,
+        contactChannel: order.contact_channel,
+        address: order.address,
+        brand: order.brand,
+        deadline: order.deadline,
+        deliveryDate: order.usage_date,
+        // Calculate total quantity from items
+        totalQty: (() => {
+            if (!order.items || order.items.length === 0) return 0;
+            return order.items.reduce((sum, item) => {
+                if (item.quantity_matrix) {
+                    try {
+                        const matrix = typeof item.quantity_matrix === 'string'
+                            ? JSON.parse(item.quantity_matrix)
+                            : item.quantity_matrix;
+                        return sum + Object.values(matrix).reduce((a, b) => a + (parseInt(b) || 0), 0);
+                    } catch {
+                        return sum + (item.total_qty || 0);
+                    }
+                }
+                return sum + (item.total_qty || 0);
+            }, 0);
+        })(),
+        // Build quantities object from items
+        quantities: (() => {
+            if (!order.items || order.items.length === 0) return {};
+            const result = {};
+            order.items.forEach(item => {
+                if (item.quantity_matrix) {
+                    try {
+                        const matrix = typeof item.quantity_matrix === 'string'
+                            ? JSON.parse(item.quantity_matrix)
+                            : item.quantity_matrix;
+                        Object.keys(matrix).forEach(size => {
+                            result[size] = (result[size] || 0) + (parseInt(matrix[size]) || 0);
+                        });
+                    } catch (error) {
+                        console.error('Error parsing quantity_matrix:', error);
+                    }
+                }
+            });
+            return result;
+        })(),
+        neck: order.items?.[0]?.neck_type || '-',
+        sleeve: order.items?.[0]?.sleeve_type || '-',
+        fabric: order.items?.[0]?.fabric_type || '-',
+        basePrice: order.items?.[0]?.price_per_unit || 0,
+        productSubtotal: (() => {
+            if (!order.items || order.items.length === 0) {
+                // Fallback: use grand_total - other costs
+                return (order.grand_total || 0) - (order.vat_amount || 0) - (order.shipping_cost || 0) - (order.add_on_cost || 0);
+            }
+            return order.items.reduce((sum, item) => sum + (parseFloat(item.total_price) || 0), 0);
+        })(),
+        addOnCost: order.add_on_cost || 0,
+        sizingSurcharge: order.sizing_surcharge || 0,
+        addOnOptionsTotal: order.add_on_options_total || 0,
+        shippingCost: order.shipping_cost || 0,
+        discount: order.discount_amount || 0,
+        vatAmount: order.vat_amount || 0,
+        grandTotal: order.grand_total || 0,
+        totalCost: order.total_cost ?? null,
+        estimatedProfit: order.estimated_profit ?? null,
+        deposit1: order.deposit_1 || 0,
+        deposit2: order.deposit_2 || 0,
+        balance: (order.grand_total || 0) - (order.deposit_1 || 0) - (order.deposit_2 || 0),
+        note: order.note,
+        status: order.status
+    };
 };
 
 // 2.1 ORDER DETAIL MODAL (Reuses invoice structure)
@@ -706,108 +807,10 @@ const OrderDetailModal = ({ order, onClose }) => {
       </div>
     );
   }
-  
-  const data = buildOrderDisplayData(order);
-  const handlePrint = () => window.print();
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/75 backdrop-blur-sm overflow-y-auto pt-10 pb-10 print:p-0 print:bg-white print:fixed print:inset-0" onClick={onClose}>
-      <style>{`@media print { body * { visibility: hidden; } #detail-content, #detail-content * { visibility: visible; } #detail-content { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; box-shadow: none; border: none; } #detail-no-print { display: none !important; } }`}</style>
-      <div id="detail-no-print" className="fixed top-4 right-4 z-[60] flex space-x-2 print:hidden">
-          <button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium border border-blue-500">
-              <Printer size={18} className="mr-2"/> พิมพ์ / บันทึก PDF
-          </button>
-          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition border border-slate-600" title="Close">
-              <XCircle size={24} />
-          </button>
-      </div>
-      <div id="detail-content" className="bg-white w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 shadow-2xl relative text-slate-800 font-sans mx-auto rounded-sm mt-4 mb-4" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex justify-between items-start border-b-[3px] border-slate-900 pb-6 mb-8">
-            <div>
-                <h1 className="text-5xl font-black text-slate-900 mb-2">B-LOOK</h1>
-                <p className="text-slate-600 font-semibold">บริษัท บี-ลุค จำกัด</p>
-                <p className="text-sm text-slate-500">123 ถนนตัวอย่าง กทม.</p>
-            </div>
-            <div className="text-right">
-                <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
-                <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
-                <p className="text-sm"><span className="font-semibold mr-2">รหัสงาน:</span>{data.order_no || "DRAFT"}</p>
-            </div>
-        </div>
-        {/* Customer Info */}
-        <div className="border border-slate-200 rounded-lg p-5 bg-slate-50/50 mb-8">
-            <h3 className="text-sm font-bold text-slate-400 uppercase mb-2">ข้อมูลลูกค้า</h3>
-            <p className="font-bold text-slate-800 text-lg">{data.customerName || "-"}</p>
-            <p className="text-sm text-slate-500">{data.phoneNumber || "-"} | {data.contactChannel || "-"}</p>
-            <p className="text-sm text-slate-500 mt-1">{data.address || "-"}</p>
-        </div>
-        {/* Table */}
-        <table className="w-full text-sm mb-8">
-            <thead>
-                <tr className="bg-slate-900 text-white"><th className="py-3 px-4 text-left">รายการ</th><th className="py-3 px-4 text-right">จำนวน</th><th className="py-3 px-4 text-right">ราคา/หน่วย</th><th className="py-3 px-4 text-right">รวม</th></tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td className="py-4 px-4">
-                        <p className="font-bold">{data.brand || "-"}</p>
-                        <p className="text-xs text-slate-500">ผ้า: {data.fabric || "-"} | คอ: {data.neck || "-"} | แขน: {data.sleeve || "-"}</p>
-                    </td>
-                    <td className="py-4 px-4 text-right">{data.totalQty || 0}</td>
-                    <td className="py-4 px-4 text-right">{(data.basePrice || 0).toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right">{((data.totalQty || 0) * (data.basePrice || 0)).toLocaleString()}</td>
-                </tr>
-            </tbody>
-        </table>
-        {/* Totals */}
-        <div className="flex justify-end">
-            <div className="w-1/2 space-y-2 text-sm">
-                <div className="flex justify-between"><span>รวมเป็นเงิน</span><span>{((data.totalQty || 0) * (data.basePrice || 0)).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span>ค่าขนส่ง/อื่นๆ</span><span>{((data.addOnCost || 0) + (data.shippingCost || 0)).toLocaleString()}</span></div>
-                
-                {/* Display Discount */}
-                {(data.discount || data.discountAmount || 0) > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                      <span>ส่วนลด</span>
-                      <span>-{(data.discountAmount || data.discount || 0).toLocaleString()}</span>
-                  </div>
-                )}
 
-                <div className="flex justify-between text-slate-500"><span>VAT ({data.isVatIncluded ? 'รวมแล้ว' : 'แยก'} 7%)</span><span>{(data.vatAmount || 0).toLocaleString()}</span></div>
-                <div className="flex justify-between font-bold text-lg border-t pt-2 mb-4"><span>ยอดสุทธิ</span><span>{(data.grandTotal || 0).toLocaleString()}</span></div>
-                
-                {/* Deposit Details Block */}
-                <div className="border-2 border-emerald-200 bg-emerald-50 rounded-lg p-4 mt-4">
-                    <h4 className="text-sm font-bold text-emerald-900 mb-3">รายละเอียดการชำระเงิน</h4>
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                            <span className="text-slate-700">ยอดสุทธิ</span>
-                            <span className="font-bold text-slate-800">{(data.grandTotal || 0).toLocaleString()} บาท</span>
-                        </div>
-                        <div className="border-t border-emerald-200"></div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-emerald-700 font-semibold">มัดจำที่ชำระแล้ว</span>
-                            <span className="font-bold text-emerald-700">{(data.deposit || 0).toLocaleString()} บาท</span>
-                        </div>
-                        <div className="border-t-2 border-emerald-300"></div>
-                        <div className="flex justify-between items-center pt-1">
-                            <span className="text-emerald-900 font-bold text-base">คงเหลือชำระ</span>
-                            <span className="font-bold text-emerald-900 text-lg">{(data.balance || 0).toLocaleString()} บาท</span>
-                        </div>
-                    </div>
-                </div>
+    const data = buildInvoiceDataFromOrder(order);
 
-                {/* Note */}
-                {data.note && (
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-100 rounded text-xs text-yellow-800">
-                        <strong>หมายเหตุ:</strong> {data.note}
-                    </div>
-                )}
-            </div>
-        </div>
-      </div>
-    </div>
-  );
+    return <InvoiceModal data={data} onClose={onClose} />;
 };
 
 // 2.7 USER MANAGEMENT PAGE
@@ -818,7 +821,7 @@ const UserManagementPage = ({ onNotify }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         setLoading(true);
         try {
             const data = await fetchWithAuth('/admin/users'); 
@@ -828,11 +831,11 @@ const UserManagementPage = ({ onNotify }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [onNotify]);
 
     useEffect(() => {
         fetchUsers();
-    }, []);
+    }, [fetchUsers]);
 
     const handleUpdateRole = async (userId, newRole) => {
         try {
@@ -850,6 +853,7 @@ const UserManagementPage = ({ onNotify }) => {
     const getRoleBadge = (role) => {
         switch(role) {
             case 'owner': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner</span>;
+            case 'md': return <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">MD</span>;
             case 'admin': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin</span>;
             case 'user': return <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">User</span>;
             case 'pending': return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto animate-pulse"><Lock size={12} className="mr-1"/> รออนุมัติ</span>;
@@ -903,6 +907,10 @@ const UserManagementPage = ({ onNotify }) => {
                                                 <option value="pending">Pending</option>
                                                 <option value="user">General User</option>
                                                 <option value="admin">Admin</option>
+
+                                                {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
+                                                    <option value="md">MD</option>
+                                                )}
 
                                                 {/* แสดงตัวเลือก Owner เฉพาะถ้าคน Login เป็น Owner */}
                                                 {currentUserRole === 'owner' && (
@@ -994,6 +1002,17 @@ const DetailListModal = ({ title, items, onClose, onEdit }) => (
     </div>
 );
 
+// Simple metric card component (defined outside render to keep stable identity)
+const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
+    <div 
+        onClick={onClick}
+        className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
+    >
+        <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
+        <div className={`text-4xl font-black ${color}`}>{value}</div>
+    </div>
+);
+
 // -----------------------------------------------------------------------------
 // 2.1 DASHBOARD (FULL UPDATED CODE)
 // -----------------------------------------------------------------------------
@@ -1005,7 +1024,6 @@ const DashboardPage = ({ onEdit }) => {
     const [brandFilter, setBrandFilter] = useState('All Outlets'); // 'All Outlets', 'BG', 'Jersey'
 
     // Data States
-    const [allOrders, setAllOrders] = useState([]);
     const [notifications, setNotifications] = useState([]); // Smart Alerts
     
     // Metric Lists (Filtered)
@@ -1053,7 +1071,6 @@ const DashboardPage = ({ onEdit }) => {
             try {
                 const orders = await fetchWithAuth('/orders/');
                 const data = orders || [];
-                setAllOrders(data);
                 
                 // --- 1. Apply Brand Filter First ---
                 let filteredData = data;
@@ -1173,16 +1190,6 @@ const DashboardPage = ({ onEdit }) => {
     }, {});
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-
-    const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
-        <div 
-            onClick={onClick}
-            className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between h-32 transition ${isHoverable ? 'hover:shadow-md cursor-pointer hover:scale-[1.02]' : ''}`}
-        >
-            <h3 className="text-gray-500 font-bold text-sm">{title}</h3>
-            <div className={`text-4xl font-black ${color}`}>{value}</div>
-        </div>
-    );
 
     // Filter Today List for UI
     const filteredTodayList = todayFilter === 'all' ? todaysList : todaysList.filter(i => i.type === todayFilter);
@@ -1500,7 +1507,6 @@ const DashboardPage = ({ onEdit }) => {
 
 // 2.2 ORDER CREATION PAGE - FIXED VERSION
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
-  const [role, setRole] = useState("owner"); 
   const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
@@ -1515,17 +1521,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [shippingCost, setShippingCost] = useState(0);
   const [discount, setDiscount] = useState(0);
   const [isVatIncluded, setIsVatIncluded] = useState(true);
-  const [deposit, setDeposit] = useState(0);
   const [deposit1, setDeposit1] = useState(0);
   const [deposit2, setDeposit2] = useState(0);
   
   const [fabrics, setFabrics] = useState([]);
-  const [necks, setNecks] = useState([]);
   const [sleeves, setSleeves] = useState([]);
   const [selectedFabric, setSelectedFabric] = useState("");
   const [selectedNeck, setSelectedNeck] = useState("");
   const [selectedSleeve, setSelectedSleeve] = useState("");
-  const [pricingRules, setPricingRules] = useState([]);
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
   // NEW: State for deliveryDate (renamed from usageDate) and status
@@ -1545,10 +1548,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   );
   
   // NEW: Neck Extra Price (ราคาเพิ่มเติมจากประเภทคอ)
-  const [neckExtraPrice, setNeckExtraPrice] = useState(0);
+    const neckExtraPrice = useMemo(() => getNeckExtraPrice(selectedNeck), [selectedNeck]);
   
   // NEW: Available neck types from localStorage
-  const [availableNeckTypes, setAvailableNeckTypes] = useState(getNeckTypes());
+    const [availableNeckTypes] = useState(getNeckTypes());
   
   // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
   
@@ -1589,7 +1592,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [isFactoryView, setIsFactoryView] = useState(false);
   
   // NEW: Custom status options
-  const [statusOptions, setStatusOptions] = useState(DEFAULT_STATUS_OPTIONS);
+    const [statusOptions] = useState(DEFAULT_STATUS_OPTIONS);
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -1615,7 +1618,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setUrgencyStatus(editingOrder.urgency_level || "normal");
         
         // Financial Info
-        setDeposit(editingOrder.deposit_amount || 0);
         setDeposit1(editingOrder.deposit_1 || 0);
         setDeposit2(editingOrder.deposit_2 || 0);
         setShippingCost(editingOrder.shipping_cost || 0);
@@ -1634,7 +1636,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             setSelectedFabric(firstItem.fabric_type || "");
             setSelectedNeck(firstItem.neck_type || "");
             setSelectedSleeve(firstItem.sleeve_type || "");
-            setBasePrice(firstItem.price_per_unit || 0);
+            // ✅ FIX: Don't load price from DB - let useEffect recalculate based on STEP_PRICING
+            // This prevents perpetuating wrong prices from old orders
+            // setBasePrice(firstItem.price_per_unit || 0);
             
             // Parse and set quantities
             if (firstItem.quantity_matrix) {
@@ -1665,7 +1669,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setDeliveryDate("");
         setStatus("draft");
         setUrgencyStatus("normal");
-        setDeposit(0);
         setDeposit1(0);
         setDeposit2(0);
         setShippingCost(0);
@@ -1691,18 +1694,41 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       const fetchMasters = async () => {
           try {
               setIsLoading(true);
-              const [fData, nData, sData, pData, cData] = await Promise.all([
+              const [fData, nData, sData, cData] = await Promise.all([
                   fetchWithAuth('/products/fabrics').catch(() => null),
                   fetchWithAuth('/products/necks').catch(() => null),
                   fetchWithAuth('/products/sleeves').catch(() => null),
-                  fetchWithAuth('/pricing-rules/').catch(() => null),
                   fetchWithAuth('/company/config').catch(() => null)
               ]);
               
               setFabrics(fData || []);
-              setNecks(nData || []);
               setSleeves(sData || []);
-              setPricingRules(pData || []);
+              
+              // Map backend neck types to frontend format
+              // Backend has: cost_price, additional_cost, price_adjustment
+              // Frontend needs: extraPrice
+              if (nData && nData.length > 0) {
+                  const mappedNeckTypes = nData.map((neck) => ({
+                      id: neck.id,
+                      name: neck.name,
+                      // Use cost_price as extraPrice (cost_price is set for special necks with +40)
+                      extraPrice: neck.cost_price || neck.additional_cost || neck.price_adjustment || 0,
+                      // Determine priceGroup based on neck name
+                      priceGroup: neck.name.includes('ปก') ? 'collarOthers' : 'roundVNeck',
+                      supportSlope: ['คอกลม', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n))
+                  }));
+                  
+                  // Merge with localStorage custom items (if any)
+                  const neckTypesFromStorage = getNeckTypes();
+                  const customNecks = neckTypesFromStorage.filter(stored => 
+                      !mappedNeckTypes.some(mapped => normalizeNeckName(mapped.name) === normalizeNeckName(stored.name))
+                  );
+                  
+                  const finalNeckTypes = [...mappedNeckTypes, ...customNecks];
+                  
+                  // Update localStorage with backend data
+                  localStorage.setItem('neckTypes', JSON.stringify(finalNeckTypes));
+              }
                
               if (cData) {
                   setConfig({ 
@@ -1717,10 +1743,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                   if (fData?.length > 0) setSelectedFabric(fData[0].name);
                   else setSelectedFabric("");
                   
-                  // Use availableNeckTypes from localStorage for default selection
+                  // Use fetched neck types for default selection
                   const neckTypesFromStorage = getNeckTypes();
                   if (neckTypesFromStorage?.length > 0) setSelectedNeck(neckTypesFromStorage[0].name);
-                  else if (nData?.length > 0) setSelectedNeck(nData[0].name);
                   else setSelectedNeck("");
                   
                   if (sData?.length > 0) setSelectedSleeve(sData[0].name);
@@ -1766,6 +1791,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     // Get extra price from neck type and add to base price
     const extraPrice = getNeckExtraPrice(selectedNeck);
     
+    // ⚠️ DEFENSIVE: extraPrice should NEVER exceed 100
+    if (extraPrice > 100) {
+      console.error("🚨 CRITICAL: extraPrice =", extraPrice, "(should be 0-100 max!)");
+      console.error("Neck:", selectedNeck);
+      console.error("This will cause wrong pricing - using 0 instead");
+      // Don't proceed with corrupted data
+      return;
+    }
+    
     if (totalQty >= 10) {
       const matchedPrice = pricingTable.find(
         tier => totalQty >= tier.minQty && totalQty <= tier.maxQty
@@ -1773,11 +1807,28 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       
       if (matchedPrice) {
         // รวม extraPrice เข้ากับ basePrice เลย
-        setBasePrice(matchedPrice.price + extraPrice);
+        const calculatedPrice = matchedPrice.price + extraPrice;
+        
+        // ⚠️ FINAL SANITY CHECK before setState
+        if (calculatedPrice > 500) {
+          console.error("🚨 BLOCKED: Calculated price =", calculatedPrice, "exceeds 500 THB!");
+          console.error("Base:", matchedPrice.price, "+ Extra:", extraPrice);
+          console.error("Using safe default 240 THB instead");
+          setBasePrice(240);
+        } else {
+          setBasePrice(calculatedPrice);
+          console.log("✅ Price calculated:", matchedPrice.price, "+", extraPrice, "=", calculatedPrice);
+        }
       }
     } else {
       // ถ้าต่ำกว่า 10 ตัว ใช้ราคาสูงสุด (10-30 ตัว) + extraPrice
-      setBasePrice((isRoundVNeck ? 240 : 300) + extraPrice);
+      const calculatedPrice = (isRoundVNeck ? 240 : 300) + extraPrice;
+      if (calculatedPrice > 500) {
+        console.error("🚨 BLOCKED: Price for qty<10 exceeds 500:", calculatedPrice);
+        setBasePrice(isRoundVNeck ? 240 : 300);
+      } else {
+        setBasePrice(calculatedPrice);
+      }
     }
   }, [totalQty, selectedNeck]);
 
@@ -1807,16 +1858,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   // neckExtraPrice รวมเข้า basePrice แล้ว ไม่ต้องบวกแยก
   const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + addOnCost + shippingCost - discount;
     
-  let vatAmount = 0, grandTotal = 0;
-  if (isVatIncluded) {
-    // When including VAT: add VAT to the subtotal
-    vatAmount = totalBeforeCalc * config.vat_rate;
-    grandTotal = totalBeforeCalc + vatAmount;
-  } else {
-    // When not including VAT: show VAT amount but don't add to grandTotal
-    vatAmount = totalBeforeCalc * config.vat_rate;
-    grandTotal = totalBeforeCalc;
-  }
+    let vatAmount = 0, grandTotal = 0;
+    if (isVatIncluded) {
+        // VAT already included in prices
+        vatAmount = totalBeforeCalc * (config.vat_rate / (1 + config.vat_rate));
+        grandTotal = totalBeforeCalc;
+    } else {
+        // VAT not included yet
+        vatAmount = totalBeforeCalc * config.vat_rate;
+        grandTotal = totalBeforeCalc + vatAmount;
+    }
   
   // NEW: 50/50 deposit calculation
   const calculatedDeposit1 = Math.ceil(grandTotal / 2);
@@ -1855,7 +1906,24 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         return;
     }
 
+    // ⚠️ NEW VALIDATION: Check if basePrice is reasonable
+    if (basePrice < 50 || basePrice > 500) {
+        console.error("⛔ SUSPICIOUS BASE PRICE:", basePrice);  
+        onNotify(`ราคาต่อหน่วยผิดปกติ: ${basePrice} บาท (ควรอยู่ระหว่าง 50-500)`, "error");
+        return;
+    }
+
     try {
+        // !! CRITICAL DEBUG LOGGING
+        console.log("=== DEBUG: Order Pricing ===");
+        console.log("basePrice (raw):", basePrice);
+        console.log("basePrice (type):", typeof basePrice);
+        console.log("basePrice (Number):", Number(basePrice));
+        console.log("productSubtotal:", productSubtotal);
+        console.log("totalQty:", totalQty);
+        console.log("Calculation check:", totalQty, "×", basePrice, "=", totalQty * basePrice);
+        console.log("===========================");
+        
         // Build order items from current form data
         const orderItems = [];
         if (totalQty > 0) {
@@ -1866,6 +1934,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                 sleeve_type: selectedSleeve || null,
                 quantity_matrix: quantities,
                 total_qty: totalQty,
+                base_price: Number(basePrice) || 0,
                 price_per_unit: Number(basePrice) || 0,
                 total_price: Number(productSubtotal) || 0,
                 cost_per_unit: 0,
@@ -1883,6 +1952,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             address: address && address.trim() !== "" ? address.trim() : null,
             shipping_cost: Number(shippingCost) || 0,
             add_on_cost: Number(addOnCost) || 0,
+            sizing_surcharge: Number(sizingSurcharge) || 0,
+            add_on_options_total: Number(addOnOptionsTotal) || 0,
             discount_type: "THB",
             discount_value: Number(discount) || 0,
             discount_amount: Number(discount) || 0,
@@ -2370,7 +2441,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                     <div className="border-t border-emerald-300 pt-2 mt-2">
                                         <div className="flex justify-between font-bold text-emerald-700 text-xs md:text-sm">
                                             <span>ค้างชำระ</span>
-                                            <span>{balance.toLocaleString()} บาท</span>
+                                            <span>{Math.abs(balance).toLocaleString()} บาท</span>
                                         </div>
                                     </div>
                                 </div>
@@ -2685,7 +2756,7 @@ const CustomerPage = () => {
       try {
           const data = await fetchWithAuth('/customers/');
           setCustomers(data || []);
-      } catch (e) { console.warn("Fetch failed"); }
+    } catch { console.warn("Fetch failed"); }
       finally { setLoading(false); }
   };
 
@@ -3015,14 +3086,6 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
       }
   };
 
-  const getStatusBadge = (status) => {
-    const s = status?.toLowerCase() || 'draft';
-    if(s === 'production') return <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ผลิต</span>;
-    if(s === 'urgent') return <span className="bg-rose-100 text-rose-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ด่วน</span>;
-    if(s === 'delivered') return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold uppercase">ส่งแล้ว</span>;
-    return <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[10px] font-bold uppercase">ร่าง</span>;
-  };
-
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
      
@@ -3091,76 +3154,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
       {/* Invoice Modal for Order Detail */}
       {detailOrder && (
         <InvoiceModal 
-          data={{
-            order_no: detailOrder.order_no,
-            customerName: detailOrder.customer_name,
-            customer_name: detailOrder.customer_name,
-            phoneNumber: detailOrder.phone,
-            phone: detailOrder.phone,
-            contactChannel: detailOrder.contact_channel,
-            address: detailOrder.address,
-            brand: detailOrder.brand,
-            deadline: detailOrder.deadline,
-            deliveryDate: detailOrder.usage_date,
-            // Calculate total quantity from items
-            totalQty: (() => {
-              if (!detailOrder.items || detailOrder.items.length === 0) return 0;
-              return detailOrder.items.reduce((sum, item) => {
-                if (item.quantity_matrix) {
-                  try {
-                    const matrix = typeof item.quantity_matrix === 'string' 
-                      ? JSON.parse(item.quantity_matrix) 
-                      : item.quantity_matrix;
-                    return sum + Object.values(matrix).reduce((a, b) => a + (parseInt(b) || 0), 0);
-                  } catch (e) {
-                    return sum + (item.total_qty || 0);
-                  }
-                }
-                return sum + (item.total_qty || 0);
-              }, 0);
-            })(),
-            // Build quantities object from items
-            quantities: (() => {
-              if (!detailOrder.items || detailOrder.items.length === 0) return {};
-              const result = {};
-              detailOrder.items.forEach(item => {
-                if (item.quantity_matrix) {
-                  try {
-                    const matrix = typeof item.quantity_matrix === 'string' 
-                      ? JSON.parse(item.quantity_matrix) 
-                      : item.quantity_matrix;
-                    Object.keys(matrix).forEach(size => {
-                      result[size] = (result[size] || 0) + (parseInt(matrix[size]) || 0);
-                    });
-                  } catch (e) {
-                    console.error('Error parsing quantity_matrix:', e);
-                  }
-                }
-              });
-              return result;
-            })(),
-            neck: detailOrder.items?.[0]?.neck_type || '-',
-            sleeve: detailOrder.items?.[0]?.sleeve_type || '-',
-            fabric: detailOrder.items?.[0]?.fabric_type || '-',
-            basePrice: detailOrder.items?.[0]?.price_per_unit || 0,
-            productSubtotal: (() => {
-              if (!detailOrder.items || detailOrder.items.length === 0) {
-                // Fallback: use grand_total - other costs
-                return (detailOrder.grand_total || 0) - (detailOrder.vat_amount || 0) - (detailOrder.shipping_cost || 0) - (detailOrder.add_on_cost || 0);
-              }
-              return detailOrder.items.reduce((sum, item) => sum + (parseFloat(item.total_price) || 0), 0);
-            })(),
-            addOnCost: detailOrder.add_on_cost || 0,
-            shippingCost: detailOrder.shipping_cost || 0,
-            discount: detailOrder.discount_amount || 0,
-            vatAmount: detailOrder.vat_amount || 0,
-            grandTotal: detailOrder.grand_total || 0,
-            deposit1: detailOrder.deposit_1 || 0,
-            deposit2: detailOrder.deposit_2 || 0,
-            balance: (detailOrder.grand_total || 0) - (detailOrder.deposit_1 || 0) - (detailOrder.deposit_2 || 0),
-            note: detailOrder.note,
-            status: detailOrder.status
-          }}
+                    data={buildInvoiceDataFromOrder(detailOrder)}
           onClose={() => setDetailOrder(null)}
         />
       )}
@@ -3292,9 +3286,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 
 // 2.6 SETTINGS PAGE (UPDATED: Delete Modal & Save Notify)
 const SettingsPage = ({ onNotify }) => {
-  const [activeTab, setActiveTab] = useState("pricing");
   const [pricingRules, setPricingRules] = useState([]);
-  const [loading, setLoading] = useState(false);
    
   // Pricing Rule State
   const [newRule, setNewRule] = useState({ min_qty: 0, max_qty: 0, fabric_type: "", unit_price: 0 });
@@ -3308,15 +3300,8 @@ const SettingsPage = ({ onNotify }) => {
   const [shippingTable, setShippingTable] = useState(getShippingCostTable());
   const [extraShippingCost, setExtraShippingCost] = useState(getExtraShippingCost());
   const [newShippingRow, setNewShippingRow] = useState({ minQty: 0, maxQty: 0, cost: 0 });
-  const [editingShippingRow, setEditingShippingRow] = useState(null);
-
-  // Neck Types State
-  const [neckTypes, setNeckTypes] = useState(getNeckTypes());
-  const [newNeckType, setNewNeckType] = useState({ name: '', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false });
-  const [editingNeckId, setEditingNeckId] = useState(null);
 
   const fetchRulesAndMasters = async () => {
-    setLoading(true);
     try {
         const [pData, fData] = await Promise.all([
             fetchWithAuth('/pricing-rules/'),
@@ -3328,8 +3313,7 @@ const SettingsPage = ({ onNotify }) => {
         if (fData && fData.length > 0) {
             setNewRule(prev => ({ ...prev, fabric_type: fData[0].name }));
         }
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+        } catch (e) { console.error(e); }
   };
 
   const fetchGlobalConfig = async () => {
@@ -3370,7 +3354,7 @@ const SettingsPage = ({ onNotify }) => {
         const rules = await fetchWithAuth('/pricing-rules/');
         setPricingRules(rules || []);
         onNotify("ลบข้อมูลเรียบร้อยแล้ว", "success");
-    } catch (e) { onNotify("ลบข้อมูลไม่สำเร็จ", "error"); }
+    } catch { onNotify("ลบข้อมูลไม่สำเร็จ", "error"); }
     finally { setDeleteConfirm(null); }
   };
 
@@ -3407,13 +3391,6 @@ const SettingsPage = ({ onNotify }) => {
     onNotify("ลบเงื่อนไขค่าขนส่งสำเร็จ", "success");
   };
 
-  const handleUpdateShippingRow = (index, field, value) => {
-    const updatedTable = [...shippingTable];
-    updatedTable[index][field] = parseInt(value) || 0;
-    setShippingTable(updatedTable);
-    localStorage.setItem('shippingCostTable', JSON.stringify(updatedTable));
-  };
-
   const handleSaveExtraShippingCost = () => {
     localStorage.setItem('extraShippingCostPerUnit', JSON.stringify(extraShippingCost));
     onNotify("บันทึกค่าขนส่งเพิ่มเติมสำเร็จ", "success");
@@ -3425,44 +3402,6 @@ const SettingsPage = ({ onNotify }) => {
     localStorage.setItem('shippingCostTable', JSON.stringify(DEFAULT_SHIPPING_COST_TABLE));
     localStorage.setItem('extraShippingCostPerUnit', JSON.stringify(50));
     onNotify("รีเซ็ตตารางค่าขนส่งเป็นค่าเริ่มต้น", "success");
-  };
-
-  // Neck Types Management Functions
-  const handleAddNeckType = () => {
-    if (!newNeckType.name.trim()) {
-      onNotify("กรุณากรอกชื่อประเภทคอ", "error");
-      return;
-    }
-    const newId = Math.max(...neckTypes.map(n => n.id), 0) + 1;
-    const updatedTypes = [...neckTypes, { ...newNeckType, id: newId }];
-    setNeckTypes(updatedTypes);
-    localStorage.setItem('neckTypes', JSON.stringify(updatedTypes));
-    setNewNeckType({ name: '', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false });
-    onNotify("เพิ่มประเภทคอสำเร็จ", "success");
-  };
-
-  const handleUpdateNeckType = (id, field, value) => {
-    const updatedTypes = neckTypes.map(n => {
-      if (n.id === id) {
-        return { ...n, [field]: value };
-      }
-      return n;
-    });
-    setNeckTypes(updatedTypes);
-    localStorage.setItem('neckTypes', JSON.stringify(updatedTypes));
-  };
-
-  const handleDeleteNeckType = (id) => {
-    const updatedTypes = neckTypes.filter(n => n.id !== id);
-    setNeckTypes(updatedTypes);
-    localStorage.setItem('neckTypes', JSON.stringify(updatedTypes));
-    onNotify("ลบประเภทคอสำเร็จ", "success");
-  };
-
-  const handleResetNeckTypes = () => {
-    setNeckTypes(DEFAULT_NECK_TYPES);
-    localStorage.setItem('neckTypes', JSON.stringify(DEFAULT_NECK_TYPES));
-    onNotify("รีเซ็ตประเภทคอเป็นค่าเริ่มต้น", "success");
   };
 
   return (
@@ -3713,6 +3652,17 @@ const SettingsPage = ({ onNotify }) => {
   );
 };
 
+const NavItem = ({ icon, label, active, onClick }) => (
+        <button 
+            onClick={onClick}
+            className={`w-full flex items-center space-x-3 sm:space-x-4 p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition duration-200 group relative ${active ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+        >
+                {active && <div className="absolute left-0 w-1 h-6 sm:h-8 bg-[#d4e157] rounded-r-full shadow-[0_0_10px_rgba(212,225,87,0.5)]"></div>}
+                {React.createElement(icon, { size: 18, className: `sm:w-5 sm:h-5 transition ${active ? 'text-[#d4e157]' : 'text-gray-500 group-hover:text-white'}` })}
+                <span className="font-medium text-xs sm:text-sm tracking-wide">{label}</span>
+        </button>
+);
+
 // --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
@@ -3739,8 +3689,7 @@ const App = () => {
         }
         document.title = "B-LOOK Admin";
         
-        // Check Role on Load
-        setUserRole(localStorage.getItem('user_role') || 'user');
+        // Role already initialized from localStorage on state creation
   }, [isLoggedIn]);
 
   if (!isLoggedIn) return <LoginPage onLogin={(role) => {
@@ -3779,17 +3728,6 @@ const App = () => {
     }
   };
 
-  const NavItem = ({ id, icon: Icon, label, active }) => (
-      <button 
-        onClick={() => handleNavigate(id)} 
-        className={`w-full flex items-center space-x-3 sm:space-x-4 p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition duration-200 group relative ${active ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-      >
-          {active && <div className="absolute left-0 w-1 h-6 sm:h-8 bg-[#d4e157] rounded-r-full shadow-[0_0_10px_rgba(212,225,87,0.5)]"></div>}
-          <Icon size={18} className={`sm:w-5 sm:h-5 transition ${active ? 'text-[#d4e157]' : 'text-gray-500 group-hover:text-white'}`}/>
-          <span className="font-medium text-xs sm:text-sm tracking-wide">{label}</span>
-      </button>
-  );
-
   return (
     <div className="min-h-screen bg-[#f0f2f5] font-sans text-slate-800 flex flex-col md:flex-row relative">
        {/* Toast Notification */}
@@ -3801,7 +3739,7 @@ const App = () => {
        )}
 
        {/* Mobile Header */}
-       <div className="md:hidden bg-[#1a1c23] text-white p-3 sm:p-4 flex justify-center items-center sticky top-0 z-30 shadow-lg relative">
+    <div className="md:hidden bg-[#1a1c23] text-white p-3 sm:p-4 flex justify-center items-center sticky top-0 z-30 shadow-lg">
            <button onClick={() => setIsSidebarOpen(true)} className="absolute left-3 sm:left-4"><Menu size={22} className="sm:w-6 sm:h-6" /></button>
            <div className="flex items-center gap-2">
                 <img src={LOGO_URL} alt="Logo" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full"/>
@@ -3821,18 +3759,18 @@ const App = () => {
             </div>
             
             <nav className="flex-1 px-2 sm:px-3 md:px-4 space-y-1 sm:space-y-2 mt-2 sm:mt-4">
-                <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} />
-                <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} />
-                <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} />
-                <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} />
-                <NavItem id="customer" icon={User} label="ลูกค้า" active={currentPage === 'customer'} />
+                <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} onClick={() => handleNavigate('dashboard')} />
+                <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} onClick={() => handleNavigate('create_order')} />
+                <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} onClick={() => handleNavigate('order_list')} />
+                <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} onClick={() => handleNavigate('product')} />
+                <NavItem id="customer" icon={User} label="ลูกค้า" active={currentPage === 'customer'} onClick={() => handleNavigate('customer')} />
                 
                 {/* --- แสดงเฉพาะ Admin หรือ Owner --- */}
                 {(userRole === 'admin' || userRole === 'owner') && (
-                    <NavItem id="users" icon={Users} label="จัดการผู้ใช้" active={currentPage === 'users'} />
+                    <NavItem id="users" icon={Users} label="จัดการผู้ใช้" active={currentPage === 'users'} onClick={() => handleNavigate('users')} />
                 )}
                 
-                <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} />
+                <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} onClick={() => handleNavigate('settings')} />
             </nav>
 
             {/* Profile Section */}

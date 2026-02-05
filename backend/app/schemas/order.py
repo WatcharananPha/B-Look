@@ -52,6 +52,8 @@ class OrderBase(BaseModel):
     is_vat_included: bool = False
     shipping_cost: Decimal = 0
     add_on_cost: Decimal = 0
+    sizing_surcharge: Decimal = 0
+    add_on_options_total: Decimal = 0
 
     discount_type: str = "THB"
     discount_value: Decimal = 0
@@ -63,7 +65,7 @@ class OrderBase(BaseModel):
 
     note: Optional[str] = None
 
-    # Validator รวมร่าง (ไม่ว่าจะส่งชื่อไหนมา ให้รวมไปที่ contact_channel)
+    # ✅ FIX 2: Validator รวมร่าง (ไม่ว่าจะส่งชื่อไหนมา ให้รวมไปที่ contact_channel)
     @model_validator(mode="before")
     def sync_channels_and_deposits(cls, values):
         # กรณีรับเป็น dict (ตอนรับ Request)
@@ -109,7 +111,6 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(OrderBase):
-    order_no: str
     customer_name: str
     items: List[OrderItemCreate] = []
 
