@@ -5,6 +5,7 @@ import uuid
 from decimal import Decimal, ROUND_UP
 import json
 import logging
+from datetime import datetime, timezone
 
 from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
@@ -224,6 +225,15 @@ def create_order(
         # If neck has 'มีลิ้น' ensure collarTongue add-on applied
         if (item.neck_type or "").find("มีลิ้น") != -1 and "collarTongue" not in selected:
             selected = selected + ["collarTongue"]
+        # If oversize requested, enforce oversize slope shoulder add-on
+        if getattr(item, "is_oversize", False):
+            if "oversizeSlopeShoulder" not in selected:
+                selected = selected + ["oversizeSlopeShoulder"]
+
+        # If oversize requested, enforce oversize slope shoulder add-on
+        if getattr(item, "is_oversize", False):
+            if "oversizeSlopeShoulder" not in selected:
+                selected = selected + ["oversizeSlopeShoulder"]
 
         for a in selected:
             price_a = ADDON_PRICES.get(a)
@@ -378,6 +388,27 @@ def create_order(
     total_deposit = dep1 + dep2
     balance = grand_total - total_deposit
 
+    # Auto-calc urgency level from deadline if provided
+    try:
+        if order_in.deadline:
+            dl = order_in.deadline
+            if isinstance(dl, str):
+                dl = datetime.fromisoformat(dl)
+            now = datetime.now(timezone.utc)
+            if dl.tzinfo is None:
+                dl = dl.replace(tzinfo=timezone.utc)
+            days = (dl - now).days
+            if days <= 5:
+                calc_urgency = "critical"
+            elif days <= 10:
+                calc_urgency = "warning"
+            else:
+                calc_urgency = "normal"
+        else:
+            calc_urgency = order_in.urgency_level or "normal"
+    except Exception:
+        calc_urgency = order_in.urgency_level or "normal"
+
     # 3. Save Order Header
     new_order = OrderModel(
         order_no=(
@@ -398,7 +429,7 @@ def create_order(
         phone=order_in.phone,
         deadline=order_in.deadline,
         usage_date=order_in.usage_date,
-        urgency_level=order_in.urgency_level,
+        urgency_level=calc_urgency,
         status=order_in.status,
         is_vat_included=order_in.is_vat_included,
         shipping_cost=shipping,
@@ -760,6 +791,27 @@ def update_order(
     total_deposit = dep1 + dep2
     balance = grand_total - total_deposit
 
+    # Auto-calc urgency level from deadline if provided (for update)
+    try:
+        if order_in.deadline:
+            dl = order_in.deadline
+            if isinstance(dl, str):
+                dl = datetime.fromisoformat(dl)
+            now = datetime.now(timezone.utc)
+            if dl.tzinfo is None:
+                dl = dl.replace(tzinfo=timezone.utc)
+            days = (dl - now).days
+            if days <= 5:
+                calc_urgency = "critical"
+            elif days <= 10:
+                calc_urgency = "warning"
+            else:
+                calc_urgency = "normal"
+        else:
+            calc_urgency = order_in.urgency_level or "normal"
+    except Exception:
+        calc_urgency = order_in.urgency_level or "normal"
+
     # Update Order Fields
     order.order_no = order_in.order_no or order.order_no
     order.customer_id = customer.id
@@ -769,12 +821,11 @@ def update_order(
     order.phone = order_in.phone
     order.customer_code = order_in.customer_code
     order.graphic_code = order_in.graphic_code
-    order.product_type = order_in.product_type
-
     order.brand = order_in.brand
+    order.product_type = order_in.product_type
     order.deadline = order_in.deadline
     order.usage_date = order_in.usage_date
-    order.urgency_level = order_in.urgency_level
+    order.urgency_level = calc_urgency
     order.status = order_in.status
 
     order.is_vat_included = order_in.is_vat_included
