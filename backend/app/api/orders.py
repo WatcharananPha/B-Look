@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Any
 import uuid
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 import json
 import logging
 
@@ -318,8 +318,21 @@ def create_order(
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount))
 
-    dep1 = Decimal(str(order_in.deposit_1))
-    dep2 = Decimal(str(order_in.deposit_2))
+    # Deposit defaults: if not provided, default deposit_1 to 50% (rounded up),
+    # and deposit_2 to remaining amount minus design_fee.
+    raw_dep1 = getattr(order_in, "deposit_1", None)
+    raw_dep2 = getattr(order_in, "deposit_2", None)
+
+    if raw_dep1:
+        dep1 = Decimal(str(raw_dep1))
+    else:
+        # default to ceil(half of grand_total) after grand total is calculated
+        dep1 = Decimal(0)
+
+    if raw_dep2:
+        dep2 = Decimal(str(raw_dep2))
+    else:
+        dep2 = Decimal(0)
     total_deposit = dep1 + dep2
 
     total_before_vat = (
@@ -343,6 +356,26 @@ def create_order(
 
     revenue_ex_vat = grand_total - vat_amount
     estimated_profit = revenue_ex_vat - items_total_cost
+
+    # If deposit values weren't provided, compute sensible defaults
+    if (not raw_dep1 or Decimal(str(raw_dep1)) == 0) and (
+        not raw_dep2 or Decimal(str(raw_dep2)) == 0
+    ):
+        # deposit_1 = ceil(grand_total / 2)
+        half = grand_total / Decimal(2)
+        dep1 = half.quantize(Decimal("1"), rounding=ROUND_UP)
+        # deposit_2 = remaining (grand_total - dep1 - design_fee)
+        dep2 = grand_total - dep1 - design_fee
+        if dep2 < 0:
+            dep2 = Decimal(0)
+    else:
+        # If one side missing, fill deposit_2 as remainder minus design_fee
+        if not raw_dep2 or Decimal(str(raw_dep2)) == 0:
+            dep2 = grand_total - dep1 - design_fee
+            if dep2 < 0:
+                dep2 = Decimal(0)
+
+    total_deposit = dep1 + dep2
     balance = grand_total - total_deposit
 
     # 3. Save Order Header
@@ -675,8 +708,16 @@ def update_order(
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount))
 
-    dep1 = Decimal(str(order_in.deposit_1))
-    dep2 = Decimal(str(order_in.deposit_2))
+    raw_dep1 = getattr(order_in, "deposit_1", None)
+    raw_dep2 = getattr(order_in, "deposit_2", None)
+    if raw_dep1:
+        dep1 = Decimal(str(raw_dep1))
+    else:
+        dep1 = Decimal(0)
+    if raw_dep2:
+        dep2 = Decimal(str(raw_dep2))
+    else:
+        dep2 = Decimal(0)
     total_deposit = dep1 + dep2
 
     total_before_vat = (
@@ -700,6 +741,23 @@ def update_order(
 
     revenue_ex_vat = grand_total - vat_amount
     estimated_profit = revenue_ex_vat - items_total_cost
+
+    # Deposit defaults: compute deposit_1 (50% ceil) and deposit_2 (remainder minus design_fee) if not provided
+    if (not raw_dep1 or Decimal(str(raw_dep1)) == 0) and (
+        not raw_dep2 or Decimal(str(raw_dep2)) == 0
+    ):
+        half = grand_total / Decimal(2)
+        dep1 = half.quantize(Decimal("1"), rounding=ROUND_UP)
+        dep2 = grand_total - dep1 - design_fee
+        if dep2 < 0:
+            dep2 = Decimal(0)
+    else:
+        if not raw_dep2 or Decimal(str(raw_dep2)) == 0:
+            dep2 = grand_total - dep1 - design_fee
+            if dep2 < 0:
+                dep2 = Decimal(0)
+
+    total_deposit = dep1 + dep2
     balance = grand_total - total_deposit
 
     # Update Order Fields
