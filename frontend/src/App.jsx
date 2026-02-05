@@ -40,6 +40,12 @@ const APP_VERSION = "2024.02.05.1";
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
 const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
+const PRODUCT_TYPES = [
+    { id: 'shirt', label: 'เสื้อพิมพ์ลาย' },
+    { id: 'sportsPants', label: 'กางเกงกีฬา' },
+    { id: 'fashionPants', label: 'กางเกงแฟชั่น' }
+];
+
 // Step Pricing by Quantity and Collar Type
 const STEP_PRICING = {
   // คอกลม/วี - Round/V-neck
@@ -136,10 +142,10 @@ const DEFAULT_NECK_TYPES = [
     { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
     { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true },
     { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 8, name: 'คอหยดนํ้า', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)', extraPrice: 40, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 8, name: 'คอหยดนํ้า', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
     { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
     { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
     { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
@@ -177,17 +183,20 @@ const getNeckTypes = () => {
                 );
 
                 if (existingIndex >= 0) {
+                    const normalizedName = merged[existingIndex].name || item?.name || "";
+                    const isTongueNeck = normalizedName.includes('มีลิ้น');
                     merged[existingIndex] = {
                         ...merged[existingIndex],
                         ...item,
                         name: merged[existingIndex].name,
                         // ⚠️ Clamp extraPrice to safe range (0-100)
-                        extraPrice: Math.min(Math.max(item.extraPrice || 0, 0), 100)
+                        extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
                     };
                 } else if (item?.name) {
+                    const isTongueNeck = item.name.includes('มีลิ้น');
                     merged.push({
                         ...item,
-                        extraPrice: Math.min(Math.max(item.extraPrice || 0, 0), 100)
+                        extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
                     });
                 }
             });
@@ -210,8 +219,11 @@ const getNeckExtraPrice = (neckName) => {
         return needle.includes(hay) || hay.includes(needle);
     });
     
+    // Tongue necks use add-on (+10) instead of extraPrice
+    const isTongueNeck = (neck?.name || "").includes('มีลิ้น');
+    const extraPrice = isTongueNeck ? 0 : (neck?.extraPrice || 0);
+
     // ⚠️ SANITY CHECK: extraPrice should never exceed 100 THB
-    const extraPrice = neck?.extraPrice || 0;
     if (extraPrice > 100) {
         console.error("🚨 CORRUPT DATA: extraPrice =", extraPrice, "for neck:", neckName);
         console.error("This indicates localStorage corruption. Cleaning up...");
@@ -238,6 +250,19 @@ const DEFAULT_STATUS_OPTIONS = [
   { value: 'เตรียมจัดส่ง', label: 'เตรียมจัดส่ง' },
   { value: 'ส่งมอบแล้ว', label: 'ส่งมอบแล้ว' }
 ];
+
+const getStatusOptions = () => {
+    try {
+        const stored = localStorage.getItem('statusOptions');
+        if (stored) return JSON.parse(stored);
+    } catch (e) { console.error(e); }
+    return DEFAULT_STATUS_OPTIONS;
+};
+
+const saveStatusOptions = (options) => {
+    localStorage.setItem('statusOptions', JSON.stringify(options));
+    window.dispatchEvent(new Event('statusOptionsUpdated'));
+};
 
 // --- HELPER: API Fetch Wrapper ---
 const fetchWithAuth = async (endpoint, options = {}) => {
@@ -458,7 +483,13 @@ const InvoiceModal = ({ data, onClose }) => {
       alert('ไม่สามารถดาวน์โหลด PDF ได้');
     }
   };
-  const isFactoryView = data.isFactoryView || false;
+    const isFactoryView = data.isFactoryView || false;
+    const urgencyStatus = data.urgencyStatus || data.urgency_level || 'normal';
+    const invoiceTheme = {
+            critical: { header: "bg-rose-600 text-white" },
+            warning: { header: "bg-amber-500 text-white" },
+            normal: { header: "bg-emerald-600 text-white" }
+    };
   
   // Get sizes with quantities > 0
   const activeSizes = SIZES.filter(size => (data.quantities?.[size] || 0) > 0);
@@ -511,7 +542,7 @@ const InvoiceModal = ({ data, onClose }) => {
       <div id="invoice-content" className="bg-white w-[210mm] h-[297mm] shadow-2xl relative text-slate-800 font-sans overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         
         {/* Header - Red Banner (30mm) */}
-        <div className="bg-red-600 text-white px-6 py-3 flex-shrink-0">
+        <div className={`${invoiceTheme[urgencyStatus]?.header || invoiceTheme.normal.header} px-6 py-3 flex-shrink-0`}>
             <div className="flex justify-between items-start">
                 <div>
                     <h1 className="text-3xl font-black leading-none">ORDER</h1>
@@ -537,6 +568,12 @@ const InvoiceModal = ({ data, onClose }) => {
                         <span className="text-gray-500 text-xs">ลูกค้า:</span>
                         <p className="font-bold">{data.customerName || data.customer_name || "-"}</p>
                     </div>
+                    {data.customerCode && (
+                        <div>
+                            <span className="text-gray-500 text-xs">รหัสลูกค้า:</span>
+                            <p className="font-bold">{data.customerCode}</p>
+                        </div>
+                    )}
                 </div>
             </div>
             <div className="p-3">
@@ -652,6 +689,10 @@ const InvoiceModal = ({ data, onClose }) => {
                         </tbody>
                     </table>
 
+                    <div className="mt-2 text-[10px] text-gray-500">
+                        หากต้องการใบกำกับภาษี กรุณาแจ้งแอดมินก่อนสรุปยอด
+                    </div>
+
                     {canViewCost && (data.totalCost != null || data.estimatedProfit != null) && (
                         <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded">
                             <div className="flex justify-between text-xs text-slate-600">
@@ -721,6 +762,7 @@ const buildInvoiceDataFromOrder = (order) => {
 
     return {
         order_no: order.order_no,
+        customerCode: order.customer_code,
         customerName: order.customer_name,
         customer_name: order.customer_name,
         phoneNumber: order.phone,
@@ -789,9 +831,12 @@ const buildInvoiceDataFromOrder = (order) => {
         estimatedProfit: order.estimated_profit ?? null,
         deposit1: order.deposit_1 || 0,
         deposit2: order.deposit_2 || 0,
+        designFee: order.design_fee || 0,
         balance: (order.grand_total || 0) - (order.deposit_1 || 0) - (order.deposit_2 || 0),
         note: order.note,
-        status: order.status
+        status: order.status,
+        graphicCode: order.graphic_code,
+        urgencyStatus: order.urgency_level
     };
 };
 
@@ -1511,12 +1556,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [deadline, setDeadline] = useState("");
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
   const [customerName, setCustomerName] = useState("");
+    const [customerCode, setCustomerCode] = useState("");
   const [contactChannel, setContactChannel] = useState("LINE OA");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
   const [basePrice, setBasePrice] = useState(150);
+    const [productType, setProductType] = useState("shirt");
   const [addOnCost, setAddOnCost] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
   const [discount, setDiscount] = useState(0);
@@ -1592,13 +1639,62 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const [isFactoryView, setIsFactoryView] = useState(false);
   
   // NEW: Custom status options
-    const [statusOptions] = useState(DEFAULT_STATUS_OPTIONS);
+    const [statusOptions, setStatusOptions] = useState(getStatusOptions());
+    useEffect(() => {
+        const handleStatusUpdate = () => setStatusOptions(getStatusOptions());
+        window.addEventListener('statusOptionsUpdated', handleStatusUpdate);
+        return () => window.removeEventListener('statusOptionsUpdated', handleStatusUpdate);
+    }, []);
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+    // NEW: Hold multiple items for this order
+    const [orderItems, setOrderItems] = useState([]);
+
+    const addCurrentItemToList = () => {
+        const qty = Object.values(quantities).reduce((a,b)=>a+b,0);
+        if (qty <= 0) {
+            onNotify('กรุณากรอกจำนวนสินค้าอย่างน้อย 1 ชิ้น ก่อนเพิ่มสินค้า', 'error');
+            return;
+        }
+
+        const productName = productType === 'sportsPants'
+            ? 'กางเกงกีฬา'
+            : productType === 'fashionPants'
+                ? 'กางเกงแฟชั่น'
+                : `${selectedNeck || 'เสื้อ'} ${selectedSleeve || ''}`.trim();
+
+        const item = {
+            product_name: productName,
+            fabric_type: selectedFabric || null,
+            neck_type: productType === 'shirt' ? (selectedNeck || null) : null,
+            sleeve_type: productType === 'shirt' ? (selectedSleeve || null) : null,
+            quantity_matrix: { ...quantities },
+            total_qty: qty,
+            base_price: Number(basePrice) || 0,
+            price_per_unit: Number(basePrice) || 0,
+            total_price: Number(productSubtotal) || 0,
+            cost_per_unit: 0,
+            total_cost: 0
+        };
+        // include per-item add-ons and oversize flag so backend can persist and re-calc
+        item.selected_add_ons = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id);
+        item.is_oversize = Boolean(isOversize);
+
+        setOrderItems(prev => [...prev, item]);
+
+        // Reset current form item to allow adding another product
+        setQuantities(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
+        setSelectedFabric('');
+        // keep neck/sleeve as user may want same type, do not clear
+    };
+
+    const removeItemAt = (index) => {
+        setOrderItems(prev => prev.filter((_, i) => i !== index));
+    };
 
   // Initialize form when editing an order
   useEffect(() => {
@@ -1606,6 +1702,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         // Basic Info
         setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
+        setCustomerCode(editingOrder.customer_code || "");
         setCustomerId(editingOrder.order_no || "");
         setPhoneNumber(editingOrder.phone || "");
         setContactChannel(editingOrder.contact_channel || "LINE OA");
@@ -1651,16 +1748,30 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     console.error('Error parsing quantity_matrix:', e);
                 }
             }
+            // If order has additional items, populate orderItems list
+            if (editingOrder.items.length > 1) {
+                const rest = editingOrder.items.slice(1).map(it => {
+                    // Ensure quantity_matrix is an object
+                    let qm = it.quantity_matrix;
+                    try {
+                        if (typeof qm === 'string') qm = JSON.parse(qm);
+                    } catch (e) { qm = qm; }
+                    return { ...it, quantity_matrix: qm };
+                });
+                setOrderItems(rest);
+            }
         }
         
         // Legacy fields (if they exist in order)
         setGraphicCode(editingOrder.graphic_code || "");
         setIsOversize(editingOrder.is_oversize || false);
         setDesignFee(editingOrder.design_fee || 0);
+        setProductType(editingOrder.product_type || "shirt");
     } else {
         // Reset form for new order
         setBrand(BRANDS[0]);
         setCustomerName("");
+        setCustomerCode("");
         setCustomerId("");
         setPhoneNumber("");
         setContactChannel("LINE OA");
@@ -1671,6 +1782,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setUrgencyStatus("normal");
         setDeposit1(0);
         setDeposit2(0);
+        setProductType("shirt");
         setShippingCost(0);
         setAddOnCost(0);
         setDiscount(0);
@@ -1712,10 +1824,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                       id: neck.id,
                       name: neck.name,
                       // Use cost_price as extraPrice (cost_price is set for special necks with +40)
-                      extraPrice: neck.cost_price || neck.additional_cost || neck.price_adjustment || 0,
+                      extraPrice: neck.name.includes('มีลิ้น')
+                          ? 0
+                          : (neck.cost_price || neck.additional_cost || neck.price_adjustment || 0),
                       // Determine priceGroup based on neck name
                       priceGroup: neck.name.includes('ปก') ? 'collarOthers' : 'roundVNeck',
-                      supportSlope: ['คอกลม', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n))
+                      supportSlope: ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n))
                   }));
                   
                   // Merge with localStorage custom items (if any)
@@ -1763,8 +1877,23 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
+    const isOversizeAllowed = useMemo(
+        () => SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n)),
+        [selectedNeck]
+    );
+
+    useEffect(() => {
+        if (productType !== 'shirt') {
+            setSelectedNeck("");
+            setSelectedSleeve("");
+            setIsOversize(false);
+            setAddOnOptions(ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {}));
+        }
+    }, [productType]);
+
   // NEW: Calculate quantities for oversize surcharge
   const oversizeSurchargeQty = useMemo(() => {
+        if (productType !== 'shirt') return 0;
     if (isOversize) {
       // Oversize: 2XL+ gets +100
       return (quantities['2XL'] || 0) + (quantities['3XL'] || 0) + (quantities['4XL'] || 0) + (quantities['5XL'] || 0);
@@ -1772,18 +1901,42 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       // Normal: 4XL+ gets +100
       return (quantities['4XL'] || 0) + (quantities['5XL'] || 0);
     }
-  }, [quantities, isOversize]);
+    }, [quantities, isOversize, productType]);
 
   // NEW: Auto-select ไหล่สโลป when Oversize is selected (for supported necks)
   useEffect(() => {
-    if (isOversize && SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n))) {
-      setAddOnOptions(prev => ({ ...prev, slopeShoulder: true }));
-    }
-  }, [isOversize, selectedNeck]);
+        if (productType !== 'shirt') return;
+        if (isOversize && !isOversizeAllowed) {
+            setIsOversize(false);
+            onNotify("ทรงโอเวอร์ไซส์ทำได้เฉพาะ คอกลม, คอวี, คอวีตัด, คอวีปก", "error");
+            return;
+        }
+        if (isOversize && isOversizeAllowed) {
+            setAddOnOptions(prev => ({ ...prev, oversizeSlopeShoulder: true, slopeShoulder: false }));
+        } else if (!isOversize) {
+            setAddOnOptions(prev => ({ ...prev, oversizeSlopeShoulder: false }));
+        }
+    }, [isOversize, selectedNeck, isOversizeAllowed, productType, onNotify]);
+
+    useEffect(() => {
+        if (productType !== 'shirt') return;
+        if (selectedNeck.includes('มีลิ้น')) {
+            setAddOnOptions(prev => ({ ...prev, collarTongue: true }));
+        }
+    }, [selectedNeck, productType]);
 
   // NEW: Step Pricing calculation based on qty and neck type
   // ถ้ามีคำว่า "ปก" ในชื่อคอ = ใช้ราคา collarOthers
   useEffect(() => {
+        if (productType === 'sportsPants') {
+            setBasePrice(STEP_PRICING.sportsPants);
+            return;
+        }
+        if (productType === 'fashionPants') {
+            setBasePrice(STEP_PRICING.fashionPants);
+            return;
+        }
+
     const hasCollarWord = selectedNeck.includes('ปก');
     const isRoundVNeck = !hasCollarWord && ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type));
     const pricingTable = isRoundVNeck ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
@@ -1830,7 +1983,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setBasePrice(calculatedPrice);
       }
     }
-  }, [totalQty, selectedNeck]);
+    }, [totalQty, selectedNeck, productType]);
 
   // NEW: Auto-calculate Shipping Cost based on total quantity
   useEffect(() => {
@@ -1843,16 +1996,17 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
   // NEW: Calculate Add-on Options total
   const addOnOptionsTotal = useMemo(() => {
+        if (productType !== 'shirt') return 0;
     return ADDON_OPTIONS.reduce((total, opt) => {
       if (addOnOptions[opt.id]) {
         return total + (opt.price * totalQty);
       }
       return total;
     }, 0);
-  }, [addOnOptions, totalQty]);
+    }, [addOnOptions, totalQty, productType]);
 
   // NEW: Calculate sizing surcharge
-  const sizingSurcharge = oversizeSurchargeQty * 100;
+    const sizingSurcharge = productType === 'shirt' ? oversizeSurchargeQty * 100 : 0;
 
   const productSubtotal = totalQty * basePrice;
   // neckExtraPrice รวมเข้า basePrice แล้ว ไม่ต้องบวกแยก
@@ -1879,6 +2033,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       setDeposit1(calculatedDeposit1);
     }
   }, [calculatedDeposit1, editingOrder]);
+
+    useEffect(() => {
+        if (!editingOrder) {
+            setDeposit2(Math.max(calculatedDeposit2, 0));
+        }
+    }, [calculatedDeposit2, editingOrder]);
   
   const balance = grandTotal - deposit1 - deposit2;
 
@@ -1924,14 +2084,19 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         console.log("Calculation check:", totalQty, "×", basePrice, "=", totalQty * basePrice);
         console.log("===========================");
         
-        // Build order items from current form data
-        const orderItems = [];
+        // Build final items list: combine previously added items and current form item (if any)
+        const finalItems = [...orderItems];
         if (totalQty > 0) {
-            orderItems.push({
-                product_name: `${selectedNeck || 'เสื้อ'} ${selectedSleeve || ''}`.trim(),
+            const productName = productType === 'sportsPants'
+                ? 'กางเกงกีฬา'
+                : productType === 'fashionPants'
+                    ? 'กางเกงแฟชั่น'
+                    : `${selectedNeck || 'เสื้อ'} ${selectedSleeve || ''}`.trim();
+            finalItems.push({
+                product_name: productName,
                 fabric_type: selectedFabric || null,
-                neck_type: selectedNeck || null,
-                sleeve_type: selectedSleeve || null,
+                neck_type: productType === 'shirt' ? (selectedNeck || null) : null,
+                sleeve_type: productType === 'shirt' ? (selectedSleeve || null) : null,
                 quantity_matrix: quantities,
                 total_qty: totalQty,
                 base_price: Number(basePrice) || 0,
@@ -1941,15 +2106,27 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                 total_cost: 0
             });
         }
+            // attach per-item add-ons and oversize flag for backend
+            finalItems[finalItems.length - 1].selected_add_ons = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id);
+            finalItems[finalItems.length - 1].is_oversize = Boolean(isOversize);
+
+        if (finalItems.length === 0) {
+            onNotify('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการก่อนบันทึก', 'error');
+            return;
+        }
 
         const orderData = {
             order_no: customerId.trim(),
+            customer_code: customerCode && customerCode.trim() !== "" ? customerCode.trim() : null,
             customer_name: customerName.trim(),
-            customer_id: customerId && customerId !== "" ? Number(customerId) : null,
+            customer_id: null,
             phone: phoneNumber && phoneNumber.trim() !== "" ? phoneNumber.trim() : null,
             brand: brand,
             contact_channel: contactChannel,
             address: address && address.trim() !== "" ? address.trim() : null,
+            graphic_code: graphicCode && graphicCode.trim() !== "" ? graphicCode.trim() : null,
+            design_fee: Number(designFee) || 0,
+            product_type: productType,
             shipping_cost: Number(shippingCost) || 0,
             add_on_cost: Number(addOnCost) || 0,
             sizing_surcharge: Number(sizingSurcharge) || 0,
@@ -1966,7 +2143,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             deadline: deadline && deadline.trim() !== "" ? new Date(deadline).toISOString() : null,
             usage_date: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             note: note && note.trim() !== "" ? note.trim() : null,
-            items: orderItems
+            items: finalItems
         };
 
         console.log("Sending order data:", JSON.stringify(orderData, null, 2));
@@ -2002,7 +2179,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   useEffect(() => {
     if (!deadline) { setUrgencyStatus("normal"); return; }
     const diffDays = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24)); 
-    if (diffDays <= 5) {
+        // Red: 3-5 days, Yellow: 7-10 days, Green: 10-14 days (default)
+        if (diffDays <= 5) {
       setUrgencyStatus("critical");
     } else if (diffDays <= 10) {
       setUrgencyStatus("warning");
@@ -2149,8 +2327,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
                         
                         {/* NEW: Customer ID and Graphic Code */}
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสลูกค้า" value={customerCode} onChange={e => setCustomerCode(e.target.value)} />
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสงาน" value={customerId} onChange={e => setCustomerId(e.target.value)} />
-                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="Admin" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสกราฟิก" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
                         
                         <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
                         <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
@@ -2177,6 +2356,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     <h3 className="text-base md:text-lg font-bold mb-4 md:mb-6 flex items-center text-gray-800"><Box className="mr-2" size={18}/> รายละเอียดสินค้า</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">
                         <div>
+                            <label className="block text-xs md:text-sm mb-1 text-gray-500">ประเภทสินค้า</label>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={productType} onChange={e => setProductType(e.target.value)}>
+                                {PRODUCT_TYPES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                            </select>
+                        </div>
+                        <div>
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">แบรนด์</label>
                             <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={brand} onChange={e => setBrand(e.target.value)}>
                                 {BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
@@ -2191,7 +2376,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </div>
                         <div>
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">คอเสื้อ</label>
-                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)}>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)} disabled={productType !== 'shirt'}>
                                 <option value="">-- เลือกคอ --</option>
                                 {availableNeckTypes.map(n => (
                                     <option key={n.id} value={n.name}>
@@ -2212,14 +2397,21 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </div>
                         <div>
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">แขนเสื้อ</label>
-                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)}>
+                            <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedSleeve} onChange={e => setSelectedSleeve(e.target.value)} disabled={productType !== 'shirt'}>
                                 <option value="">-- เลือกแขน --</option>
                                 {sleeves.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                             </select>
                         </div>
                     </div>
+
+                    {productType !== 'shirt' && (
+                        <div className="mb-4 p-3 md:p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                            <Info size={12} className="inline mr-1"/> กางเกงจะคิดราคาต่อชิ้นตามประเภทสินค้า (ไม่ใช้คอเสื้อ/แขนเสื้อ และไม่คิด Add-on)
+                        </div>
+                    )}
                     
                     {/* NEW: Oversize Checkbox */}
+                    {productType === 'shirt' && (
                     <div className="mb-4 p-3 md:p-4 bg-blue-50 border border-blue-200 rounded-xl">
                         <label className="flex items-center cursor-pointer">
                             <input 
@@ -2235,12 +2427,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         </label>
                         {isOversize && (
                             <div className="mt-2 text-xs text-blue-700 bg-blue-100 p-2 rounded">
-                                <Info size={12} className="inline mr-1"/> ไหล่สโลป จะถูกเลือกอัตโนมัติ (เฉพาะคอกลม, คอวี, คอวีตัด)
+                                <Info size={12} className="inline mr-1"/> ไหล่สโลปโอเวอร์ไซส์ จะถูกเลือกอัตโนมัติ (เฉพาะคอกลม, คอวี, คอวีตัด, คอวีปก)
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* NEW: Add-on Options */}
+                    {productType === 'shirt' && (
                     <div className="mb-4 p-3 md:p-4 bg-purple-50 border border-purple-200 rounded-xl">
                         <label className="block text-xs md:text-sm font-bold text-gray-700 mb-3">ตัวเลือกเพิ่มเติม</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
@@ -2250,7 +2444,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                         type="checkbox" 
                                         className="mr-2 rounded text-purple-600" 
                                         checked={addOnOptions[opt.id] || false}
-                                        disabled={opt.id === 'slopeShoulder' && isOversize && SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n))}
+                                        disabled={
+                                            (opt.id === 'slopeShoulder' && isOversize && isOversizeAllowed) ||
+                                            (opt.id === 'oversizeSlopeShoulder' && isOversize && isOversizeAllowed) ||
+                                            (opt.id === 'collarTongue' && selectedNeck.includes('มีลิ้น'))
+                                        }
                                         onChange={e => setAddOnOptions({...addOnOptions, [opt.id]: e.target.checked})}
                                     />
                                     <div>
@@ -2266,6 +2464,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     <div className="bg-gray-50 p-4 md:p-6 rounded-2xl border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
@@ -2329,42 +2528,46 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                     <div className="flex flex-col">
                                         <span className="font-semibold text-blue-700">ราคาขาย/ตัว (อัตโนมัติ)</span>
                                         <span className="text-[10px] text-blue-500">
-                                            {selectedNeck.includes('ปก') ? 'เรท: คอปก/คออื่นๆ' : (ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type)) ? 'เรท: คอกลม/คอวี' : 'เรท: คอปก/คออื่นๆ')}
-                                            {neckExtraPrice > 0 && ` (+${neckExtraPrice} บาท/ตัว)`}
+                                            {productType === 'shirt'
+                                                ? (selectedNeck.includes('ปก') ? 'เรท: คอปก/คออื่นๆ' : (ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type)) ? 'เรท: คอกลม/คอวี' : 'เรท: คอปก/คออื่นๆ'))
+                                                : (productType === 'sportsPants' ? 'เรท: กางเกงกีฬา' : 'เรท: กางเกงแฟชั่น')}
+                                            {productType === 'shirt' && neckExtraPrice > 0 && ` (+${neckExtraPrice} บาท/ตัว)`}
                                         </span>
                                     </div>
                                     <span className="font-bold text-blue-700 text-lg">{basePrice.toLocaleString()} ฿</span>
                                 </div>
                                 
                                 {/* Pricing Reference Table */}
-                                <div className="text-[10px] text-gray-500 bg-gray-50 px-2 py-1.5 rounded -mt-1 border border-gray-100">
-                                    <div className="font-bold mb-1">ตารางเรทราคา: {neckExtraPrice > 0 && <span className="text-orange-500">(+{neckExtraPrice} บาท/ตัว สำหรับคอนี้)</span>}</div>
-                                    <div className="grid grid-cols-3 gap-1">
-                                        <span className="font-semibold">จำนวน</span>
-                                        <span className="text-center">คอกลม/วี</span>
-                                        <span className="text-right">คอปก/อื่นๆ</span>
-                                        
-                                        <span className={totalQty >= 10 && totalQty <= 30 ? 'font-bold text-blue-600' : ''}>10-30</span>
-                                        <span className={`text-center ${totalQty >= 10 && totalQty <= 30 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>240</span>
-                                        <span className={`text-right ${totalQty >= 10 && totalQty <= 30 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>300</span>
-                                        
-                                        <span className={totalQty >= 31 && totalQty <= 50 ? 'font-bold text-blue-600' : ''}>31-50</span>
-                                        <span className={`text-center ${totalQty >= 31 && totalQty <= 50 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>220</span>
-                                        <span className={`text-right ${totalQty >= 31 && totalQty <= 50 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>260</span>
-                                        
-                                        <span className={totalQty >= 51 && totalQty <= 100 ? 'font-bold text-blue-600' : ''}>51-100</span>
-                                        <span className={`text-center ${totalQty >= 51 && totalQty <= 100 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>190</span>
-                                        <span className={`text-right ${totalQty >= 51 && totalQty <= 100 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>240</span>
-                                        
-                                        <span className={totalQty >= 101 && totalQty <= 300 ? 'font-bold text-blue-600' : ''}>101-300</span>
-                                        <span className={`text-center ${totalQty >= 101 && totalQty <= 300 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>180</span>
-                                        <span className={`text-right ${totalQty >= 101 && totalQty <= 300 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>220</span>
-                                        
-                                        <span className={totalQty > 300 ? 'font-bold text-blue-600' : ''}>300+</span>
-                                        <span className={`text-center ${totalQty > 300 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>170</span>
-                                        <span className={`text-right ${totalQty > 300 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>200</span>
+                                {productType === 'shirt' && (
+                                    <div className="text-[10px] text-gray-500 bg-gray-50 px-2 py-1.5 rounded -mt-1 border border-gray-100">
+                                        <div className="font-bold mb-1">ตารางเรทราคา: {neckExtraPrice > 0 && <span className="text-orange-500">(+{neckExtraPrice} บาท/ตัว สำหรับคอนี้)</span>}</div>
+                                        <div className="grid grid-cols-3 gap-1">
+                                            <span className="font-semibold">จำนวน</span>
+                                            <span className="text-center">คอกลม/วี</span>
+                                            <span className="text-right">คอปก/อื่นๆ</span>
+                                            
+                                            <span className={totalQty >= 10 && totalQty <= 30 ? 'font-bold text-blue-600' : ''}>10-30</span>
+                                            <span className={`text-center ${totalQty >= 10 && totalQty <= 30 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>240</span>
+                                            <span className={`text-right ${totalQty >= 10 && totalQty <= 30 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>300</span>
+                                            
+                                            <span className={totalQty >= 31 && totalQty <= 50 ? 'font-bold text-blue-600' : ''}>31-50</span>
+                                            <span className={`text-center ${totalQty >= 31 && totalQty <= 50 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>220</span>
+                                            <span className={`text-right ${totalQty >= 31 && totalQty <= 50 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>260</span>
+                                            
+                                            <span className={totalQty >= 51 && totalQty <= 100 ? 'font-bold text-blue-600' : ''}>51-100</span>
+                                            <span className={`text-center ${totalQty >= 51 && totalQty <= 100 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>190</span>
+                                            <span className={`text-right ${totalQty >= 51 && totalQty <= 100 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>240</span>
+                                            
+                                            <span className={totalQty >= 101 && totalQty <= 300 ? 'font-bold text-blue-600' : ''}>101-300</span>
+                                            <span className={`text-center ${totalQty >= 101 && totalQty <= 300 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>180</span>
+                                            <span className={`text-right ${totalQty >= 101 && totalQty <= 300 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>220</span>
+                                            
+                                            <span className={totalQty > 300 ? 'font-bold text-blue-600' : ''}>300+</span>
+                                            <span className={`text-center ${totalQty > 300 && !selectedNeck.includes('ปก') && ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t)) ? 'font-bold text-blue-600' : ''}`}>170</span>
+                                            <span className={`text-right ${totalQty > 300 && (selectedNeck.includes('ปก') || !ROUND_V_NECK_TYPES.some(t => selectedNeck.includes(t))) ? 'font-bold text-blue-600' : ''}`}>200</span>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                                 
                                 {/* Show pricing breakdown */}
                                 <div className="text-[10px] text-gray-400 pl-2">
@@ -2409,6 +2612,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                         <input type="checkbox" className="mr-2 rounded text-[#1a1c23]" checked={isVatIncluded} onChange={e => setIsVatIncluded(e.target.checked)}/>
                                         ราคารวม VAT ({config.vat_rate*100}%)
                                     </label>
+                                </div>
+
+                                <div className="text-[10px] text-gray-500 px-2">
+                                    หากต้องการใบกำกับภาษี กรุณาแจ้งแอดมินก่อนสรุปยอด
                                 </div>
 
                                 <div className="flex justify-between font-black text-lg md:text-2xl text-[#1a1c23] mt-3 md:mt-4 pt-3 md:pt-4 border-t border-gray-100"><span>ยอดสุทธิ</span><span>{grandTotal.toLocaleString()} ฿</span></div>
@@ -2456,9 +2663,30 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                             </div>
                         )}
                     </div>
-                    <button className="w-full bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-2.5 md:py-4 rounded-xl shadow-lg flex justify-center items-center transition text-sm md:text-base" onClick={handleSaveOrder}>
-                        <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
-                    </button>
+                                        <div className="space-y-2">
+                                            {orderItems.length > 0 && (
+                                                <div className="bg-white p-2 rounded-lg border">
+                                                    <div className="text-xs font-bold mb-2">รายการสินค้าที่เพิ่ม</div>
+                                                    <div className="space-y-1">
+                                                        {orderItems.map((it, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between text-sm">
+                                                                <div className="truncate">{it.product_name} — {it.total_qty} ชิ้น</div>
+                                                                <button className="text-red-500 text-xs" onClick={() => removeItemAt(idx)}>ลบ</button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="flex gap-2">
+                                                <button className="flex-1 py-2 text-sm font-bold bg-white border rounded-lg hover:bg-gray-50" onClick={addCurrentItemToList}>
+                                                    <Plus className="inline mr-2" size={14}/> เพิ่มสินค้า
+                                                </button>
+                                                <button className="flex-1 bg-[#1a1c23] hover:bg-slate-800 text-white font-bold py-2.5 md:py-4 rounded-xl shadow-lg flex justify-center items-center transition text-sm md:text-base" onClick={handleSaveOrder}>
+                                                    <Save className="mr-2" size={18}/> {editingOrder ? "บันทึกการแก้ไข" : "บันทึกออเดอร์"}
+                                                </button>
+                                            </div>
+                                        </div>
                     <div className="grid grid-cols-3 gap-2 md:gap-3 mt-3 md:mt-4">
                         <button className="py-1.5 md:py-2 text-xs font-bold text-gray-500 border rounded-lg hover:bg-gray-50" onClick={() => { setIsFactoryView(false); setShowPreview(true); }}>ดูตัวอย่าง</button>
                         <button className="py-1.5 md:py-2 text-xs font-bold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50" onClick={() => { setIsFactoryView(true); setShowPreview(true); }}>ใบโรงงาน</button>
@@ -3301,6 +3529,11 @@ const SettingsPage = ({ onNotify }) => {
   const [extraShippingCost, setExtraShippingCost] = useState(getExtraShippingCost());
   const [newShippingRow, setNewShippingRow] = useState({ minQty: 0, maxQty: 0, cost: 0 });
 
+    // Status Options State
+    const [statusOptions, setStatusOptions] = useState(getStatusOptions());
+    const [newStatusLabel, setNewStatusLabel] = useState("");
+    const [newStatusValue, setNewStatusValue] = useState("");
+
   const fetchRulesAndMasters = async () => {
     try {
         const [pData, fData] = await Promise.all([
@@ -3404,6 +3637,30 @@ const SettingsPage = ({ onNotify }) => {
     onNotify("รีเซ็ตตารางค่าขนส่งเป็นค่าเริ่มต้น", "success");
   };
 
+    const handleSaveStatusOptions = () => {
+        saveStatusOptions(statusOptions);
+        onNotify("บันทึกสถานะงานสำเร็จ", "success");
+    };
+
+    const handleAddStatusOption = () => {
+        if (!newStatusLabel.trim()) {
+            onNotify("กรุณากรอกชื่อสถานะ", "error");
+            return;
+        }
+        const value = newStatusValue.trim() || newStatusLabel.trim();
+        const next = [...statusOptions, { value, label: newStatusLabel.trim() }];
+        setStatusOptions(next);
+        setNewStatusLabel("");
+        setNewStatusValue("");
+        saveStatusOptions(next);
+    };
+
+    const handleDeleteStatusOption = (value) => {
+        const next = statusOptions.filter(opt => opt.value !== value);
+        setStatusOptions(next);
+        saveStatusOptions(next);
+    };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto">
       {/* Delete Modal */}
@@ -3494,6 +3751,80 @@ const SettingsPage = ({ onNotify }) => {
                       >
                           บันทึกการตั้งค่า
                       </button>
+                  </div>
+
+                  {/* Status Options Section */}
+                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-blue-200">
+                      <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
+                          <Info size={18} className="mr-2 text-blue-500"/>
+                          ตั้งค่าสถานะงาน
+                      </h3>
+                      <div className="space-y-2">
+                          {statusOptions.map((opt, idx) => (
+                              <div key={`${opt.value}-${idx}`} className="flex items-center gap-2">
+                                  <input
+                                      type="text"
+                                      className="flex-1 border border-gray-200 p-1.5 rounded-lg text-xs"
+                                      value={opt.label}
+                                      onChange={e => {
+                                          const next = [...statusOptions];
+                                          next[idx] = { ...next[idx], label: e.target.value };
+                                          setStatusOptions(next);
+                                      }}
+                                  />
+                                  <input
+                                      type="text"
+                                      className="flex-1 border border-gray-200 p-1.5 rounded-lg text-xs"
+                                      value={opt.value}
+                                      onChange={e => {
+                                          const next = [...statusOptions];
+                                          next[idx] = { ...next[idx], value: e.target.value };
+                                          setStatusOptions(next);
+                                      }}
+                                  />
+                                  <button
+                                      onClick={() => handleDeleteStatusOption(opt.value)}
+                                      className="text-gray-400 hover:text-rose-500 transition"
+                                  >
+                                      <Trash2 size={14}/>
+                                  </button>
+                              </div>
+                          ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-3">
+                          <input
+                              type="text"
+                              className="border border-gray-200 p-1.5 rounded-lg text-xs"
+                              placeholder="ชื่อสถานะใหม่"
+                              value={newStatusLabel}
+                              onChange={e => setNewStatusLabel(e.target.value)}
+                          />
+                          <input
+                              type="text"
+                              className="border border-gray-200 p-1.5 rounded-lg text-xs"
+                              placeholder="ค่า (value)"
+                              value={newStatusValue}
+                              onChange={e => setNewStatusValue(e.target.value)}
+                          />
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                          <button
+                              onClick={handleAddStatusOption}
+                              className="flex-1 bg-blue-600 text-white font-bold py-1.5 text-xs rounded-lg hover:bg-blue-700 transition"
+                          >
+                              + เพิ่มสถานะ
+                          </button>
+                          <button
+                              onClick={handleSaveStatusOptions}
+                              className="flex-1 bg-[#1a1c23] text-white font-bold py-1.5 text-xs rounded-lg hover:bg-slate-800 transition"
+                          >
+                              บันทึกสถานะ
+                          </button>
+                      </div>
+                      <div className="mt-2 text-[10px] text-gray-500">
+                          แก้ไขรายการสถานะงานที่ใช้ในหน้าออเดอร์
+                      </div>
                   </div>
 
                   {/* Shipping Cost Table Section */}

@@ -14,6 +14,38 @@ from app.models.audit_log import AuditLog
 from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
 
+# --- Server-side pricing constants (mirror frontend rules) ---
+STEP_PRICING = {
+    "roundVNeck": [
+        {"minQty": 10, "maxQty": 30, "price": Decimal(240)},
+        {"minQty": 31, "maxQty": 50, "price": Decimal(220)},
+        {"minQty": 51, "maxQty": 100, "price": Decimal(190)},
+        {"minQty": 101, "maxQty": 300, "price": Decimal(180)},
+        {"minQty": 301, "maxQty": 99999, "price": Decimal(170)},
+    ],
+    "collarOthers": [
+        {"minQty": 10, "maxQty": 30, "price": Decimal(300)},
+        {"minQty": 31, "maxQty": 50, "price": Decimal(260)},
+        {"minQty": 51, "maxQty": 100, "price": Decimal(240)},
+        {"minQty": 101, "maxQty": 300, "price": Decimal(220)},
+        {"minQty": 301, "maxQty": 99999, "price": Decimal(200)},
+    ],
+    "sportsPants": Decimal(210),
+    "fashionPants": Decimal(280),
+}
+
+ADDON_PRICES = {
+    "longSleeve": Decimal(40),
+    "pocket": Decimal(20),
+    "numberName": Decimal(20),
+    "slopeShoulder": Decimal(40),
+    "collarTongue": Decimal(10),
+    "shortSleeveAlt": Decimal(20),
+    "oversizeSlopeShoulder": Decimal(60),
+}
+
+OVERSIZE_ALLOWED_NECKS = ["คอกลม", "คอวี", "คอวีตัด", "คอวีปก"]
+
 router = APIRouter()
 
 # Module-level logger for all functions
@@ -60,6 +92,20 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
                         )
                     except (json.JSONDecodeError, TypeError):
                         item_dict["quantity_matrix"] = {}
+                # Parse selected_add_ons stored as JSON string back into list
+                if item_dict.get("selected_add_ons"):
+                    try:
+                        item_dict["selected_add_ons"] = json.loads(
+                            item_dict["selected_add_ons"]
+                        )
+                    except (json.JSONDecodeError, TypeError):
+                        # If it's already a list, keep it; otherwise set empty list
+                        if not isinstance(item_dict.get("selected_add_ons"), list):
+                            item_dict["selected_add_ons"] = []
+                else:
+                    item_dict["selected_add_ons"] = []
+                # Ensure is_oversize is boolean
+                item_dict["is_oversize"] = bool(item_dict.get("is_oversize", False))
                 items_list.append(item_dict)
             o_dict["items"] = items_list
 
@@ -94,6 +140,7 @@ def create_order(
             phone=order_in.phone.strip() if order_in.phone else None,
             channel=final_channel,
             address=order_in.address,
+            customer_code=order_in.customer_code,
         )
         db.add(customer)
         db.flush()  # Flush to get customer.id
@@ -117,37 +164,124 @@ def create_order(
             customer.address = order_in.address
             is_changed = True
 
+        if order_in.customer_code and customer.customer_code != order_in.customer_code:
+            customer.customer_code = order_in.customer_code
+            is_changed = True
+
         if is_changed:
             db.add(customer)
             db.flush()
 
-    # 2. Calculation Logic
+    # 2. Calculation Logic — Server-side authoritative pricing and validation
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []
 
     for item in order_in.items:
         qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-        base_price_input = (
-            item.base_price
-            if item.base_price not in (None, 0, "")
-            else item.price_per_unit
+
+        # Determine product_type for the item
+        p_type = getattr(item, "product_type", None) or getattr(
+            order_in, "product_type", "shirt"
         )
-        base_price = Decimal(str(base_price_input or 0))
-        cost_per_unit = Decimal(str(item.cost_per_unit))
 
-        # ⚠️ CRITICAL VALIDATION: Prevent obviously wrong prices
-        if base_price < Decimal("50") or base_price > Decimal("1000"):
-            logger.warning(
-                f"⛔ SUSPICIOUS PRICE DETECTED: {base_price} for {item.product_name}"
+        # Compute base price per unit according to step pricing
+        if p_type == "sportsPants":
+            computed_unit = STEP_PRICING["sportsPants"]
+        elif p_type == "fashionPants":
+            computed_unit = STEP_PRICING["fashionPants"]
+        else:
+            neck_name = (item.neck_type or "").strip()
+            has_collar_word = "ปก" in neck_name
+            is_round_v = not has_collar_word and any(
+                k in neck_name for k in ["คอกลม", "คอวี", "คอวีตัด", "คอวีชน", "คอวีไขว้"]
             )
-            raise HTTPException(
-                status_code=400,
-                detail=f"ราคาต่อหน่วยผิดปกติ: {base_price} บาท (ควรอยู่ระหว่าง 50-1000 บาท)",
+            pricing_table = (
+                STEP_PRICING["roundVNeck"]
+                if is_round_v
+                else STEP_PRICING["collarOthers"]
             )
 
-        line_price = base_price * qty
+            if qty >= 10:
+                matched = next(
+                    (
+                        t
+                        for t in pricing_table
+                        if qty >= t["minQty"] and qty <= t["maxQty"]
+                    ),
+                    None,
+                )
+                if matched:
+                    computed_unit = matched["price"]
+                else:
+                    computed_unit = pricing_table[0]["price"]
+            else:
+                computed_unit = Decimal(240) if is_round_v else Decimal(300)
+
+        # Add-on totals for this item (per unit add-on prices)
+        item_addon_total = Decimal(0)
+        selected = getattr(item, "selected_add_ons", []) or []
+        # If neck has 'มีลิ้น' ensure collarTongue add-on applied
+        if (item.neck_type or "").find("มีลิ้น") != -1 and "collarTongue" not in selected:
+            selected = selected + ["collarTongue"]
+
+        for a in selected:
+            price_a = ADDON_PRICES.get(a)
+            if price_a:
+                item_addon_total += price_a * qty
+
+        # Sizing surcharge per item (4XL+ or 2XL+ based on is_oversize flag)
+        oversize_qty = 0
+        if getattr(item, "is_oversize", False):
+            # oversize mode: surcharge applies from 2XL upwards
+            for size_name, n in (item.quantity_matrix or {}).items():
+                try:
+                    if (
+                        size_name.startswith("2XL")
+                        or size_name.startswith("3XL")
+                        or size_name.startswith("4XL")
+                        or size_name.startswith("5XL")
+                    ):
+                        oversize_qty += int(n)
+                except Exception:
+                    continue
+        else:
+            # normal mode: surcharge applies from 4XL upwards
+            for size_name, n in (item.quantity_matrix or {}).items():
+                try:
+                    if size_name.startswith("4XL") or size_name.startswith("5XL"):
+                        oversize_qty += int(n)
+                except Exception:
+                    continue
+
+        sizing_surcharge_item = Decimal(oversize_qty) * Decimal(100)
+
+        # Validate oversize rule: if item is_oversize True ensure neck supports it
+        if getattr(item, "is_oversize", False):
+            neck_val = item.neck_type or ""
+            if not any(nk in neck_val for nk in OVERSIZE_ALLOWED_NECKS):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"ทรงโอเวอร์ไซส์ทำได้เฉพาะ {', '.join(OVERSIZE_ALLOWED_NECKS)}; คอที่ให้มา: {neck_val}",
+                )
+
+        # Compute final totals for the line
+        computed_price_per_unit = Decimal(computed_unit)
+        line_price = (
+            (computed_price_per_unit * qty) + item_addon_total + sizing_surcharge_item
+        )
+
+        # cost_per_unit currently taken from request if provided
+        cost_per_unit = Decimal(str(item.cost_per_unit or 0))
         line_cost = cost_per_unit * qty
+
+        # Safety validation for unit price range
+        if computed_price_per_unit < Decimal("10") or computed_price_per_unit > Decimal(
+            "5000"
+        ):
+            logger.warning(
+                f"Computed suspicious unit price {computed_price_per_unit} for {item.product_name}"
+            )
 
         items_total_price += line_price
         items_total_cost += line_cost
@@ -156,17 +290,30 @@ def create_order(
             {
                 "data": item,
                 "qty": qty,
-                "base_price": base_price,
+                "base_price": computed_price_per_unit,
                 "total_price": line_price,
                 "total_cost": line_cost,
+                "item_addon_total": item_addon_total,
+                "item_sizing_surcharge": sizing_surcharge_item,
             }
         )
 
-    # Financials
+    # Financials — recompute add-on totals and sizing surcharge from items
     shipping = Decimal(str(order_in.shipping_cost))
-    addon = Decimal(str(order_in.add_on_cost))
-    sizing_surcharge = Decimal(str(order_in.sizing_surcharge))
-    add_on_options_total = Decimal(str(order_in.add_on_options_total))
+    addon_manual = Decimal(str(order_in.add_on_cost))
+    design_fee = Decimal(str(order_in.design_fee))
+
+    computed_addon_total = sum(
+        (it.get("item_addon_total") or Decimal(0)) for it in order_items_data
+    )
+    computed_sizing_surcharge = sum(
+        (it.get("item_sizing_surcharge") or Decimal(0)) for it in order_items_data
+    )
+
+    # Final values
+    add_on_options_total = Decimal(computed_addon_total)
+    sizing_surcharge = Decimal(computed_sizing_surcharge)
+    addon = addon_manual
 
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount))
@@ -200,11 +347,18 @@ def create_order(
 
     # 3. Save Order Header
     new_order = OrderModel(
-        order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
+        order_no=(
+            order_in.order_no.strip()
+            if order_in.order_no
+            else f"PO-{uuid.uuid4().hex[:6].upper()}"
+        ),
         brand=order_in.brand,
         customer_id=customer.id,
         # ✅ FIX: Save customer_name snapshot
         customer_name=clean_name,
+        customer_code=order_in.customer_code,
+        graphic_code=order_in.graphic_code,
+        product_type=order_in.product_type,
         # Snapshot Data (Save current state to order)
         contact_channel=final_channel,
         address=order_in.address,
@@ -218,6 +372,7 @@ def create_order(
         add_on_cost=addon,
         sizing_surcharge=sizing_surcharge,
         add_on_options_total=add_on_options_total,
+        design_fee=design_fee,
         discount_type=order_in.discount_type,
         discount_value=discount_val,
         discount_amount=discount_amt,
@@ -258,6 +413,10 @@ def create_order(
             total_price=item_data["total_price"],
             cost_per_unit=src.cost_per_unit,
             total_cost=item_data["total_cost"],
+            selected_add_ons=json.dumps(getattr(src, "selected_add_ons", []) or []),
+            is_oversize=bool(getattr(src, "is_oversize", False)),
+            item_addon_total=item_data.get("item_addon_total", 0),
+            item_sizing_surcharge=item_data.get("item_sizing_surcharge", 0),
         )
         db.add(new_item)
 
@@ -305,6 +464,31 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
         if not order_dict.get("address"):
             order_dict["address"] = order.customer.address
 
+    # Parse items if present to normalize quantity_matrix and selected_add_ons
+    if order.items:
+        items_list = []
+        for item in order.items:
+            item_dict = item.__dict__.copy()
+            if item_dict.get("quantity_matrix"):
+                try:
+                    item_dict["quantity_matrix"] = json.loads(item_dict["quantity_matrix"])
+                except (json.JSONDecodeError, TypeError):
+                    item_dict["quantity_matrix"] = {}
+
+            if item_dict.get("selected_add_ons"):
+                try:
+                    item_dict["selected_add_ons"] = json.loads(item_dict["selected_add_ons"])
+                except (json.JSONDecodeError, TypeError):
+                    if not isinstance(item_dict.get("selected_add_ons"), list):
+                        item_dict["selected_add_ons"] = []
+            else:
+                item_dict["selected_add_ons"] = []
+
+            item_dict["is_oversize"] = bool(item_dict.get("is_oversize", False))
+            items_list.append(item_dict)
+
+        order_dict["items"] = items_list
+
     return order_dict
 
 
@@ -333,6 +517,7 @@ def update_order(
             phone=order_in.phone.strip() if order_in.phone else None,
             channel=final_channel,
             address=order_in.address,
+            customer_code=order_in.customer_code,
         )
         db.add(customer)
         db.flush()
@@ -352,36 +537,105 @@ def update_order(
             customer.address = order_in.address
             is_changed = True
 
+        if order_in.customer_code and customer.customer_code != order_in.customer_code:
+            customer.customer_code = order_in.customer_code
+            is_changed = True
+
         if is_changed:
             db.add(customer)
             db.flush()
 
-    # Recalculate Logic
+    # Recalculate Logic — server-side authoritative (same rules as create)
     items_total_price = Decimal(0)
     items_total_cost = Decimal(0)
     order_items_data = []
 
     for item in order_in.items:
         qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-        base_price_input = (
-            item.base_price
-            if item.base_price not in (None, 0, "")
-            else item.price_per_unit
+
+        p_type = getattr(item, "product_type", None) or getattr(
+            order_in, "product_type", "shirt"
         )
-        base_price = Decimal(str(base_price_input or 0))
-        cost_per_unit = Decimal(str(item.cost_per_unit))
 
-        # ⚠️ CRITICAL VALIDATION: Prevent obviously wrong prices
-        if base_price < Decimal("50") or base_price > Decimal("1000"):
-            logger.warning(
-                f"⛔ SUSPICIOUS PRICE DETECTED: {base_price} for {item.product_name}"
+        if p_type == "sportsPants":
+            computed_unit = STEP_PRICING["sportsPants"]
+        elif p_type == "fashionPants":
+            computed_unit = STEP_PRICING["fashionPants"]
+        else:
+            neck_name = (item.neck_type or "").strip()
+            has_collar_word = "ปก" in neck_name
+            is_round_v = not has_collar_word and any(
+                k in neck_name for k in ["คอกลม", "คอวี", "คอวีตัด", "คอวีชน", "คอวีไขว้"]
             )
-            raise HTTPException(
-                status_code=400,
-                detail=f"ราคาต่อหน่วยผิดปกติ: {base_price} บาท (ควรอยู่ระหว่าง 50-1000 บาท)",
+            pricing_table = (
+                STEP_PRICING["roundVNeck"]
+                if is_round_v
+                else STEP_PRICING["collarOthers"]
             )
 
-        line_price = base_price * qty
+            if qty >= 10:
+                matched = next(
+                    (
+                        t
+                        for t in pricing_table
+                        if qty >= t["minQty"] and qty <= t["maxQty"]
+                    ),
+                    None,
+                )
+                if matched:
+                    computed_unit = matched["price"]
+                else:
+                    computed_unit = pricing_table[0]["price"]
+            else:
+                computed_unit = Decimal(240) if is_round_v else Decimal(300)
+
+        # Add-ons
+        item_addon_total = Decimal(0)
+        selected = getattr(item, "selected_add_ons", []) or []
+        if (item.neck_type or "").find("มีลิ้น") != -1 and "collarTongue" not in selected:
+            selected = selected + ["collarTongue"]
+        for a in selected:
+            price_a = ADDON_PRICES.get(a)
+            if price_a:
+                item_addon_total += price_a * qty
+
+        oversize_qty = 0
+        if getattr(item, "is_oversize", False):
+            for size_name, n in (item.quantity_matrix or {}).items():
+                try:
+                    if (
+                        size_name.startswith("2XL")
+                        or size_name.startswith("3XL")
+                        or size_name.startswith("4XL")
+                        or size_name.startswith("5XL")
+                    ):
+                        oversize_qty += int(n)
+                except Exception:
+                    continue
+        else:
+            for size_name, n in (item.quantity_matrix or {}).items():
+                try:
+                    if size_name.startswith("4XL") or size_name.startswith("5XL"):
+                        oversize_qty += int(n)
+                except Exception:
+                    continue
+
+        sizing_surcharge_item = Decimal(oversize_qty) * Decimal(100)
+
+        if getattr(item, "is_oversize", False):
+            neck_val = item.neck_type or ""
+            if not any(nk in neck_val for nk in OVERSIZE_ALLOWED_NECKS):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"ทรงโอเวอร์ไซส์ทำได้เฉพาะ {', '.join(OVERSIZE_ALLOWED_NECKS)}; คอที่ให้มา: {neck_val}",
+                )
+
+        computed_price_per_unit = Decimal(computed_unit)
+        line_price = (
+            (computed_price_per_unit * qty) + item_addon_total + sizing_surcharge_item
+        )
+
+        cost_per_unit = Decimal(str(item.cost_per_unit or 0))
         line_cost = cost_per_unit * qty
 
         items_total_price += line_price
@@ -391,17 +645,29 @@ def update_order(
             {
                 "data": item,
                 "qty": qty,
-                "base_price": base_price,
+                "base_price": computed_price_per_unit,
                 "total_price": line_price,
                 "total_cost": line_cost,
+                "item_addon_total": item_addon_total,
+                "item_sizing_surcharge": sizing_surcharge_item,
             }
         )
 
-    # Financials
+    # Financials — recompute add-on totals and sizing surcharge from items
     shipping = Decimal(str(order_in.shipping_cost))
-    addon = Decimal(str(order_in.add_on_cost))
-    sizing_surcharge = Decimal(str(order_in.sizing_surcharge))
-    add_on_options_total = Decimal(str(order_in.add_on_options_total))
+    addon_manual = Decimal(str(order_in.add_on_cost))
+    design_fee = Decimal(str(order_in.design_fee))
+
+    computed_addon_total = sum(
+        (it.get("item_addon_total") or Decimal(0)) for it in order_items_data
+    )
+    computed_sizing_surcharge = sum(
+        (it.get("item_sizing_surcharge") or Decimal(0)) for it in order_items_data
+    )
+
+    add_on_options_total = Decimal(computed_addon_total)
+    sizing_surcharge = Decimal(computed_sizing_surcharge)
+    addon = addon_manual
     discount_val = Decimal(str(order_in.discount_value))
     discount_amt = Decimal(str(order_in.discount_amount))
 
@@ -433,11 +699,15 @@ def update_order(
     balance = grand_total - total_deposit
 
     # Update Order Fields
+    order.order_no = order_in.order_no or order.order_no
     order.customer_id = customer.id
     order.customer_name = clean_name
     order.contact_channel = final_channel
     order.address = order_in.address
     order.phone = order_in.phone
+    order.customer_code = order_in.customer_code
+    order.graphic_code = order_in.graphic_code
+    order.product_type = order_in.product_type
 
     order.brand = order_in.brand
     order.deadline = order_in.deadline
@@ -450,6 +720,7 @@ def update_order(
     order.add_on_cost = addon
     order.sizing_surcharge = sizing_surcharge
     order.add_on_options_total = add_on_options_total
+    order.design_fee = design_fee
 
     order.discount_type = order_in.discount_type
     order.discount_value = discount_val
@@ -489,6 +760,10 @@ def update_order(
             total_price=item_data["total_price"],
             cost_per_unit=src.cost_per_unit,
             total_cost=item_data["total_cost"],
+            selected_add_ons=json.dumps(getattr(src, "selected_add_ons", []) or []),
+            is_oversize=bool(getattr(src, "is_oversize", False)),
+            item_addon_total=item_data.get("item_addon_total", 0),
+            item_sizing_surcharge=item_data.get("item_sizing_surcharge", 0),
         )
         db.add(new_item)
 

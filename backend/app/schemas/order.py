@@ -12,6 +12,13 @@ class OrderItemBase(BaseModel):
     sleeve_type: Optional[str] = None
     quantity_matrix: Dict[str, int] = {}
 
+    # Optional: product_type (shirt / sportsPants / fashionPants)
+    product_type: Optional[str] = "shirt"
+
+    # Flags and add-ons per-item
+    selected_add_ons: List[str] = []  # e.g. ['longSleeve','pocket']
+    is_oversize: bool = False
+
     base_price: float = 0
     price_per_unit: float = 0
     cost_per_unit: float = 0
@@ -34,10 +41,14 @@ class OrderItem(OrderItemBase):
 
 # --- Order Schema ---
 class OrderBase(BaseModel):
+    order_no: Optional[str] = None
     customer_id: Optional[int] = None
     customer_name: Optional[str] = "Unknown"
     brand: Optional[str] = "BG"
     phone: Optional[str] = None
+    customer_code: Optional[str] = None
+    graphic_code: Optional[str] = None
+    product_type: Optional[str] = "shirt"
 
     # ✅ FIX 1: รับค่าตรงๆ ไม่ต้องมี alias
     contact_channel: Optional[str] = None
@@ -54,6 +65,7 @@ class OrderBase(BaseModel):
     add_on_cost: Decimal = 0
     sizing_surcharge: Decimal = 0
     add_on_options_total: Decimal = 0
+    design_fee: Decimal = 0
 
     discount_type: str = "THB"
     discount_value: Decimal = 0

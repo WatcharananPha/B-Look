@@ -3,71 +3,84 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
-from pydantic import BaseModel, Field # ✅ 1. Import Field
+from pydantic import BaseModel, Field  # ✅ 1. Import Field
 
 router = APIRouter()
+
 
 # Schema ของ Pydantic
 class CustomerSchema(BaseModel):
     id: int
     name: str
+    customer_code: str | None = None
     phone: str | None = None
-    
+
     # ✅ 2. เพิ่ม validation_alias="channel" เพื่อ Map ข้อมูลจาก DB (channel) -> Frontend (contact_channel)
     contact_channel: str | None = Field(default=None, validation_alias="channel")
-    
+
     address: str | None = None
 
     class Config:
         from_attributes = True
 
+
 class CustomerCreate(BaseModel):
     name: str
+    customer_code: str | None = None
     phone: str | None = None
     contact_channel: str | None = None
     address: str | None = None
 
+
 # --- Routes ---
+
 
 @router.get("/", response_model=List[CustomerSchema])
 def read_customers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     # เมื่อ query ออกมา Pydantic จะใช้ validation_alias ดึงค่า channel มาใส่ contact_channel ให้เอง
     return db.query(Customer).offset(skip).limit(limit).all()
 
+
 @router.post("/", response_model=CustomerSchema)
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     db_cust = Customer(
-        name=customer.name.strip(), # ✅ ตัดช่องว่าง
+        name=customer.name.strip(),  # ✅ ตัดช่องว่าง
+        customer_code=customer.customer_code,
         phone=customer.phone,
-        channel=customer.contact_channel, 
-        address=customer.address
+        channel=customer.contact_channel,
+        address=customer.address,
     )
     db.add(db_cust)
     db.commit()
     db.refresh(db_cust)
     return db_cust
 
+
 @router.put("/{customer_id}", response_model=CustomerSchema)
-def update_customer(customer_id: int, customer: CustomerCreate, db: Session = Depends(get_db)):
+def update_customer(
+    customer_id: int, customer: CustomerCreate, db: Session = Depends(get_db)
+):
     db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")
-    
-    db_cust.name = customer.name.strip() # ✅ ตัดช่องว่าง
+
+    db_cust.name = customer.name.strip()  # ✅ ตัดช่องว่าง
+    db_cust.customer_code = customer.customer_code
     db_cust.phone = customer.phone
     db_cust.channel = customer.contact_channel
     db_cust.address = customer.address
-    
+
     db.commit()
     db.refresh(db_cust)
     return db_cust
+
 
 @router.delete("/{customer_id}", status_code=204)
 def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")
-    
+
     db.delete(db_cust)
     db.commit()
     return None

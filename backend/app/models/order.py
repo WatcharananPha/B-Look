@@ -22,6 +22,9 @@ class Order(Base):
     # Customer Info Snapshot
     customer_name = Column(String, index=True)
     brand = Column(String)
+    customer_code = Column(String, nullable=True)
+    graphic_code = Column(String, nullable=True)
+    product_type = Column(String, nullable=True)
 
     # ✅ เพิ่มคอลัมน์ใหม่ตรงนี้
     contact_channel = Column(String, nullable=True)
@@ -43,6 +46,7 @@ class Order(Base):
     add_on_cost = Column(DECIMAL(10, 2), default=0)
     sizing_surcharge = Column(DECIMAL(10, 2), default=0)
     add_on_options_total = Column(DECIMAL(10, 2), default=0)
+    design_fee = Column(DECIMAL(10, 2), default=0)
 
     discount_type = Column(String, default="THB")  # THB or PERCENT
     discount_value = Column(DECIMAL(10, 2), default=0)
@@ -90,6 +94,14 @@ class OrderItem(Base):
     total_qty = Column(Integer, default=0)
     price_per_unit = Column(DECIMAL(10, 2), default=0)
     total_price = Column(DECIMAL(10, 2), default=0)
+
+    # Persist per-item add-ons and oversize flag for audit and recalculation
+    selected_add_ons = Column(Text, nullable=True)  # JSON array of add-on ids
+    is_oversize = Column(Boolean, default=False)
+
+    # Optional: Store per-item addon totals and sizing surcharge for reporting
+    item_addon_total = Column(DECIMAL(10, 2), default=0)
+    item_sizing_surcharge = Column(DECIMAL(10, 2), default=0)
 
     cost_per_unit = Column(DECIMAL(10, 2), default=0)
     total_cost = Column(DECIMAL(10, 2), default=0)
