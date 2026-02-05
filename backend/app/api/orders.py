@@ -76,6 +76,10 @@ def create_order(
     logger = logging.getLogger(__name__)
     logger.info(f"Received order creation request: {order_in.model_dump()}")
 
+    if not order_in.order_no or not order_in.order_no.strip():
+        raise HTTPException(status_code=400, detail="order_no is required")
+    order_no = order_in.order_no.strip()
+
     # ✅ Robust Logic: Support both contact_channel and channel fields
     incoming_channel = getattr(order_in, "channel", None)
     final_channel = incoming_channel if incoming_channel else order_in.contact_channel
@@ -174,7 +178,7 @@ def create_order(
 
     # 3. Save Order Header
     new_order = OrderModel(
-        order_no=f"PO-{uuid.uuid4().hex[:6].upper()}",
+        order_no=order_no,
         brand=order_in.brand,
         customer_id=customer.id,
         # ✅ FIX: Save customer_name snapshot
@@ -380,6 +384,8 @@ def update_order(
     balance = grand_total - total_deposit
 
     # Update Order Fields
+    if order_in.order_no and order_in.order_no.strip():
+        order.order_no = order_in.order_no.strip()
     order.customer_id = customer.id
     order.customer_name = clean_name
     order.contact_channel = final_channel

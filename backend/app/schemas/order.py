@@ -109,6 +109,7 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(OrderBase):
+    order_no: str
     customer_name: str
     items: List[OrderItemCreate] = []
 

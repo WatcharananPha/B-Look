@@ -472,7 +472,7 @@ const InvoiceModal = ({ data, onClose }) => {
                     <p className="text-xs font-semibold mt-0.5">{data.brand || "Jersey Express"}</p>
                 </div>
                 <div className="text-right">
-                    <p className="text-xs text-red-100">เลขที่</p>
+                    <p className="text-xs text-red-100">รหัสงาน</p>
                     <p className="text-lg font-bold">{data.order_no || "SP-DRAFT"}</p>
                     {isFactoryView && <span className="inline-block px-2 py-0.5 bg-white/20 rounded text-xs font-bold mt-1">FACTORY</span>}
                 </div>
@@ -484,7 +484,7 @@ const InvoiceModal = ({ data, onClose }) => {
             <div className="p-3 border-r border-gray-300">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
-                        <span className="text-gray-500 text-xs">หมายเลข:</span>
+                        <span className="text-gray-500 text-xs">รหัสงาน:</span>
                         <p className="font-bold text-base">{data.order_no || "SP-DRAFT"}</p>
                     </div>
                     <div>
@@ -545,7 +545,7 @@ const InvoiceModal = ({ data, onClose }) => {
                 </div>
                 {data.graphicCode && (
                     <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-200">
-                        <span className="text-xs text-amber-700">รหัสกราฟิก: <strong>{data.graphicCode}</strong></span>
+                        <span className="text-xs text-amber-700">Admin <strong>{data.graphicCode}</strong></span>
                     </div>
                 )}
             </div>
@@ -732,7 +732,7 @@ const OrderDetailModal = ({ order, onClose }) => {
             <div className="text-right">
                 <h2 className="text-3xl font-bold text-slate-800">ใบสั่งผลิต</h2>
                 <p className="text-sm"><span className="font-semibold mr-2">วันที่:</span>{new Date().toLocaleDateString('th-TH')}</p>
-                <p className="text-sm"><span className="font-semibold mr-2">เลขที่:</span>{data.order_no || "DRAFT"}</p>
+                <p className="text-sm"><span className="font-semibold mr-2">รหัสงาน:</span>{data.order_no || "DRAFT"}</p>
             </div>
         </div>
         {/* Customer Info */}
@@ -1603,7 +1603,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         // Basic Info
         setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
-        setCustomerId(editingOrder.customer_id || "");
+        setCustomerId(editingOrder.order_no || "");
         setPhoneNumber(editingOrder.phone || "");
         setContactChannel(editingOrder.contact_channel || "LINE OA");
         setAddress(editingOrder.address || "");
@@ -1832,10 +1832,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   const balance = grandTotal - deposit1 - deposit2;
 
   const generateOrderId = useCallback(() => {
-    return editingOrder ? editingOrder.order_no : `PO-${Date.now().toString().slice(-6)}`;
-  }, [editingOrder]);
+        return editingOrder ? editingOrder.order_no : (customerId?.trim() || "");
+    }, [editingOrder, customerId]);
 
   const handleSaveOrder = async () => {
+        // Validation: Check if job code is provided
+        if (!customerId || customerId.trim() === "") {
+                onNotify("กรุณากรอกรหัสงาน", "error");
+                return;
+        }
+
     // Validation: Check if customer name is provided
     if (!customerName || customerName.trim() === "") {
         onNotify("กรุณากรอกชื่อลูกค้า", "error");
@@ -1868,6 +1874,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         }
 
         const orderData = {
+            order_no: customerId.trim(),
             customer_name: customerName.trim(),
             customer_id: customerId && customerId !== "" ? Number(customerId) : null,
             phone: phoneNumber && phoneNumber.trim() !== "" ? phoneNumber.trim() : null,
@@ -2071,8 +2078,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="เบอร์โทร" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} />
                         
                         {/* NEW: Customer ID and Graphic Code */}
-                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสลูกค้า (Customer ID)" value={customerId} onChange={e => setCustomerId(e.target.value)} />
-                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสกราฟิก (Graphic Code)" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="รหัสงาน" value={customerId} onChange={e => setCustomerId(e.target.value)} />
+                        <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="Admin" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
                         
                         <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
                         <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
@@ -3209,7 +3216,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                 <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed border-collapse">
                     <thead>
                         <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">เลขที่</th>
+                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">รหัสงาน</th>
                             <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
                             <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
                             <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
