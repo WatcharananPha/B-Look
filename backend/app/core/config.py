@@ -1,23 +1,25 @@
 import os
 from pydantic_settings import BaseSettings
+from typing import List
+
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "B-Look OMS API"
     API_V1_STR: str = "/api/v1"
-    
+
     # --- Database Settings ---
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "password"
     POSTGRES_DB: str = "blook_db"
     POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
-    
+
     @property
     def DATABASE_URL(self) -> str:
         # สร้าง URL เชื่อมต่อ Database
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
 
     # --- Security Settings ---
-    SECRET_KEY: str = "YOUR_SUPER_SECRET_KEY_CHANGE_THIS" 
+    SECRET_KEY: str = "YOUR_SUPER_SECRET_KEY_CHANGE_THIS"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 วัน
 
@@ -26,4 +28,12 @@ class Settings(BaseSettings):
         # อนุญาตให้อ่านไฟล์ .env ได้ (ถ้ามี)
         env_file = ".env"
 
-settings = Settings()   
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost",
+        "http://localhost:8000",
+        "http://localhost:5173",
+        "https://blook8238663284.z23.web.core.windows.net",
+    ]
+
+
+settings = Settings()

@@ -7,6 +7,7 @@ import logging
 
 from app.db.session import engine
 from app.db.base import Base
+from app.core.config import settings
 
 Base.metadata.create_all(bind=engine)
 
@@ -21,7 +22,6 @@ from app.api import (
     company,
 )
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -40,18 +40,28 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "https://blook-web-app.azurewebsites.net",
-    "*",
-]
+configured = getattr(settings, "BACKEND_CORS_ORIGINS", None)
+if configured:
+    origins = [str(o) for o in configured]
+else:
+    origins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "https://blook-web-app.azurewebsites.net",
+    ]
+
+if "*" in origins:
+    allow_origins = ["*"]
+    allow_credentials = False
+else:
+    allow_origins = origins
+    allow_credentials = True
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
