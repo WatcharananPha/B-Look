@@ -1753,7 +1753,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     let qm = it.quantity_matrix;
                     try {
                         if (typeof qm === 'string') qm = JSON.parse(qm);
-                    } catch (e) { qm = qm; }
+                    } catch (err) {
+                        console.error('Error parsing quantity_matrix:', err);
+                        qm = {};
+                    }
                     return { ...it, quantity_matrix: qm };
                 });
                 setOrderItems(rest);
