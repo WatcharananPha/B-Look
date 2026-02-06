@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, DECIMAL, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
+
 # ✅ สำคัญ: ต้อง Import Base จาก base_class เท่านั้น
-from app.db.base_class import Base 
+from app.db.base_class import Base
+
 
 class FabricType(Base):
     __tablename__ = "fabric_types"
@@ -9,40 +11,44 @@ class FabricType(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     price_adjustment = Column(DECIMAL(10, 2), default=0)
-    
+
     # ✅ ต้องมี 2 บรรทัดนี้
     quantity = Column(Integer, default=0)
     cost_price = Column(DECIMAL(10, 2), default=0)
-    
+
     # (Field เก่าเก็บไว้ได้)
     cost_per_yard = Column(DECIMAL(10, 2), default=0)
     is_active = Column(Boolean, default=True)
-    
+
     supplier_id = Column(Integer, ForeignKey("suppliers.id"), nullable=True)
     supplier = relationship("Supplier", back_populates="fabrics")
+
 
 class NeckType(Base):
     __tablename__ = "neck_types"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     price_adjustment = Column(DECIMAL(10, 2), default=0)
-    
+
     # ✅ ต้องมี
     quantity = Column(Integer, default=0)
     cost_price = Column(DECIMAL(10, 2), default=0)
-    
+
     additional_cost = Column(DECIMAL(10, 2), default=0)
+    # When true this neck forces the shoulder to be a slope; pricing included
+    force_slope = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
+
 
 class SleeveType(Base):
     __tablename__ = "sleeve_types"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     price_adjustment = Column(DECIMAL(10, 2), default=0)
-    
+
     # ✅ ต้องมี
     quantity = Column(Integer, default=0)
     cost_price = Column(DECIMAL(10, 2), default=0)
-    
+
     additional_cost = Column(DECIMAL(10, 2), default=0)
     is_active = Column(Boolean, default=True)

@@ -136,25 +136,34 @@ const calculateShippingCost = (qty) => {
 
 // Default Neck Types with prices (from image)
 const DEFAULT_NECK_TYPES = [
-    { id: 1, name: 'คอกลม', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
-    { id: 2, name: 'คอวีชน', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
-    { id: 3, name: 'คอวีไขว้', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false },
-    { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true },
-    { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true },
-    { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 8, name: 'คอหยดนํ้า', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 14, name: 'คอวาย', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
-    { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false },
+    { id: 1, name: 'คอกลม', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true, forceSlope: false },
+    { id: 2, name: 'คอวีชน', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false, forceSlope: false },
+    { id: 3, name: 'คอวีไขว้', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false, forceSlope: false },
+    { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true, forceSlope: false },
+    { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true, forceSlope: false },
+    { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
+    { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
+    { id: 8, name: 'คอหยดนํ้า', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
+    { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
+    { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
+    { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
+    { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
+    { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
+    { id: 14, name: 'คอวาย', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
+    { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
 ];
 
 // Helper: Normalize neck name for matching
 const normalizeNeckName = (name) => (name || "").replace("นํ้า", "น้ำ").trim();
+
+// Helper: detect necks that must force slope shoulder
+const isForceSlopeNeck = (name) => {
+    if (!name) return false;
+    const n = normalizeNeckName(name);
+    // base keywords that indicate forced slope
+    const forceKeys = ['คอปกคางหมู', 'คอหยด', 'คอห้าเหลี่ยมคางหมู'];
+    return forceKeys.some(k => n.includes(k));
+};
 
 // Helper: Load Neck Types from localStorage or default (merge to keep new items/prices)
 const getNeckTypes = () => {
@@ -1596,8 +1605,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   // NEW: Neck Extra Price (ราคาเพิ่มเติมจากประเภทคอ)
     const neckExtraPrice = useMemo(() => getNeckExtraPrice(selectedNeck), [selectedNeck]);
   
-  // NEW: Available neck types from localStorage
-    const [availableNeckTypes] = useState(getNeckTypes());
+    // NEW: Available neck types from localStorage (kept in state so fetch updates reflect in UI)
+        const [availableNeckTypes, setAvailableNeckTypes] = useState(getNeckTypes());
   
   // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
   
@@ -1680,8 +1689,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             total_cost: 0
         };
         // include per-item add-ons and oversize flag so backend can persist and re-calc
-        item.selected_add_ons = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id);
+        const sel = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
+            if (id === 'slopeShoulder' && isSlopeForcedByNeck) return false;
+            return true;
+        });
+        item.selected_add_ons = sel;
         item.is_oversize = Boolean(isOversize);
+        item.slope_included_in_base = Boolean(isSlopeForcedByNeck);
 
         setOrderItems(prev => [...prev, item]);
 
@@ -1830,7 +1844,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                           : (neck.cost_price || neck.additional_cost || neck.price_adjustment || 0),
                       // Determine priceGroup based on neck name
                       priceGroup: neck.name.includes('ปก') ? 'collarOthers' : 'roundVNeck',
-                      supportSlope: ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n))
+                      supportSlope: ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n)),
+                      forceSlope: (neck.force_slope !== undefined ? Boolean(neck.force_slope) : isForceSlopeNeck(neck.name))
                   }));
                   
                   // Merge with localStorage custom items (if any)
@@ -1841,8 +1856,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                   
                   const finalNeckTypes = [...mappedNeckTypes, ...customNecks];
                   
-                  // Update localStorage with backend data
+                  // Update localStorage and state with backend data
                   localStorage.setItem('neckTypes', JSON.stringify(finalNeckTypes));
+                  setAvailableNeckTypes(finalNeckTypes);
               }
                
               if (cData) {
@@ -1883,6 +1899,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         [selectedNeck]
     );
 
+    // If selected neck forces slope shoulder, detect it here
+    const isSlopeForcedByNeck = useMemo(() => isForceSlopeNeck(selectedNeck), [selectedNeck]);
+
     useEffect(() => {
         if (productType !== 'shirt') {
             setSelectedNeck("");
@@ -1921,10 +1940,23 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
     useEffect(() => {
         if (productType !== 'shirt') return;
-        if (selectedNeck.includes('มีลิ้น')) {
+        if (selectedNeck.includes('มีลิ้น') && !isSlopeForcedByNeck) {
             setAddOnOptions(prev => ({ ...prev, collarTongue: true }));
+        } else if (isSlopeForcedByNeck) {
+            // When neck forces slope, ensure collarTongue is not selected (price included)
+            setAddOnOptions(prev => ({ ...prev, collarTongue: false }));
         }
     }, [selectedNeck, productType]);
+
+    // Auto-apply slopeShoulder when selected neck requires it
+    useEffect(() => {
+        if (productType !== 'shirt') return;
+        if (isSlopeForcedByNeck) {
+            // When neck forces slope, do NOT tick slopeShoulder or collarTongue in add-ons
+            // because their cost is already included in the neck price (+40)
+            setAddOnOptions(prev => ({ ...prev, slopeShoulder: false, collarTongue: false }));
+        }
+    }, [isSlopeForcedByNeck, productType]);
 
   // NEW: Step Pricing calculation based on qty and neck type
   // ถ้ามีคำว่า "ปก" ในชื่อคอ = ใช้ราคา collarOthers
@@ -1944,6 +1976,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     
     // Get extra price from neck type and add to base price
     const extraPrice = getNeckExtraPrice(selectedNeck);
+    const slopeAdd = 0;
     
     // ⚠️ DEFENSIVE: extraPrice should NEVER exceed 100
     if (extraPrice > 100) {
@@ -1961,7 +1994,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       
       if (matchedPrice) {
         // รวม extraPrice เข้ากับ basePrice เลย
-        const calculatedPrice = matchedPrice.price + extraPrice;
+                const calculatedPrice = matchedPrice.price + extraPrice + slopeAdd;
         
         // ⚠️ FINAL SANITY CHECK before setState
         if (calculatedPrice > 500) {
@@ -1976,7 +2009,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       }
     } else {
       // ถ้าต่ำกว่า 10 ตัว ใช้ราคาสูงสุด (10-30 ตัว) + extraPrice
-      const calculatedPrice = (isRoundVNeck ? 240 : 300) + extraPrice;
+    const calculatedPrice = (isRoundVNeck ? 240 : 300) + extraPrice + slopeAdd;
       if (calculatedPrice > 500) {
         console.error("🚨 BLOCKED: Price for qty<10 exceeds 500:", calculatedPrice);
         setBasePrice(isRoundVNeck ? 240 : 300);
@@ -1995,16 +2028,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
   // neckExtraPrice ตอนนี้รวมเข้า basePrice แล้ว ไม่ต้อง setNeckExtraPrice แยก
   // แต่ยังเก็บไว้สำหรับแสดง UI
 
-  // NEW: Calculate Add-on Options total
-  const addOnOptionsTotal = useMemo(() => {
-        if (productType !== 'shirt') return 0;
-    return ADDON_OPTIONS.reduce((total, opt) => {
-      if (addOnOptions[opt.id]) {
-        return total + (opt.price * totalQty);
-      }
-      return total;
-    }, 0);
-    }, [addOnOptions, totalQty, productType]);
+    // NEW: Calculate Add-on Options total
+    const addOnOptionsTotal = useMemo(() => {
+                if (productType !== 'shirt') return 0;
+        return ADDON_OPTIONS.reduce((total, opt) => {
+            // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
+            if (opt.id === 'slopeShoulder' && isSlopeForcedByNeck) return total;
+            if (addOnOptions[opt.id]) {
+                return total + (opt.price * totalQty);
+            }
+            return total;
+        }, 0);
+        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck]);
 
   // NEW: Calculate sizing surcharge
     const sizingSurcharge = productType === 'shirt' ? oversizeSurchargeQty * 100 : 0;
@@ -2038,7 +2073,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
     useEffect(() => {
         if (!editingOrder) {
-            setDeposit2(Math.max(calculatedDeposit2, 0));
+            setDeposit2(0);
         }
     }, [calculatedDeposit2, editingOrder]);
   
@@ -2109,8 +2144,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             });
         }
             // attach per-item add-ons and oversize flag for backend
-            finalItems[finalItems.length - 1].selected_add_ons = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id);
-            finalItems[finalItems.length - 1].is_oversize = Boolean(isOversize);
+                // If slope is forced by neck and included in basePrice, don't send it as selected_add_ons to avoid double-count
+                const selectedAddOns = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
+                    // Exclude slopeShoulder and collarTongue from payload when neck forces slope
+                    if (isSlopeForcedByNeck && (id === 'slopeShoulder' || id === 'collarTongue')) return false;
+                    return true;
+                });
+                finalItems[finalItems.length - 1].selected_add_ons = selectedAddOns;
+                finalItems[finalItems.length - 1].is_oversize = Boolean(isOversize);
+                // Indicate explicitly that slope fee is already included in base price when forced
+                finalItems[finalItems.length - 1].slope_included_in_base = Boolean(isSlopeForcedByNeck);
 
         if (finalItems.length === 0) {
             onNotify('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการก่อนบันทึก', 'error');
@@ -2119,6 +2162,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
 
         const orderData = {
             order_no: customerId.trim(),
+            customer_name: customerName && customerName.trim() !== "" ? customerName.trim() : null,
+            phone: phoneNumber && phoneNumber.trim() !== "" ? phoneNumber.trim() : null,
+            contact_channel: contactChannel || null,
+            address: address && address.trim() !== "" ? address.trim() : null,
             graphic_code: graphicCode && graphicCode.trim() !== "" ? graphicCode.trim() : null,
             brand: brand,
             design_fee: Number(designFee) || 0,
@@ -2375,7 +2422,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                 <option value="">-- เลือกคอ --</option>
                                 {availableNeckTypes.map(n => (
                                     <option key={n.id} value={n.name}>
-                                        {n.name} {n.extraPrice > 0 ? `(+${n.extraPrice} รวมใน basePrice)` : ''}
+                                        {n.name}
+                                        {n.extraPrice > 0 && n.forceSlope ? (
+                                            <span> (+{n.extraPrice} รวมใน basePrice, บังคับไหล่สโลป)</span>
+                                        ) : n.extraPrice > 0 ? (
+                                            <span> (+{n.extraPrice} รวมใน basePrice)</span>
+                                        ) : n.forceSlope ? (
+                                            <span> (บังคับไหล่สโลป+40 บาท/ตัว)</span>
+                                        ) : null}
                                     </option>
                                 ))}
                             </select>
@@ -2441,8 +2495,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                                         checked={addOnOptions[opt.id] || false}
                                         disabled={
                                             (opt.id === 'slopeShoulder' && isOversize && isOversizeAllowed) ||
+                                            (opt.id === 'slopeShoulder' && isSlopeForcedByNeck) ||
                                             (opt.id === 'oversizeSlopeShoulder' && isOversize && isOversizeAllowed) ||
-                                            (opt.id === 'collarTongue' && selectedNeck.includes('มีลิ้น'))
+                                            (opt.id === 'collarTongue' && isSlopeForcedByNeck)
                                         }
                                         onChange={e => setAddOnOptions({...addOnOptions, [opt.id]: e.target.checked})}
                                     />

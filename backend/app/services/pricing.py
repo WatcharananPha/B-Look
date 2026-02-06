@@ -165,3 +165,14 @@ class PricingService:
                 f"{fabric_name} (Qty {total_qty})" if fabric_name else "Standard"
             ),
         }
+
+        # Additional pricing for specific neck types
+        if neck:
+            specific_necks = [
+                "คอปกคางหมู (มีลิ้น)",
+                "คอหยดน้ำ",
+                "คอห้าเหลี่ยมคางหมู (มีลิ้น)",
+                "คอห้าเหลี่ยมคางหมู (ไม่มีลิ้น)",
+            ]
+            if neck.name in specific_necks:
+                base_price += Decimal(40)
