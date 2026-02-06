@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -7,7 +7,6 @@ import logging
 
 from app.db.session import engine
 from app.db.base import Base
-from app.core.config import settings
 
 Base.metadata.create_all(bind=engine)
 
@@ -28,6 +27,18 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="B-Look OMS API")
 
 
+# Global OPTIONS handler to ensure preflight requests receive CORS headers
+@app.options("/{rest_of_path:path}")
+def preflight_handler(rest_of_path: str, request: Request):
+    headers = {
+        "Access-Control-Allow-Origin": "https://blook8238663284.z23.web.core.windows.net",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Allow-Credentials": "true",
+    }
+    return Response(status_code=200, headers=headers)
+
+
 # Add validation error handler
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -40,28 +51,19 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-configured = getattr(settings, "BACKEND_CORS_ORIGINS", None)
-if configured:
-    origins = [str(o) for o in configured]
-else:
-    origins = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "https://blook-web-app.azurewebsites.net",
-    ]
-
-if "*" in origins:
-    allow_origins = ["*"]
-    allow_credentials = False
-else:
-    allow_origins = origins
-    allow_credentials = True
+# Hardcoded CORS origins to ensure deployed service always allows the frontend
+origins = [
+    "http://localhost",
+    "http://localhost:8000",
+    "http://localhost:5173",
+    "https://blook8238663284.z23.web.core.windows.net",
+    "https://blook8238663284.z23.web.core.windows.net/",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=allow_credentials,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
