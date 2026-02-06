@@ -12,7 +12,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const LOGO_URL = "/logo.jpg"; 
 
 // 🆕 Application version for cache busting
-const APP_VERSION = "2024.02.05.1";
+const APP_VERSION = "2026.02.06.1649";
 
 // 🆕 Check and clear localStorage if version mismatch (run once on load)
 (() => {
