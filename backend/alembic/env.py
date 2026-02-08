@@ -1,5 +1,5 @@
 from logging.config import fileConfig
-import os # <--- 1. เพิ่ม import os
+import os  # <--- 1. เพิ่ม import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -9,6 +9,7 @@ from alembic import context
 # --- Import App Config & Models ---
 from app.core.config import settings
 from app.db.base import Base
+
 # Import Models ให้ครบเพื่อให้ Autogenerate ทำงาน
 from app.models.user import User
 from app.models.order import Order
@@ -27,13 +28,16 @@ db_url = os.getenv("DATABASE_URL")
 if not db_url:
     db_url = settings.DATABASE_URL
 
-config.set_main_option("sqlalchemy.url", db_url)
+# Escape '%' characters to avoid configparser interpolation issues in alembic
+escaped_db_url = db_url.replace("%", "%%") if isinstance(db_url, str) else db_url
+config.set_main_option("sqlalchemy.url", escaped_db_url)
 # ------------------------------------------------
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
@@ -48,21 +52,24 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # --- Temporary override: force SQLite empty DB to generate full create_table
+    # When running 'alembic revision --autogenerate' this makes Alembic
+    # compare against a blank SQLite DB so it will emit op.create_table()
+    # rather than alter_column on missing tables in target Postgres.
+    # NOTE: revert this change after migration file(s) are generated.
+    from sqlalchemy import create_engine
+
+    connectable = create_engine("sqlite:///./empty_slate.db")
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

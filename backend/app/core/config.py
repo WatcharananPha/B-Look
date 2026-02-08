@@ -1,6 +1,7 @@
 import os
 from pydantic_settings import BaseSettings
 from typing import List
+from sqlalchemy.engine.url import URL
 
 
 class Settings(BaseSettings):
@@ -15,8 +16,21 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        # สร้าง URL เชื่อมต่อ Database
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
+        # สร้าง URL เชื่อมต่อ Database โดยใช้ SQLAlchemy URL.create
+        ssl_mode = os.getenv("POSTGRES_SSLMODE", "prefer")
+        port = int(os.getenv("POSTGRES_PORT", 5432))
+
+        db_url = URL.create(
+            drivername="postgresql+psycopg2",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_SERVER,
+            port=port,
+            database=self.POSTGRES_DB,
+            query={"sslmode": ssl_mode},
+        )
+
+        return db_url.render_as_string(hide_password=False)
 
     # --- Security Settings ---
     SECRET_KEY: str = "YOUR_SUPER_SECRET_KEY_CHANGE_THIS"
