@@ -82,7 +82,7 @@ const ADDON_OPTIONS = [
 ];
 
 // State: addon definitions loaded from backend (authoritative)
-const [addOnDefinitions, setAddOnDefinitions] = useState(ADDON_OPTIONS);
+// NOTE: moved into `App` component to satisfy React Hooks rules.
 
 const buildAddOnOptionsState = (defs) => (defs || []).reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {});
 
@@ -116,7 +116,7 @@ const getExtraShippingCost = () => {
 };
 
 // Helper function: Calculate Shipping Cost
-const calculateShippingCost = (qty) => {
+const _calculateShippingCost = (qty) => {
   if (qty < 10) return 0; // ไม่มีค่าขนส่ง ต่ำกว่า 10 ตัว
   
   const table = getShippingCostTable();
@@ -136,7 +136,7 @@ const calculateShippingCost = (qty) => {
     return baseCost + (extraQty * extraPerUnit);
   }
   
-  return 0;
+    return 0;
 };
 
 // Default Neck Types with prices (from image)
@@ -330,19 +330,27 @@ const fetchWithAuth = async (endpoint, options = {}) => {
   try {
     const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
     // Handle authentication errors (401 and 403 with credential issues)
+    // When authentication fails, clear credentials and emit a logout event.
     if (response.status === 401) {
+        const hadToken = Boolean(token);
         localStorage.removeItem('access_token');
         localStorage.removeItem('user_role');
-        window.location.reload();
+        if (hadToken) {
+            // Notify app to perform a graceful logout (no full-page reload)
+            window.dispatchEvent(new Event('blook:logout'));
+        }
         return null;
     }
     if (response.status === 403) {
         const errorData = await response.json().catch(() => ({}));
         // If it's a credential validation error, treat it like 401
         if (errorData.detail && errorData.detail.includes('Could not validate credentials')) {
+            const hadToken = Boolean(token);
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_role');
-            window.location.reload();
+            if (hadToken) {
+                window.dispatchEvent(new Event('blook:logout'));
+            }
             return null;
         }
         throw new Error(errorData.detail || 'Access forbidden');
@@ -1601,7 +1609,7 @@ const DashboardPage = ({ onEdit }) => {
 };
 
 // 2.2 ORDER CREATION PAGE - FIXED VERSION
-const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
+const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinitions, setAddOnDefinitions }) => {
   const [brand, setBrand] = useState(BRANDS[0]);
   const [deadline, setDeadline] = useState("");
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
@@ -1857,7 +1865,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         setDesignFee(0);
                 setAddOnOptions(buildAddOnOptionsState(addOnDefinitions));
     }
-  }, [editingOrder]);
+    }, [editingOrder, addOnDefinitions]);
 
   // Fetch master data
   useEffect(() => {
@@ -1907,8 +1915,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                   }
 
                   // Overwrite local cache with backend-provided master list
-                  localStorage.setItem('neckTypes', JSON.stringify(finalNeckTypes));
-                  setAvailableNeckTypes(finalNeckTypes);
+                  try {
+                      const currentNecks = JSON.stringify(availableNeckTypes || []);
+                      const incomingNecks = JSON.stringify(finalNeckTypes || []);
+                      localStorage.setItem('neckTypes', incomingNecks);
+                      if (currentNecks !== incomingNecks) {
+                          setAvailableNeckTypes(finalNeckTypes);
+                      }
+                  } catch {
+                      // Fallback: always set
+                      localStorage.setItem('neckTypes', JSON.stringify(finalNeckTypes));
+                      setAvailableNeckTypes(finalNeckTypes);
+                  }
               }
                
               if (cData) {
@@ -1923,12 +1941,22 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
               try {
                   const addons = await fetchWithAuth('/company/addons').catch(() => null);
                   if (addons && Array.isArray(addons)) {
-                      setAddOnDefinitions(addons);
-                      // rebuild addOnOptions state default
-                      setAddOnOptions(buildAddOnOptionsState(addons));
+                      try {
+                          // Avoid updating App-level state if data is identical (prevents unnecessary re-renders)
+                          const current = JSON.stringify(addOnDefinitions || []);
+                          const incoming = JSON.stringify(addons || []);
+                          if (current !== incoming) {
+                              setAddOnDefinitions(addons);
+                              setAddOnOptions(buildAddOnOptionsState(addons));
+                          }
+                      } catch {
+                          // Fallback: if serialization fails, just set state
+                          setAddOnDefinitions(addons);
+                          setAddOnOptions(buildAddOnOptionsState(addons));
+                      }
                   }
               } catch (err) {
-                  console.warn('Failed to load addons from backend, using defaults');
+                  console.warn('Failed to load addons from backend, using defaults', err);
               }
 
               // Set default selections (with safety check)
@@ -1950,9 +1978,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
           } finally {
               setIsLoading(false);
           }
-      };
-      fetchMasters();
-  }, [editingOrder, onNotify]);
+            };
+            fetchMasters();
+        }, [editingOrder, onNotify, setAddOnDefinitions, setAddOnOptions, addOnDefinitions, availableNeckTypes]);
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
@@ -1971,7 +1999,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             setIsOversize(false);
                 setAddOnOptions(buildAddOnOptionsState(addOnDefinitions));
         }
-    }, [productType]);
+    }, [productType, addOnDefinitions]);
 
   // NEW: Calculate quantities for oversize surcharge
   const oversizeSurchargeQty = useMemo(() => {
@@ -2008,7 +2036,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             // When neck forces slope, ensure collarTongue is not selected (price included)
             setAddOnOptions(prev => ({ ...prev, collarTongue: false }));
         }
-    }, [selectedNeck, productType]);
+    }, [selectedNeck, productType, isSlopeForcedByNeck]);
 
     // Auto-apply slopeShoulder when selected neck requires it
     useEffect(() => {
@@ -2026,97 +2054,68 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             // their cost is considered included in the neck price (+40).
             setAddOnOptions(prev => ({ ...prev, slopeShoulder: false, collarTongue: false }));
         }
-    }, [isSlopeForcedByNeck, productType]);
+    }, [isSlopeForcedByNeck, productType, selectedNeck]);
 
-  // NEW: Step Pricing calculation based on qty and neck type
-  // ถ้ามีคำว่า "ปก" ในชื่อคอ = ใช้ราคา collarOthers
-  useEffect(() => {
-        if (productType === 'sportsPants') {
-            setBasePrice(STEP_PRICING.sportsPants);
-            return;
-        }
-        if (productType === 'fashionPants') {
-            setBasePrice(STEP_PRICING.fashionPants);
-            return;
-        }
+    // NEW: Calculate pricing server-side — call backend pricing API
+    useEffect(() => {
+        let mounted = true;
+        const calc = async () => {
+            try {
+                if (totalQty <= 0) {
+                    if (!mounted) return;
+                    setBasePrice(0);
+                    setAddOnCost(0);
+                    setShippingCost(0);
+                    return;
+                }
 
-    const hasCollarWord = selectedNeck.includes('ปก');
-    const isRoundVNeck = !hasCollarWord && ROUND_V_NECK_TYPES.some(type => selectedNeck.includes(type));
-    const pricingTable = isRoundVNeck ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
-    
-    // Get extra price from neck type and add to base price
-    let extraPrice = getNeckExtraPrice(selectedNeck);
-    const slopeAdd = 0;
+                // build selected addon ids
+                const selectedAddOns = (addOnDefinitions || []).filter(opt => addOnOptions[opt.id]).map(o => o.id);
 
-    // --- FIX: Force Price to 340 (Base 300 + 40) for specific necks ---
-    const targetSpecialNecks = [
-        "คอปกคางหมู (มีลิ้น)",
-        "คอหยดนํ้า", "คอหยดน้ำ",
-        "คอห้าเหลี่ยมคางหมู (มีลิ้น)",
-        "คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)"
-    ];
-    if (selectedNeck && targetSpecialNecks.some(n => selectedNeck.includes(n))) {
-        extraPrice = 40; // บังคับบวก 40 บาท เพื่อให้ Base (300) + 40 = 340
-    }
-    // ----------------------------------------------------------------
-    
-    // ⚠️ DEFENSIVE: extraPrice should NEVER exceed 100
-    if (extraPrice > 100) {
-      console.error("🚨 CRITICAL: extraPrice =", extraPrice, "(should be 0-100 max!)");
-      console.error("Neck:", selectedNeck);
-      console.error("This will cause wrong pricing - using 0 instead");
-      // Don't proceed with corrupted data
-      return;
-    }
-    
-        // Special case: certain neck types force a fixed sale price of 340 THB
-        // If this neck is one of the special collar shapes, show base price 300
-        // and auto-select the slope add-on (+40) so UI shows 300 + 40 instead of 340
-        const selNorm = normalizeNeckName(selectedNeck || '');
-        const isSpecial340 = SPECIAL_NECKS_FORCE_340_UI.some(n => normalizeNeckName(n) === selNorm || selNorm.includes(normalizeNeckName(n)));
-        if (isSpecial340) {
-            setBasePrice(300);
-            setAddOnOptions(prev => ({ ...prev, slopeShoulder: true }));
-            return;
-        }
+                const payload = {
+                    total_qty: totalQty,
+                    product_type: productType,
+                    quantity_matrix: quantities,
+                    product_is_oversize: isOversize,
+                    fabric_name: selectedFabric || null,
+                    neck_name: selectedNeck || null,
+                    sleeve_name: selectedSleeve || null,
+                    addon_ids: selectedAddOns,
+                    is_vat_included: isVatIncluded
+                };
 
-        if (totalQty >= 10) {
-      const matchedPrice = pricingTable.find(
-        tier => totalQty >= tier.minQty && totalQty <= tier.maxQty
-      );
-      
-      if (matchedPrice) {
-        // รวม extraPrice เข้ากับ basePrice เลย
-                const calculatedPrice = matchedPrice.price + extraPrice + slopeAdd;
-        
-        // ⚠️ FINAL SANITY CHECK before setState
-        if (calculatedPrice > 500) {
-          console.error("🚨 BLOCKED: Calculated price =", calculatedPrice, "exceeds 500 THB!");
-          console.error("Base:", matchedPrice.price, "+ Extra:", extraPrice);
-          console.error("Using safe default 240 THB instead");
-          setBasePrice(240);
-        } else {
-          setBasePrice(calculatedPrice);
-          console.log("✅ Price calculated:", matchedPrice.price, "+", extraPrice, "=", calculatedPrice);
-        }
-      }
-    } else {
-      // ถ้าต่ำกว่า 10 ตัว ใช้ราคาสูงสุด (10-30 ตัว) + extraPrice
-    const calculatedPrice = (isRoundVNeck ? 240 : 300) + extraPrice + slopeAdd;
-      if (calculatedPrice > 500) {
-        console.error("🚨 BLOCKED: Price for qty<10 exceeds 500:", calculatedPrice);
-        setBasePrice(isRoundVNeck ? 240 : 300);
-      } else {
-        setBasePrice(calculatedPrice);
-      }
-    }
-    }, [totalQty, selectedNeck, productType]);
+                const res = await fetchWithAuth('/pricing/calc', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                }).catch(() => null);
 
-  // NEW: Auto-calculate Shipping Cost based on total quantity
-  useEffect(() => {
-    const calculatedCost = calculateShippingCost(totalQty);
-    setShippingCost(calculatedCost);
-  }, [totalQty]);
+                if (!res) return;
+                if (!mounted) return;
+
+                setBasePrice(res.price_per_unit || 0);
+                setAddOnCost(res.item_addon_total || 0);
+                setShippingCost(res.shipping_cost || 0);
+                // Note: sizing surcharge and VAT handled/displayed from derived values
+            } catch (err) {
+                console.error('Pricing API failed:', err);
+            }
+        };
+        calc();
+        return () => { mounted = false; };
+    }, [
+        totalQty,
+        selectedNeck,
+        productType,
+        selectedFabric,
+        selectedSleeve,
+        isOversize,
+        isVatIncluded,
+        quantities,
+        addOnOptions,
+        addOnDefinitions
+    ]);
+
+    // Shipping cost is calculated on the backend now; frontend reads it from pricing API.
 
   // neckExtraPrice ตอนนี้รวมเข้า basePrice แล้ว ไม่ต้อง setNeckExtraPrice แยก
   // แต่ยังเก็บไว้สำหรับแสดง UI
@@ -2124,6 +2123,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     // NEW: Calculate Add-on Options total
     const addOnOptionsTotal = useMemo(() => {
                 if (productType !== 'shirt') return 0;
+        // If backend provided `addOnCost`, prefer that authoritative value
+        if (addOnCost && Number(addOnCost) > 0) return Number(addOnCost);
         return (addOnDefinitions || []).reduce((total, opt) => {
                 // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
                 // but for our special UI necks we want to show 300 + slope add-on, so count it there.
@@ -2135,7 +2136,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             }
             return total;
         }, 0);
-        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck]);
+        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck, addOnDefinitions, selectedNeck, addOnCost]);
 
   // NEW: Calculate sizing surcharge
     const sizingSurcharge = productType === 'shirt' ? oversizeSurchargeQty * 100 : 0;
@@ -3677,7 +3678,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
 };
 
 // 2.6 SETTINGS PAGE (UPDATED: Delete Modal & Save Notify)
-const SettingsPage = ({ onNotify }) => {
+const SettingsPage = ({ onNotify, addOnDefinitions, setAddOnDefinitions }) => {
   const [pricingRules, setPricingRules] = useState([]);
    
   // Pricing Rule State
@@ -3687,6 +3688,10 @@ const SettingsPage = ({ onNotify }) => {
 
   // Global Config State
   const [globalConfig, setGlobalConfig] = useState({ vat_rate: 7, default_shipping_cost: 0 });
+
+    // Add-on edit state for Settings page
+    const [editingAddOnId, setEditingAddOnId] = useState(null);
+    const [editingAddOnPrice, setEditingAddOnPrice] = useState(0);
 
   // Shipping Cost Table State
   const [shippingTable, setShippingTable] = useState(getShippingCostTable());
@@ -3767,6 +3772,43 @@ const SettingsPage = ({ onNotify }) => {
           onNotify("บันทึกการตั้งค่าเรียบร้อยแล้ว", "success");
       } catch(e) { onNotify("บันทึกการตั้งค่าไม่สำเร็จ: " + e.message, "error"); }
   }
+
+  // --- Add-on price editor (Settings) ---
+  const startEditAddOn = (opt) => {
+      setEditingAddOnId(opt.id);
+      setEditingAddOnPrice(opt.price || 0);
+  };
+
+  const cancelEditAddOn = () => {
+      setEditingAddOnId(null);
+      setEditingAddOnPrice(0);
+  };
+
+  const saveAddOnPrice = async () => {
+      try {
+          // Update local state first so UI updates immediately
+          const updated = (addOnDefinitions || []).map(a => a.id === editingAddOnId ? { ...a, price: Number(editingAddOnPrice) } : a);
+          setAddOnDefinitions(updated);
+
+          // Try to persist to backend if endpoint exists (graceful fallback)
+          try {
+              await fetchWithAuth('/company/addons', {
+                  method: 'PUT',
+                  body: JSON.stringify(updated)
+              });
+          } catch (e) {
+              // it's OK if backend doesn't support persistence yet
+              console.warn('Persisting addons failed (backend may not support PUT /company/addons):', e.message || e);
+          }
+
+          onNotify('บันทึกราคา Add-on เรียบร้อยแล้ว', 'success');
+      } catch (e) {
+          console.error('Failed to save add-on price', e);
+          onNotify('บันทึกราคา Add-on ไม่สำเร็จ', 'error');
+      } finally {
+          cancelEditAddOn();
+      }
+  };
 
   // Shipping Cost Table functions
   const handleAddShippingRow = () => {
@@ -3915,6 +3957,38 @@ const SettingsPage = ({ onNotify }) => {
                       >
                           บันทึกการตั้งค่า
                       </button>
+                  </div>
+
+                  {/* Add-on Prices Editor */}
+                  <div className="bg-white p-4 rounded-3xl shadow-sm border border-purple-100">
+                      <h3 className="text-sm font-bold text-[#1a1c23] mb-3 flex items-center">
+                          <Tag size={18} className="mr-2 text-purple-500" />
+                          ราคาตัวเลือกเพิ่มเติม (Add-on)
+                      </h3>
+                      <div className="space-y-2">
+                          {(addOnDefinitions || ADDON_OPTIONS).map(opt => (
+                              <div key={opt.id} className="flex items-center justify-between gap-2">
+                                  <div>
+                                      <div className="text-sm font-medium">{opt.name}</div>
+                                      <div className="text-xs text-gray-500">id: {opt.id}</div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      {editingAddOnId === opt.id ? (
+                                          <>
+                                              <input type="number" className="w-24 border p-1 rounded text-sm" value={editingAddOnPrice} onChange={e => setEditingAddOnPrice(parseFloat(e.target.value)||0)} />
+                                              <button onClick={saveAddOnPrice} className="px-3 py-1 bg-purple-600 text-white rounded text-xs">บันทึก</button>
+                                              <button onClick={cancelEditAddOn} className="px-3 py-1 text-xs border rounded">ยกเลิก</button>
+                                          </>
+                                      ) : (
+                                          <>
+                                              <div className="text-sm font-bold">+{opt.price} ฿/ตัว</div>
+                                              <button onClick={() => startEditAddOn(opt)} className="ml-3 text-xs text-sky-600 hover:underline">แก้ไข</button>
+                                          </>
+                                      )}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
                   </div>
 
                   {/* Status Options Section */}
@@ -4168,6 +4242,8 @@ const App = () => {
    
   // Notification State
   const [notification, setNotification] = useState(null);
+    // Authoritative add-on definitions (shared across app)
+    const [addOnDefinitions, setAddOnDefinitions] = useState(ADDON_OPTIONS);
   
   // ✅ FIX: Track when customer list should refresh (after order creation)
   const [customerRefreshTrigger, setCustomerRefreshTrigger] = useState(false);
@@ -4187,10 +4263,16 @@ const App = () => {
         // Role already initialized from localStorage on state creation
   }, [isLoggedIn]);
 
-  if (!isLoggedIn) return <LoginPage onLogin={(role) => {
-      setIsLoggedIn(true);
-      setUserRole(role);
-  }} />;
+    // Listen for logout events triggered by fetchWithAuth to gracefully return to login
+    useEffect(() => {
+        const onLogout = () => {
+            setIsLoggedIn(false);
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_role');
+        };
+        window.addEventListener('blook:logout', onLogout);
+        return () => window.removeEventListener('blook:logout', onLogout);
+    }, []);
 
   const handleEditOrder = (order) => {
       setEditingOrder(order);
@@ -4205,17 +4287,28 @@ const App = () => {
       setIsSidebarOpen(false);
   };
 
-  const handleNotify = (message, type = 'success') => {
+  const handleNotify = useCallback((message, type = 'success') => {
       setNotification({ message, type });
       setTimeout(() => setNotification(null), 3000);
-  };
+  }, [setNotification]);
+
+  // Memoized wrapper for order page to toggle customer refresh without recreating inline function
+  const handleOrderNotify = useCallback((msg, type) => {
+      handleNotify(msg, type);
+      if (type === 'success') setCustomerRefreshTrigger(prev => !prev);
+  }, [handleNotify, setCustomerRefreshTrigger]);
+
+  if (!isLoggedIn) return <LoginPage onLogin={(role) => {
+      setIsLoggedIn(true);
+      setUserRole(role);
+  }} />;
 
   const renderContent = () => {
     switch(currentPage) {
         case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
         case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
-        case 'settings': return <SettingsPage onNotify={handleNotify} />;
-        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={(msg, type) => { handleNotify(msg, type); if (type === 'success') setCustomerRefreshTrigger(!customerRefreshTrigger); }} />;
+        case 'settings': return <SettingsPage onNotify={handleNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} />;
+        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleOrderNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} />;
         case 'product': return <ProductPage />;
         case 'customer': return <CustomerPage refreshTrigger={customerRefreshTrigger} />;
         case 'users': return <UserManagementPage onNotify={handleNotify} />;

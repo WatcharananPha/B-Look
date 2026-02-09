@@ -19,6 +19,7 @@ from app.api import (
     customers,
     pricing_rules,
     company,
+    pricing,
     admin,
 )
 
@@ -137,6 +138,7 @@ app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customer
 app.include_router(
     pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"]
 )
+app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 
