@@ -189,7 +189,9 @@ const getNeckTypes = () => {
     try {
         const stored = localStorage.getItem('neckTypes');
         if (stored) {
-            const storedList = JSON.parse(stored);
+            let storedList = JSON.parse(stored);
+            // Clean stored names to remove any appended UI annotations or parentheticals
+            storedList = storedList.map(it => ({ ...it, name: normalizeNeckName(it?.name) }));
             
             // ⚠️ VALIDATION: Check if any neck has corrupted extraPrice (> 100)
             const hasCorruptData = storedList.some(item => 
@@ -202,7 +204,7 @@ const getNeckTypes = () => {
                 return DEFAULT_NECK_TYPES;
             }
             
-            const merged = [...DEFAULT_NECK_TYPES];
+            const merged = [...DEFAULT_NECK_TYPES].map(it => ({ ...it, name: normalizeNeckName(it.name) }));
 
             storedList.forEach((item) => {
                 const storedName = normalizeNeckName(item?.name);
@@ -216,7 +218,7 @@ const getNeckTypes = () => {
                     merged[existingIndex] = {
                         ...merged[existingIndex],
                         ...item,
-                        name: merged[existingIndex].name,
+                        name: normalizeNeckName(merged[existingIndex].name),
                         // ⚠️ Clamp extraPrice to safe range (0-100)
                         extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
                     };
@@ -224,12 +226,31 @@ const getNeckTypes = () => {
                     const isTongueNeck = item.name.includes('มีลิ้น');
                     merged.push({
                         ...item,
+                        name: normalizeNeckName(item.name),
                         extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
                     });
                 }
             });
 
-            return merged;
+            // Deduplicate by normalized name to avoid duplicates from backend+storage
+            const seen = new Set();
+            const deduped = [];
+            for (const m of merged) {
+                const key = normalizeNeckName(m.name);
+                if (!key) continue; // skip empty names
+                if (seen.has(key)) continue;
+                seen.add(key);
+                // Ensure name is cleaned and typed correctly
+                deduped.push({
+                    ...m,
+                    id: m.id || `custom-${key}`,
+                    name: key,
+                    extraPrice: Number(m.extraPrice) || 0,
+                    forceSlope: Boolean(m.forceSlope)
+                });
+            }
+
+            return deduped;
         }
     } catch (e) { 
         console.error("Error loading neckTypes:", e);
@@ -1873,9 +1894,25 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                       !mappedNeckTypes.some(mapped => normalizeNeckName(mapped.name) === normalizeNeckName(stored.name))
                   );
                   
-                  const finalNeckTypes = [...mappedNeckTypes, ...customNecks];
-                  
-                  // Update localStorage and state with backend data
+                  // Merge and dedupe mapped + custom necks by normalized name
+                  const combined = [...mappedNeckTypes, ...customNecks];
+                  const seen = new Set();
+                  const finalNeckTypes = [];
+                  for (const n of combined) {
+                      const key = normalizeNeckName(n.name);
+                      if (!key) continue;
+                      if (seen.has(key)) continue;
+                      seen.add(key);
+                      finalNeckTypes.push({
+                          ...n,
+                          id: n.id || `custom-${key}`,
+                          name: key,
+                          extraPrice: Number(n.extraPrice) || 0,
+                          forceSlope: Boolean(n.forceSlope)
+                      });
+                  }
+
+                  // Persist cleaned/deduped list and update state
                   localStorage.setItem('neckTypes', JSON.stringify(finalNeckTypes));
                   setAvailableNeckTypes(finalNeckTypes);
               }
