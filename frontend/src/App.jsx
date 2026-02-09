@@ -70,16 +70,21 @@ const STEP_PRICING = {
   fashionPants: 280
 };
 
-// Add-on Options with prices
+// Add-on Options default (fallback) - will be replaced by backend data on load
 const ADDON_OPTIONS = [
-  { id: 'longSleeve', name: 'แขนยาว', price: 40 },
-  { id: 'pocket', name: 'กระเป๋า', price: 20 },
-  { id: 'numberName', name: 'รันเบอร์/ชื่อ', price: 20 },
-  { id: 'slopeShoulder', name: 'ไหล่สโลป', price: 40 },
-  { id: 'collarTongue', name: 'คอมีลิ้น', price: 10 },
-  { id: 'shortSleeveAlt', name: 'แขนจิ้ม', price: 20 },
-  { id: 'oversizeSlopeShoulder', name: 'ทรงโอเวอร์ไซส์ไหล่สโลป', price: 60 }
+    { id: 'longSleeve', name: 'แขนยาว', price: 40 },
+    { id: 'pocket', name: 'กระเป๋า', price: 20 },
+    { id: 'numberName', name: 'รันเบอร์/ชื่อ', price: 20 },
+    { id: 'slopeShoulder', name: 'ไหล่สโลป', price: 40 },
+    { id: 'collarTongue', name: 'คอมีลิ้น', price: 10 },
+    { id: 'shortSleeveAlt', name: 'แขนจิ้ม', price: 20 },
+    { id: 'oversizeSlopeShoulder', name: 'ทรงโอเวอร์ไซส์ไหล่สโลป', price: 60 }
 ];
+
+// State: addon definitions loaded from backend (authoritative)
+const [addOnDefinitions, setAddOnDefinitions] = useState(ADDON_OPTIONS);
+
+const buildAddOnOptionsState = (defs) => (defs || []).reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {});
 
 // Default Shipping Cost Table by Quantity (บาทรวม)
 const DEFAULT_SHIPPING_COST_TABLE = [
@@ -162,7 +167,7 @@ const normalizeNeckName = (name) => {
     // normalize misspelling
     n = n.replace(/นํ้า/g, 'น้ำ');
     // remove any parenthesis and their contents which cause duplicate display labels
-    n = n.replace(/\(.*?\)/g, '');
+    // Removed by Admin Request: Show full name with parenthesis
     // collapse multiple spaces and trim
     n = n.replace(/\s+/g, ' ').trim();
     return n;
@@ -1637,10 +1642,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     // deducted from deposit_2. This implements the customer's request.
     const [advanceHold, setAdvanceHold] = useState(0);
   
-  // NEW: Add-on options state (object with boolean values)
-  const [addOnOptions, setAddOnOptions] = useState(
-    ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {})
-  );
+    // NEW: Add-on options state (object with boolean values)
+    const [addOnOptions, setAddOnOptions] = useState(() => buildAddOnOptionsState(ADDON_OPTIONS));
   
   // NEW: Neck Extra Price (ราคาเพิ่มเติมจากประเภทคอ)
     const neckExtraPrice = useMemo(() => getNeckExtraPrice(selectedNeck), [selectedNeck]);
@@ -1852,7 +1855,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         // graphic code intentionally ignored in UI
         setIsOversize(false);
         setDesignFee(0);
-        setAddOnOptions(ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {}));
+                setAddOnOptions(buildAddOnOptionsState(addOnDefinitions));
     }
   }, [editingOrder]);
 
@@ -1875,44 +1878,35 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
               // Backend has: cost_price, additional_cost, price_adjustment
               // Frontend needs: extraPrice
               if (nData && nData.length > 0) {
+                  // Treat backend as authoritative: map backend necks directly
                   const mappedNeckTypes = nData.map((neck) => ({
                       id: neck.id,
                       name: neck.name,
                       // Use cost_price as extraPrice (cost_price is set for special necks with +40)
-                      extraPrice: neck.name.includes('มีลิ้น')
-                          ? 0
-                          : (neck.cost_price || neck.additional_cost || neck.price_adjustment || 0),
-                      // Determine priceGroup based on neck name
+                      extraPrice: (neck.cost_price || neck.additional_cost || neck.price_adjustment || 0),
                       priceGroup: neck.name.includes('ปก') ? 'collarOthers' : 'roundVNeck',
                       supportSlope: ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n)),
                       forceSlope: (neck.force_slope !== undefined ? Boolean(neck.force_slope) : isForceSlopeNeck(neck.name))
                   }));
-                  
-                  // Merge with localStorage custom items (if any)
-                  const neckTypesFromStorage = getNeckTypes();
-                  const customNecks = neckTypesFromStorage.filter(stored => 
-                      !mappedNeckTypes.some(mapped => normalizeNeckName(mapped.name) === normalizeNeckName(stored.name))
-                  );
-                  
-                  // Merge and dedupe mapped + custom necks by normalized name
-                  const combined = [...mappedNeckTypes, ...customNecks];
+
+                  // Deduplicate by normalized name (keep first occurrence)
                   const seen = new Set();
                   const finalNeckTypes = [];
-                  for (const n of combined) {
+                  for (const n of mappedNeckTypes) {
                       const key = normalizeNeckName(n.name);
                       if (!key) continue;
                       if (seen.has(key)) continue;
                       seen.add(key);
                       finalNeckTypes.push({
                           ...n,
-                          id: n.id || `custom-${key}`,
-                          name: key,
+                          id: n.id || `nb-${key}`,
+                          name: n.name,
                           extraPrice: Number(n.extraPrice) || 0,
                           forceSlope: Boolean(n.forceSlope)
                       });
                   }
 
-                  // Persist cleaned/deduped list and update state
+                  // Overwrite local cache with backend-provided master list
                   localStorage.setItem('neckTypes', JSON.stringify(finalNeckTypes));
                   setAvailableNeckTypes(finalNeckTypes);
               }
@@ -1923,6 +1917,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                       default_shipping_cost: cData.default_shipping_cost || 0 
                   });
                   if (!editingOrder) setShippingCost(cData.default_shipping_cost || 0);
+              }
+
+              // Fetch add-on definitions from backend (authoritative)
+              try {
+                  const addons = await fetchWithAuth('/company/addons').catch(() => null);
+                  if (addons && Array.isArray(addons)) {
+                      setAddOnDefinitions(addons);
+                      // rebuild addOnOptions state default
+                      setAddOnOptions(buildAddOnOptionsState(addons));
+                  }
+              } catch (err) {
+                  console.warn('Failed to load addons from backend, using defaults');
               }
 
               // Set default selections (with safety check)
@@ -1963,7 +1969,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
             setSelectedNeck("");
             setSelectedSleeve("");
             setIsOversize(false);
-            setAddOnOptions(ADDON_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {}));
+                setAddOnOptions(buildAddOnOptionsState(addOnDefinitions));
         }
     }, [productType]);
 
@@ -2118,7 +2124,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     // NEW: Calculate Add-on Options total
     const addOnOptionsTotal = useMemo(() => {
                 if (productType !== 'shirt') return 0;
-        return ADDON_OPTIONS.reduce((total, opt) => {
+        return (addOnDefinitions || []).reduce((total, opt) => {
                 // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
                 // but for our special UI necks we want to show 300 + slope add-on, so count it there.
                 const selNorm = normalizeNeckName(selectedNeck || '');
@@ -2237,7 +2243,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                 // If slope is forced by neck and included in basePrice, don't send it as selected_add_ons to avoid double-count
                 const selNormForPayload = normalizeNeckName(selectedNeck || '');
                 const isSpecialForPayload = SPECIAL_NECKS_FORCE_340_UI.some(n => normalizeNeckName(n) === selNormForPayload || selNormForPayload.includes(normalizeNeckName(n)));
-                const selectedAddOns = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
+                const selectedAddOns = (addOnDefinitions || []).filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
                     // Exclude slopeShoulder and collarTongue from payload when neck forces slope
                     // but if this is one of the special UI necks we DO want to include the slope add-on
                     if (isSlopeForcedByNeck && !isSpecialForPayload && (id === 'slopeShoulder' || id === 'collarTongue')) return false;
@@ -2580,7 +2586,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
                     <div className="mb-4 p-3 md:p-4 bg-purple-50 border border-purple-200 rounded-xl">
                         <label className="block text-xs md:text-sm font-bold text-gray-700 mb-3">ตัวเลือกเพิ่มเติม</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-3">
-                            {ADDON_OPTIONS.map(opt => (
+                            {(addOnDefinitions || ADDON_OPTIONS).map(opt => (
                                 <label key={opt.id} className={`flex items-center p-2 md:p-3 rounded-lg border cursor-pointer transition ${addOnOptions[opt.id] ? 'bg-purple-100 border-purple-400' : 'bg-white border-gray-200 hover:border-purple-300'}`}>
                                     <input 
                                         type="checkbox" 

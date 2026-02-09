@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Path ถาวร
+# ✅ ใช้ Path ถาวร /home/blook_prod.db ข้อมูลจะไม่หายเมื่อ Restart
 SQLALCHEMY_DATABASE_URL = "sqlite:////home/blook_prod.db"
 
 engine = create_engine(
