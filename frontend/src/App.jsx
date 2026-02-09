@@ -154,16 +154,35 @@ const DEFAULT_NECK_TYPES = [
 ];
 
 // Helper: Normalize neck name for matching
-const normalizeNeckName = (name) => (name || "").replace("นํ้า", "น้ำ").trim();
-
-// Helper: detect necks that must force slope shoulder
-const isForceSlopeNeck = (name) => {
-    if (!name) return false;
-    const n = normalizeNeckName(name);
-    // base keywords that indicate forced slope
-    const forceKeys = ['คอปกคางหมู', 'คอหยด', 'คอห้าเหลี่ยมคางหมู'];
-    return forceKeys.some(k => n.includes(k));
+// - normalize common misspelling, remove parenthetical annotations (e.g. "(มีลิ้น)")
+// - collapse whitespace
+const normalizeNeckName = (name) => {
+    if (!name) return "";
+    let n = String(name || "");
+    // normalize misspelling
+    n = n.replace(/นํ้า/g, 'น้ำ');
+    // remove any parenthesis and their contents which cause duplicate display labels
+    n = n.replace(/\(.*?\)/g, '');
+    // collapse multiple spaces and trim
+    n = n.replace(/\s+/g, ' ').trim();
+    return n;
 };
+
+// Helper: detect necks that must force slope shoulder (legacy flag)
+const isForceSlopeNeck = (name) => {
+        if (!name) return false;
+        const n = normalizeNeckName(name);
+        // base keywords that indicate forced slope
+        const forceKeys = ['คอปกคางหมู', 'คอหยด', 'คอห้าเหลี่ยมคางหมู'];
+        return forceKeys.some(k => n.includes(k));
+};
+
+// Special necks that should show price as 300 + slope add-on (40)
+const SPECIAL_NECKS_FORCE_340_UI = [
+    'คอปกคางหมู',
+    'คอหยดน้ำ',
+    'คอห้าเหลี่ยมคางหมู'
+];
 
 // Helper: Load Neck Types from localStorage or default (merge to keep new items/prices)
 const getNeckTypes = () => {
@@ -1952,8 +1971,16 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     useEffect(() => {
         if (productType !== 'shirt') return;
         if (isSlopeForcedByNeck) {
-            // When neck forces slope, do NOT tick slopeShoulder or collarTongue in add-ons
-            // because their cost is already included in the neck price (+40)
+            // If this is one of the special collar shapes where we want to
+            // show 300 + slope add-on (instead of embedding 40 into base), skip
+            // disabling slopeShoulder here.
+            const selNorm = normalizeNeckName(selectedNeck || '');
+            const isSpecial340 = SPECIAL_NECKS_FORCE_340_UI.some(n => normalizeNeckName(n) === selNorm || selNorm.includes(normalizeNeckName(n)));
+            if (isSpecial340) return;
+
+            // When neck forces slope and it's NOT in the special UI list,
+            // do NOT tick slopeShoulder or collarTongue in add-ons because
+            // their cost is considered included in the neck price (+40).
             setAddOnOptions(prev => ({ ...prev, slopeShoulder: false, collarTongue: false }));
         }
     }, [isSlopeForcedByNeck, productType]);
@@ -1975,8 +2002,20 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     const pricingTable = isRoundVNeck ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
     
     // Get extra price from neck type and add to base price
-    const extraPrice = getNeckExtraPrice(selectedNeck);
+    let extraPrice = getNeckExtraPrice(selectedNeck);
     const slopeAdd = 0;
+
+    // --- FIX: Force Price to 340 (Base 300 + 40) for specific necks ---
+    const targetSpecialNecks = [
+        "คอปกคางหมู (มีลิ้น)",
+        "คอหยดนํ้า", "คอหยดน้ำ",
+        "คอห้าเหลี่ยมคางหมู (มีลิ้น)",
+        "คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)"
+    ];
+    if (selectedNeck && targetSpecialNecks.some(n => selectedNeck.includes(n))) {
+        extraPrice = 40; // บังคับบวก 40 บาท เพื่อให้ Base (300) + 40 = 340
+    }
+    // ----------------------------------------------------------------
     
     // ⚠️ DEFENSIVE: extraPrice should NEVER exceed 100
     if (extraPrice > 100) {
@@ -1987,7 +2026,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
       return;
     }
     
-    if (totalQty >= 10) {
+        // Special case: certain neck types force a fixed sale price of 340 THB
+        // If this neck is one of the special collar shapes, show base price 300
+        // and auto-select the slope add-on (+40) so UI shows 300 + 40 instead of 340
+        const selNorm = normalizeNeckName(selectedNeck || '');
+        const isSpecial340 = SPECIAL_NECKS_FORCE_340_UI.some(n => normalizeNeckName(n) === selNorm || selNorm.includes(normalizeNeckName(n)));
+        if (isSpecial340) {
+            setBasePrice(300);
+            setAddOnOptions(prev => ({ ...prev, slopeShoulder: true }));
+            return;
+        }
+
+        if (totalQty >= 10) {
       const matchedPrice = pricingTable.find(
         tier => totalQty >= tier.minQty && totalQty <= tier.maxQty
       );
@@ -2032,8 +2082,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
     const addOnOptionsTotal = useMemo(() => {
                 if (productType !== 'shirt') return 0;
         return ADDON_OPTIONS.reduce((total, opt) => {
-            // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
-            if (opt.id === 'slopeShoulder' && isSlopeForcedByNeck) return total;
+                // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
+                // but for our special UI necks we want to show 300 + slope add-on, so count it there.
+                const selNorm = normalizeNeckName(selectedNeck || '');
+                const isSpecial340Local = SPECIAL_NECKS_FORCE_340_UI.some(n => normalizeNeckName(n) === selNorm || selNorm.includes(normalizeNeckName(n)));
+                if (opt.id === 'slopeShoulder' && isSlopeForcedByNeck && !isSpecial340Local) return total;
             if (addOnOptions[opt.id]) {
                 return total + (opt.price * totalQty);
             }
@@ -2145,15 +2198,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify }) => {
         }
             // attach per-item add-ons and oversize flag for backend
                 // If slope is forced by neck and included in basePrice, don't send it as selected_add_ons to avoid double-count
+                const selNormForPayload = normalizeNeckName(selectedNeck || '');
+                const isSpecialForPayload = SPECIAL_NECKS_FORCE_340_UI.some(n => normalizeNeckName(n) === selNormForPayload || selNormForPayload.includes(normalizeNeckName(n)));
                 const selectedAddOns = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
                     // Exclude slopeShoulder and collarTongue from payload when neck forces slope
-                    if (isSlopeForcedByNeck && (id === 'slopeShoulder' || id === 'collarTongue')) return false;
+                    // but if this is one of the special UI necks we DO want to include the slope add-on
+                    if (isSlopeForcedByNeck && !isSpecialForPayload && (id === 'slopeShoulder' || id === 'collarTongue')) return false;
                     return true;
                 });
                 finalItems[finalItems.length - 1].selected_add_ons = selectedAddOns;
                 finalItems[finalItems.length - 1].is_oversize = Boolean(isOversize);
-                // Indicate explicitly that slope fee is already included in base price when forced
-                finalItems[finalItems.length - 1].slope_included_in_base = Boolean(isSlopeForcedByNeck);
+                // Indicate explicitly that slope fee is already included in base price when forced (and NOT the special UI case)
+                finalItems[finalItems.length - 1].slope_included_in_base = Boolean(isSlopeForcedByNeck && !isSpecialForPayload);
 
         if (finalItems.length === 0) {
             onNotify('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการก่อนบันทึก', 'error');

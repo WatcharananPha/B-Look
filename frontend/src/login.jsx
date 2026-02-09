@@ -140,7 +140,7 @@ const LoginPage = ({ onLogin }) => {
                 }}
                 theme="outline"
                 size="large"
-                width="100%" 
+                 
                 text="continue_with"
             />
         </div>
