@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Calendar, Save, Calculator, AlertCircle, User, Box, FileText, 
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
@@ -1658,6 +1658,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   
     // NEW: Available neck types from localStorage (kept in state so fetch updates reflect in UI)
         const [availableNeckTypes, setAvailableNeckTypes] = useState(getNeckTypes());
+    // Refs to hold latest values so master-fetch effect can compare without
+    // including these states in the effect dependency array (avoids self-triggering loops)
+    const addOnDefinitionsRef = useRef(addOnDefinitions);
+    useEffect(() => { addOnDefinitionsRef.current = addOnDefinitions; }, [addOnDefinitions]);
+    const availableNeckTypesRef = useRef(availableNeckTypes);
+    useEffect(() => { availableNeckTypesRef.current = availableNeckTypes; }, [availableNeckTypes]);
   
   // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
   
@@ -1916,7 +1922,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
                   // Overwrite local cache with backend-provided master list
                   try {
-                      const currentNecks = JSON.stringify(availableNeckTypes || []);
+                      const currentNecks = JSON.stringify(availableNeckTypesRef.current || []);
                       const incomingNecks = JSON.stringify(finalNeckTypes || []);
                       localStorage.setItem('neckTypes', incomingNecks);
                       if (currentNecks !== incomingNecks) {
@@ -1943,7 +1949,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                   if (addons && Array.isArray(addons)) {
                       try {
                           // Avoid updating App-level state if data is identical (prevents unnecessary re-renders)
-                          const current = JSON.stringify(addOnDefinitions || []);
+                          const current = JSON.stringify(addOnDefinitionsRef.current || []);
                           const incoming = JSON.stringify(addons || []);
                           if (current !== incoming) {
                               setAddOnDefinitions(addons);
@@ -1980,7 +1986,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
           }
             };
             fetchMasters();
-        }, [editingOrder, onNotify, setAddOnDefinitions, setAddOnOptions, addOnDefinitions, availableNeckTypes]);
+        }, [editingOrder, onNotify, setAddOnDefinitions, setAddOnOptions, setAvailableNeckTypes]);
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
@@ -2061,9 +2067,25 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         let mounted = true;
         const calc = async () => {
             try {
+                // If quantity is zero, show a sensible default base price
+                // (price for the first tier / minimum quantity) so the UI
+                // doesn't display 0. Final calculations for actual orders
+                // still use the backend when qty > 0.
                 if (totalQty <= 0) {
                     if (!mounted) return;
-                    setBasePrice(0);
+                    // determine local base unit using STEP_PRICING
+                    let baseUnit = 0;
+                    if (productType === 'sportsPants') baseUnit = STEP_PRICING.sportsPants;
+                    else if (productType === 'fashionPants') baseUnit = STEP_PRICING.fashionPants;
+                    else {
+                        const neckName = selectedNeck || '';
+                        const hasCollar = neckName.includes('ปก');
+                        const isRoundV = !hasCollar && ['คอกลม','คอวี','คอวีตัด','คอวีชน','คอวีไขว้'].some(k => neckName.includes(k));
+                        const table = isRoundV ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
+                        // use first tier price as default
+                        baseUnit = (table && table.length > 0) ? table[0].price : 0;
+                    }
+                    setBasePrice(Number(baseUnit) || 0);
                     setAddOnCost(0);
                     setShippingCost(0);
                     return;
@@ -2089,12 +2111,67 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                     body: JSON.stringify(payload)
                 }).catch(() => null);
 
-                if (!res) return;
                 if (!mounted) return;
 
-                setBasePrice(res.price_per_unit || 0);
-                setAddOnCost(res.item_addon_total || 0);
-                setShippingCost(res.shipping_cost || 0);
+                if (res) {
+                    setBasePrice(res.price_per_unit || 0);
+                    setAddOnCost(res.item_addon_total || 0);
+                    setShippingCost(res.shipping_cost || 0);
+                } else {
+                    // Server didn't respond — fallback to local calculation so UI remains usable
+                    console.warn('Pricing API unavailable, using local fallback');
+                    // Local base unit calculation (mirror backend STEP_PRICING)
+                    let base_unit = 0;
+                    if (productType === 'sportsPants') base_unit = STEP_PRICING.sportsPants;
+                    else if (productType === 'fashionPants') base_unit = STEP_PRICING.fashionPants;
+                    else {
+                        const neckName = selectedNeck || '';
+                        const hasCollarWord = neckName.includes('ปก');
+                        const isRoundVLocal = !hasCollarWord && ['คอกลม','คอวี','คอวีตัด','คอวีชน','คอวีไขว้'].some(k => neckName.includes(k));
+                        const pricingTableLocal = (isRoundVLocal ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers);
+                        if (totalQty >= 10) {
+                            const matchedLocal = pricingTableLocal.find(t => totalQty >= t.minQty && totalQty <= t.maxQty);
+                            base_unit = matchedLocal ? matchedLocal.price : pricingTableLocal[0].price;
+                        } else {
+                            base_unit = pricingTableLocal[0].price;
+                        }
+                    }
+
+                    // local addon total
+                    const selectedAddOns = (addOnDefinitionsRef.current || []).filter(opt => addOnOptions[opt.id]).map(o => o.id);
+                    const addonsListLocal = (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0) ? addOnDefinitionsRef.current : ADDON_OPTIONS;
+                    let item_addon_total_local = 0;
+                    // detect force_slope from available necks (if present)
+                    let force_slope_local = false;
+                    if (selectedNeck) {
+                        const foundNeck = (availableNeckTypesRef.current || []).find(n => (n.name || '').includes(selectedNeck) || selectedNeck.includes(n.name));
+                        if (foundNeck) force_slope_local = Boolean(foundNeck.forceSlope || foundNeck.force_slope);
+                    }
+                    const special_necks_local = ['คอปกคางหมู','คอหยดน้ำ','คอห้าเหลี่ยมคางหมู'];
+                    const is_special_340_local = special_necks_local.some(s => (selectedNeck || '').includes(s));
+                    for (const aid of selectedAddOns) {
+                        const aobj = addonsListLocal.find(a => a.id === aid || a.name === aid);
+                        const price = aobj ? Number(aobj.price || 0) : 0;
+                        if (force_slope_local && (aid === 'slopeShoulder' || aid === 'collarTongue') && !is_special_340_local) continue;
+                        item_addon_total_local += price * totalQty;
+                    }
+
+                    // local shipping heuristic
+                    let shipping_cost_local = 0;
+                    if (totalQty < 10) shipping_cost_local = 0;
+                    else if (totalQty <= 15) shipping_cost_local = 60;
+                    else if (totalQty <= 20) shipping_cost_local = 80;
+                    else if (totalQty <= 30) shipping_cost_local = 100;
+                    else if (totalQty <= 40) shipping_cost_local = 120;
+                    else if (totalQty <= 50) shipping_cost_local = 180;
+                    else if (totalQty <= 70) shipping_cost_local = 200;
+                    else if (totalQty <= 100) shipping_cost_local = 230;
+                    else shipping_cost_local = 230 + ((totalQty - 100) * 50);
+
+                    setBasePrice(Number(base_unit) || 0);
+                    setAddOnCost(Number(item_addon_total_local) || 0);
+                    setShippingCost(Number(shipping_cost_local) || 0);
+                }
                 // Note: sizing surcharge and VAT handled/displayed from derived values
             } catch (err) {
                 console.error('Pricing API failed:', err);

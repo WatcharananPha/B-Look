@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, status, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm 
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import text, inspect
 from app.db.base_class import Base
 from app.db.session import engine, SessionLocal
@@ -15,7 +15,17 @@ from app.models.pricing_rule import PricingRule
 from app.models.company import Company
 from app.models.audit_log import AuditLog
 
-from app.api import auth, orders, products, suppliers, customers, pricing_rules, company, admin
+from app.api import (
+    auth,
+    orders,
+    products,
+    suppliers,
+    customers,
+    pricing_rules,
+    company,
+    admin,
+    pricing,
+)
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -31,11 +41,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 def initialize_system():
     logger.info("🛠️ DATABASE: Creating tables...")
     Base.metadata.create_all(bind=engine)
-    
+
     with engine.connect() as conn:
         try:
             logger.info("🧹 SEED: Syncing Product Data...")
@@ -43,7 +54,7 @@ def initialize_system():
             conn.execute(text("DELETE FROM fabric_types"))
             conn.execute(text("DELETE FROM sleeve_types"))
             conn.execute(text("DELETE FROM neck_types"))
-            
+
             # 2. รายการคอ (ตามที่คุณระบุ 100%)
             neck_list = [
                 "คอกลม",
@@ -60,52 +71,93 @@ def initialize_system():
                 "คอวีปก (มีลิ้น)",
                 "คอโปโล",
                 "คอวาย",
-                "คอเชิ้ตฐานตั้ง"
+                "คอเชิ้ตฐานตั้ง",
             ]
-            
+
             for name in neck_list:
                 is_special_340 = "(บังคับไหล่สโลป+40 บาท/ตัว)" in name
                 # ตั้งราคา additional_cost = 40 ทันทีถ้าเป็นคอพิเศษ
                 add_cost = 40 if is_special_340 else 0
                 force_slope = 1 if is_special_340 else 0
-                
-                conn.execute(text("""
+
+                conn.execute(
+                    text(
+                        """
                     INSERT INTO neck_types 
                     (name, price_adjustment, additional_cost, force_slope, is_active, quantity, cost_price)
                     VALUES (:n, 0, :ac, :fs, 1, 0, 0)
-                """), {"n": name, "ac": add_cost, "fs": force_slope})
-            
+                """
+                    ),
+                    {"n": name, "ac": add_cost, "fs": force_slope},
+                )
+
             # Create Admin
-            user_check = conn.execute(text("SELECT * FROM users WHERE username='admin'")).fetchone()
+            user_check = conn.execute(
+                text("SELECT * FROM users WHERE username='admin'")
+            ).fetchone()
             if not user_check:
                 pw_hash = "b2"
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     INSERT INTO users (username, password_hash, full_name, role, is_active)
                     VALUES ('admin', :p, 'System Admin', 'owner', 1)
-                """), {"p": pw_hash})
+                """
+                    ),
+                    {"p": pw_hash},
+                )
 
             conn.commit()
             logger.info("✅ SEED: Complete.")
         except Exception as e:
             logger.error(f"❌ SEED ERROR: {e}")
 
+
 @app.post("/api/v1/auth/login/access-token")
 def login_stable(form_data: OAuth2PasswordRequestForm = Depends()):
     if form_data.username == "admin" and form_data.password == "password123":
-        return {"access_token": "stable-admin-token-999", "token_type": "bearer", "role": "owner"}
+        return {
+            "access_token": "stable-admin-token-999",
+            "token_type": "bearer",
+            "role": "owner",
+        }
     raise HTTPException(status_code=400, detail="Incorrect username or password")
+
 
 @app.get("/api/v1/users/me")
 def read_users_me():
-    return {"id": 1, "username": "admin", "full_name": "System Admin", "role": "owner", "is_active": True}
+    return {
+        "id": 1,
+        "username": "admin",
+        "full_name": "System Admin",
+        "role": "owner",
+        "is_active": True,
+    }
+
 
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(suppliers.router, prefix="/api/v1/suppliers", tags=["Suppliers"])
 app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
-app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
+app.include_router(
+    pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"]
+)
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+
+# Log registered routes for easier troubleshooting in production
+try:
+    logger.info("Registered routes:")
+    for r in app.router.routes:
+        try:
+            methods = getattr(r, 'methods', None)
+            logger.info(f" - {getattr(r, 'path', getattr(r, 'name', 'unknown'))} methods={methods}")
+        except Exception:
+            logger.exception("Failed to log route")
+except Exception:
+    logger.exception("Failed to enumerate routes at startup")
+app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
+
 
 @app.get("/")
 def read_root():
