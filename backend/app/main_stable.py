@@ -45,7 +45,12 @@ app.add_middleware(
 @app.on_event("startup")
 def initialize_system():
     logger.info("🛠️ DATABASE: Creating tables...")
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        logger.error(f"❌ Could not create DB tables at startup: {e}")
+        # If DB is unavailable, skip further seeding to avoid crashing the app
+        return
 
     with engine.connect() as conn:
         try:
@@ -64,7 +69,7 @@ def initialize_system():
                 "คอวีปก",
                 "คอห้าเหลี่ยม",
                 "คอปกคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)",
-                "คอหยดนํ้า (บังคับไหล่สโลป+40 บาท/ตัว)",
+                "คอหยดน้ำ (บังคับไหล่สโลป+40 บาท/ตัว)",
                 "คอห้าเหลี่ยมคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)",
                 "คอห้าเหลี่ยมคางหมู (ไม่มีลื่น) (บังคับไหล่สโลป+40 บาท/ตัว)",
                 "คอจีน",
@@ -150,12 +155,24 @@ try:
     logger.info("Registered routes:")
     for r in app.router.routes:
         try:
-            methods = getattr(r, 'methods', None)
-            logger.info(f" - {getattr(r, 'path', getattr(r, 'name', 'unknown'))} methods={methods}")
+            methods = getattr(r, "methods", None)
+            logger.info(
+                f" - {getattr(r, 'path', getattr(r, 'name', 'unknown'))} methods={methods}"
+            )
         except Exception:
             logger.exception("Failed to log route")
 except Exception:
     logger.exception("Failed to enumerate routes at startup")
+
+# Defensive: ensure pricing.calc exists even if router import/registration failed
+try:
+    from app.api.pricing import calculate_price
+
+    # Register explicit POST route to guarantee compatibility with older deployments
+    app.post("/api/v1/pricing/calc")(calculate_price)
+    logger.info("✅ Explicit route /api/v1/pricing/calc registered via calculate_price")
+except Exception:
+    logger.exception("Could not register explicit pricing handler")
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 
 

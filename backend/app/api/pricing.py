@@ -113,7 +113,34 @@ def calculate_price(payload: PriceRequest, db: Session = Depends(get_db)) -> Any
     neck_extra = 0.0
     force_slope = False
     if payload.neck_name:
+        # Try exact match first
         n = db.query(NeckType).filter(NeckType.name == payload.neck_name).first()
+        if not n:
+            # Fallback: tolerant matching — normalize common variation and ignore parenthetical annotations
+            def _norm(s: str) -> str:
+                if not s:
+                    return ""
+                ns = str(s)
+                ns = ns.replace("นํ้า", "น้ำ")
+                # remove parentheses and contents
+                import re
+
+                ns = re.sub(r"\(.*?\)", "", ns)
+                ns = re.sub(r"\s+", " ", ns).strip()
+                return ns
+
+            needle = _norm(payload.neck_name)
+            for cand in db.query(NeckType).all():
+                if not cand or not cand.name:
+                    continue
+                if (
+                    _norm(cand.name) == needle
+                    or needle in _norm(cand.name)
+                    or _norm(cand.name) in needle
+                ):
+                    n = cand
+                    break
+
         if n:
             neck_extra = (
                 float(n.price_adjustment or 0)

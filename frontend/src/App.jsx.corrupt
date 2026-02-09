@@ -31,186 +31,68 @@ const APP_VERSION = "2026.02.06.1649";
         });
         
         // Update version
-        localStorage.setItem('appVersion', APP_VERSION);
-        console.log('✅ Cache cleaned. Please refresh if you see old data.');
-    }
-})();
+        // Fetch master data
+        useEffect(() => {
+            const controller = new AbortController();
+            const signal = controller.signal;
 
-// --- CONSTANTS ---
-const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
-const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+            const fetchMasters = async () => {
+                try {
+                    setIsLoading(true);
+                    const [fData, nData, sData, cData, addons] = await Promise.all([
+                        fetchWithAuth('/products/fabrics', { signal }).catch(() => null),
+                        fetchWithAuth('/products/necks', { signal }).catch(() => null),
+                        fetchWithAuth('/products/sleeves', { signal }).catch(() => null),
+                        fetchWithAuth('/company/config', { signal }).catch(() => null),
+                        fetchWithAuth('/company/addons', { signal }).catch(() => null)
+                    ]);
 
-const PRODUCT_TYPES = [
-    { id: 'shirt', label: 'เสื้อพิมพ์ลาย' },
-    { id: 'sportsPants', label: 'กางเกงกีฬา' },
-    { id: 'fashionPants', label: 'กางเกงแฟชั่น' }
-];
+                    setFabrics(fData || []);
+                    setSleeves(sData || []);
 
-// Step Pricing by Quantity and Collar Type
-const STEP_PRICING = {
-  // คอกลม/วี - Round/V-neck
-  roundVNeck: [
-    { minQty: 10, maxQty: 30, price: 240 },
-    { minQty: 31, maxQty: 50, price: 220 },
-    { minQty: 51, maxQty: 100, price: 190 },
-    { minQty: 101, maxQty: 300, price: 180 },
-    { minQty: 301, maxQty: 99999, price: 170 } // > 300 ตัว
-  ],
-  // คอปก/อื่นๆ - Collar/Others
-  collarOthers: [
-    { minQty: 10, maxQty: 30, price: 300 },
-    { minQty: 31, maxQty: 50, price: 260 },
-    { minQty: 51, maxQty: 100, price: 240 },
-    { minQty: 101, maxQty: 300, price: 220 },
-    { minQty: 301, maxQty: 99999, price: 200 } // > 300 ตัว
-  ],
-  // กางเกงกีฬา - Sports Pants
-  sportsPants: 210,
-  // กางเกงแฟชั่น - Fashion Pants
-  fashionPants: 280
-};
+                    // Map backend neck types to frontend format
+                    if (nData && nData.length > 0) {
+                        const mappedNeckTypes = nData.map((neck) => ({
+                            id: neck.id,
+                            name: neck.name,
+                            extraPrice: (neck.cost_price || neck.additional_cost || neck.price_adjustment || 0),
+                            priceGroup: neck.name.includes('ปก') ? 'collarOthers' : 'roundVNeck',
+                            supportSlope: ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n)),
+                            forceSlope: (neck.force_slope !== undefined ? Boolean(neck.force_slope) : isForceSlopeNeck(neck.name))
+                        }));
 
-// Add-on Options default (fallback) - will be replaced by backend data on load
-const ADDON_OPTIONS = [
-    { id: 'longSleeve', name: 'แขนยาว', price: 40 },
-    { id: 'pocket', name: 'กระเป๋า', price: 20 },
-    { id: 'numberName', name: 'รันเบอร์/ชื่อ', price: 20 },
-    { id: 'slopeShoulder', name: 'ไหล่สโลป', price: 40 },
-    { id: 'collarTongue', name: 'คอมีลิ้น', price: 10 },
-    { id: 'shortSleeveAlt', name: 'แขนจิ้ม', price: 20 },
-    { id: 'oversizeSlopeShoulder', name: 'ทรงโอเวอร์ไซส์ไหล่สโลป', price: 60 }
-];
+                        const seen = new Set();
+                        const finalNeckTypes = [];
+                        for (const n of mappedNeckTypes) {
+                            const key = normalizeNeckName(n.name);
+                            if (!key) continue;
+                            if (seen.has(key)) continue;
+                            seen.add(key);
+                            finalNeckTypes.push({
+                                // 🆕 Application version for cache busting
+                                const APP_VERSION = "2026.02.06.1649";
 
-// State: addon definitions loaded from backend (authoritative)
-// NOTE: moved into `App` component to satisfy React Hooks rules.
-
-const buildAddOnOptionsState = (defs) => (defs || []).reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {});
-
-// Default Shipping Cost Table by Quantity (บาทรวม)
-const DEFAULT_SHIPPING_COST_TABLE = [
-  { minQty: 10, maxQty: 15, cost: 60 },
-  { minQty: 16, maxQty: 20, cost: 80 },
-  { minQty: 21, maxQty: 30, cost: 100 },
-  { minQty: 31, maxQty: 40, cost: 120 },
-  { minQty: 41, maxQty: 50, cost: 180 },
-  { minQty: 51, maxQty: 70, cost: 200 },
-  { minQty: 80, maxQty: 100, cost: 230 }
-];
-
-// Helper: Load Shipping Table from localStorage or default
-const getShippingCostTable = () => {
-  try {
-    const stored = localStorage.getItem('shippingCostTable');
-    if (stored) return JSON.parse(stored);
-  } catch (e) { console.error(e); }
-  return DEFAULT_SHIPPING_COST_TABLE;
-};
-
-// Helper: Get extra cost per unit for qty > 100
-const getExtraShippingCost = () => {
-  try {
-    const stored = localStorage.getItem('extraShippingCostPerUnit');
-    if (stored) return JSON.parse(stored);
-  } catch (e) { console.error(e); }
-  return 50; // default
-};
-
-// Helper function: Calculate Shipping Cost
-const _calculateShippingCost = (qty) => {
-  if (qty < 10) return 0; // ไม่มีค่าขนส่ง ต่ำกว่า 10 ตัว
-  
-  const table = getShippingCostTable();
-  const extraPerUnit = getExtraShippingCost();
-  
-  // ค้นหาตามตารางปกติ
-  const shippingTier = table.find(tier => qty >= tier.minQty && qty <= tier.maxQty);
-  if (shippingTier) return shippingTier.cost;
-  
-  // ช่วง 71-79 ใช้ราคา 51-70 (200)
-  if (qty >= 71 && qty <= 79) return 200;
-  
-  // ถ้า > 100 ตัว: ราคา 100 ตัว + (qty - 100) * extraPerUnit
-  if (qty > 100) {
-    const baseCost = 230; // ค่าขนส่ง 100 ตัว
-    const extraQty = qty - 100;
-    return baseCost + (extraQty * extraPerUnit);
-  }
-  
-    return 0;
-};
-
-// Default Neck Types with prices (from image)
-const DEFAULT_NECK_TYPES = [
-    { id: 1, name: 'คอกลม', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true, forceSlope: false },
-    { id: 2, name: 'คอวีชน', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false, forceSlope: false },
-    { id: 3, name: 'คอวีไขว้', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: false, forceSlope: false },
-    { id: 4, name: 'คอวีตัด', extraPrice: 0, priceGroup: 'roundVNeck', supportSlope: true, forceSlope: false },
-    { id: 5, name: 'คอวีปก', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: true, forceSlope: false },
-    { id: 6, name: 'คอห้าเหลี่ยม', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
-    { id: 7, name: 'คอปกคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
-    { id: 8, name: 'คอหยดนํ้า', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
-    { id: 9, name: 'คอห้าเหลี่ยมคางหมู (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
-    { id: 10, name: 'คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: true },
-    { id: 11, name: 'คอจีน', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
-    { id: 12, name: 'คอวีปก (มีลิ้น)', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
-    { id: 13, name: 'คอโปโล', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
-    { id: 14, name: 'คอวาย', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
-    { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
-];
-
-// Helper: Normalize neck name for matching
-// - normalize common misspelling, remove parenthetical annotations (e.g. "(มีลิ้น)")
-// - collapse whitespace
-const normalizeNeckName = (name) => {
-    if (!name) return "";
-    let n = String(name || "");
-    // normalize misspelling
-    n = n.replace(/นํ้า/g, 'น้ำ');
-    // remove any parenthesis and their contents which cause duplicate display labels
-    // Removed by Admin Request: Show full name with parenthesis
-    // collapse multiple spaces and trim
-    n = n.replace(/\s+/g, ' ').trim();
-    return n;
-};
-
-// Helper: collapse duplicate annotations like "(บังคับไหล่สโลป+40 บาท/ตัว) (บังคับ...)" -> single occurrence
-const collapseDuplicateAnnotation = (name) => {
-    if (!name || typeof name !== 'string') return name;
-    // exact annotation to collapse (escape for regex)
-    const anno = '(บังคับไหล่สโลป+40 บาท/ตัว)';
-    const esc = anno.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-    const re = new RegExp(`(?:${esc})(?:\\s*${esc})+`, 'g');
-    let out = name.replace(re, anno);
-    // collapse multiple spaces and trim
-    out = out.replace(/\s+/g, ' ').trim();
-    return out;
-};
-
-// Helper: detect necks that must force slope shoulder (legacy flag)
-const isForceSlopeNeck = (name) => {
-        if (!name) return false;
-        const n = normalizeNeckName(name);
-        // base keywords that indicate forced slope
-        const forceKeys = ['คอปกคางหมู', 'คอหยด', 'คอห้าเหลี่ยมคางหมู'];
-        return forceKeys.some(k => n.includes(k));
-};
-
-// Special necks that should show price as 300 + slope add-on (40)
-const SPECIAL_NECKS_FORCE_340_UI = [
-    'คอปกคางหมู',
-    'คอหยดน้ำ',
-    'คอห้าเหลี่ยมคางหมู'
-];
-
-// Helper: Load Neck Types from localStorage or default (merge to keep new items/prices)
-const getNeckTypes = () => {
-    try {
-        const stored = localStorage.getItem('neckTypes');
-        if (stored) {
-            let storedList = JSON.parse(stored);
-            // Clean stored names to remove any appended UI annotations or parentheticals
-            storedList = storedList.map(it => ({ ...it, name: normalizeNeckName(it?.name) }));
-            
+                                // 🆕 Check and clear localStorage if version mismatch (run once on load)
+                                (() => {
+                                    const storedVersion = localStorage.getItem('appVersion');
+                                    if (storedVersion !== APP_VERSION) {
+                                        console.log('🔄 Version update detected. Clearing potentially corrupted cache...');
+                                        console.log(`   Old: ${storedVersion} → New: ${APP_VERSION}`);
+        
+                                        // Remove potentially corrupted data
+                                        const itemsToRemove = ['neckTypes', 'fabricTypes', 'sleeveTypes'];
+                                        itemsToRemove.forEach(item => {
+                                            if (localStorage.getItem(item)) {
+                                                console.log(`   ✓ Removed: ${item}`);
+                                                localStorage.removeItem(item);
+                                            }
+                                        });
+        
+                                        // Update version
+                                        localStorage.setItem('appVersion', APP_VERSION);
+                                        console.log('✅ Cache cleaned. Please refresh if you see old data.');
+                                    }
+                                })();
             // ⚠️ VALIDATION: Check if any neck has corrupted extraPrice (> 100)
             const hasCorruptData = storedList.some(item => 
                 item?.extraPrice && item.extraPrice > 100
@@ -281,13 +163,6 @@ const getNeckTypes = () => {
 const getNeckExtraPrice = (neckName) => {
     const neckTypes = getNeckTypes();
     const needle = normalizeNeckName(neckName);
-    // Quick override: certain special necks must add +40 (legacy forced slope pricing)
-    try {
-        const specialMatch = SPECIAL_NECKS_FORCE_340_UI.some(k => needle.includes(k));
-        if (specialMatch) return 40;
-    } catch {
-        // fall through
-    }
     const neck = neckTypes.find((n) => {
         const hay = normalizeNeckName(n.name);
         return needle.includes(hay) || hay.includes(needle);
@@ -1678,10 +1553,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   
     // NEW: Available neck types from localStorage (kept in state so fetch updates reflect in UI)
         const [availableNeckTypes, setAvailableNeckTypes] = useState(getNeckTypes());
-    // Refs to hold latest values so master-fetch effect can compare without
-    // including these states in the effect dependency array (avoids self-triggering loops)
+    // Refs to hold latest values so effects can read them without requiring them in deps
     const addOnDefinitionsRef = useRef(addOnDefinitions);
     useEffect(() => { addOnDefinitionsRef.current = addOnDefinitions; }, [addOnDefinitions]);
+
     const availableNeckTypesRef = useRef(availableNeckTypes);
     useEffect(() => { availableNeckTypesRef.current = availableNeckTypes; }, [availableNeckTypes]);
   
@@ -1894,25 +1769,32 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     }, [editingOrder, addOnDefinitions]);
 
   // Fetch master data
-  useEffect(() => {
+  // NOTE: We intentionally keep the dependency array minimal (only `editingOrder` and `onNotify`) because
+  // this effect is responsible for syncing authoritative master data on mount and when editing an order.
+    // Including `addOnDefinitions` or `availableNeckTypes` here would cause the effect to re-run when
+    // the effect itself updates those pieces of state, creating a fetch loop. We therefore keep the
+    // dependency array minimal while using refs to read the current values for safe comparisons.
+    useEffect(() => {
+      const controller = new AbortController();
+      const signal = controller.signal;
       const fetchMasters = async () => {
           try {
               setIsLoading(true);
               const [fData, nData, sData, cData] = await Promise.all([
-                  fetchWithAuth('/products/fabrics').catch(() => null),
-                  fetchWithAuth('/products/necks').catch(() => null),
-                  fetchWithAuth('/products/sleeves').catch(() => null),
-                  fetchWithAuth('/company/config').catch(() => null)
-              ]);
-              
-              setFabrics(fData || []);
+                  fetchWithAuth('/products/fabrics', { signal }).catch(() => null),
+                  fetchWithAuth('/products/necks', { signal }).catch(() => null),
+                  fetchWithAuth('/products/sleeves', { signal }).catch(() => null),
+                  fetchWithAuth('/company/config', { signal }).catch(() => null)
+                      try {
+                          const current = JSON.stringify(addOnDefinitionsRef.current || []);
+                          const incoming = JSON.stringify(addons || []);
               setSleeves(sData || []);
               
               // Map backend neck types to frontend format
               // Backend has: cost_price, additional_cost, price_adjustment
               // Frontend needs: extraPrice
               if (nData && nData.length > 0) {
-                  // Treat backend as authoritative: map backend necks directly
+                          setAddOnDefinitions(addons);
                   const mappedNeckTypes = nData.map((neck) => ({
                       id: neck.id,
                       name: neck.name,
@@ -1964,12 +1846,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
               }
 
               // Fetch add-on definitions from backend (authoritative)
-              try {
+                  try {
                   const addons = await fetchWithAuth('/company/addons').catch(() => null);
                   if (addons && Array.isArray(addons)) {
                       try {
                           // Avoid updating App-level state if data is identical (prevents unnecessary re-renders)
-                          const current = JSON.stringify(addOnDefinitionsRef.current || []);
+                          const current = JSON.stringify(addOnDefinitions || []);
                           const incoming = JSON.stringify(addons || []);
                           if (current !== incoming) {
                               setAddOnDefinitions(addons);
@@ -2006,7 +1888,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
           }
             };
             fetchMasters();
-        }, [editingOrder, onNotify, setAddOnDefinitions, setAddOnOptions, setAvailableNeckTypes]);
+      return () => controller.abort();
+    }, [editingOrder, onNotify]);
 
   const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
 
@@ -2087,25 +1970,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         let mounted = true;
         const calc = async () => {
             try {
-                // If quantity is zero, show a sensible default base price
-                // (price for the first tier / minimum quantity) so the UI
-                // doesn't display 0. Final calculations for actual orders
-                // still use the backend when qty > 0.
                 if (totalQty <= 0) {
                     if (!mounted) return;
-                    // determine local base unit using STEP_PRICING
-                    let baseUnit = 0;
-                    if (productType === 'sportsPants') baseUnit = STEP_PRICING.sportsPants;
-                    else if (productType === 'fashionPants') baseUnit = STEP_PRICING.fashionPants;
-                    else {
-                        const neckName = selectedNeck || '';
-                        const hasCollar = neckName.includes('ปก');
-                        const isRoundV = !hasCollar && ['คอกลม','คอวี','คอวีตัด','คอวีชน','คอวีไขว้'].some(k => neckName.includes(k));
-                        const table = isRoundV ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
-                        // use first tier price as default
-                        baseUnit = (table && table.length > 0) ? table[0].price : 0;
-                    }
-                    setBasePrice(Number(baseUnit) || 0);
+                    setBasePrice(0);
                     setAddOnCost(0);
                     setShippingCost(0);
                     return;
@@ -2131,67 +1998,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                     body: JSON.stringify(payload)
                 }).catch(() => null);
 
+                if (!res) return;
                 if (!mounted) return;
 
-                if (res) {
-                    setBasePrice(res.price_per_unit || 0);
-                    setAddOnCost(res.item_addon_total || 0);
-                    setShippingCost(res.shipping_cost || 0);
-                } else {
-                    // Server didn't respond — fallback to local calculation so UI remains usable
-                    console.warn('Pricing API unavailable, using local fallback');
-                    // Local base unit calculation (mirror backend STEP_PRICING)
-                    let base_unit = 0;
-                    if (productType === 'sportsPants') base_unit = STEP_PRICING.sportsPants;
-                    else if (productType === 'fashionPants') base_unit = STEP_PRICING.fashionPants;
-                    else {
-                        const neckName = selectedNeck || '';
-                        const hasCollarWord = neckName.includes('ปก');
-                        const isRoundVLocal = !hasCollarWord && ['คอกลม','คอวี','คอวีตัด','คอวีชน','คอวีไขว้'].some(k => neckName.includes(k));
-                        const pricingTableLocal = (isRoundVLocal ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers);
-                        if (totalQty >= 10) {
-                            const matchedLocal = pricingTableLocal.find(t => totalQty >= t.minQty && totalQty <= t.maxQty);
-                            base_unit = matchedLocal ? matchedLocal.price : pricingTableLocal[0].price;
-                        } else {
-                            base_unit = pricingTableLocal[0].price;
-                        }
-                    }
-
-                    // local addon total
-                    const selectedAddOns = (addOnDefinitionsRef.current || []).filter(opt => addOnOptions[opt.id]).map(o => o.id);
-                    const addonsListLocal = (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0) ? addOnDefinitionsRef.current : ADDON_OPTIONS;
-                    let item_addon_total_local = 0;
-                    // detect force_slope from available necks (if present)
-                    let force_slope_local = false;
-                    if (selectedNeck) {
-                        const foundNeck = (availableNeckTypesRef.current || []).find(n => (n.name || '').includes(selectedNeck) || selectedNeck.includes(n.name));
-                        if (foundNeck) force_slope_local = Boolean(foundNeck.forceSlope || foundNeck.force_slope);
-                    }
-                    const special_necks_local = ['คอปกคางหมู','คอหยดน้ำ','คอห้าเหลี่ยมคางหมู'];
-                    const is_special_340_local = special_necks_local.some(s => (selectedNeck || '').includes(s));
-                    for (const aid of selectedAddOns) {
-                        const aobj = addonsListLocal.find(a => a.id === aid || a.name === aid);
-                        const price = aobj ? Number(aobj.price || 0) : 0;
-                        if (force_slope_local && (aid === 'slopeShoulder' || aid === 'collarTongue') && !is_special_340_local) continue;
-                        item_addon_total_local += price * totalQty;
-                    }
-
-                    // local shipping heuristic
-                    let shipping_cost_local = 0;
-                    if (totalQty < 10) shipping_cost_local = 0;
-                    else if (totalQty <= 15) shipping_cost_local = 60;
-                    else if (totalQty <= 20) shipping_cost_local = 80;
-                    else if (totalQty <= 30) shipping_cost_local = 100;
-                    else if (totalQty <= 40) shipping_cost_local = 120;
-                    else if (totalQty <= 50) shipping_cost_local = 180;
-                    else if (totalQty <= 70) shipping_cost_local = 200;
-                    else if (totalQty <= 100) shipping_cost_local = 230;
-                    else shipping_cost_local = 230 + ((totalQty - 100) * 50);
-
-                    setBasePrice(Number(base_unit) || 0);
-                    setAddOnCost(Number(item_addon_total_local) || 0);
-                    setShippingCost(Number(shipping_cost_local) || 0);
-                }
+                setBasePrice(res.price_per_unit || 0);
+                setAddOnCost(res.item_addon_total || 0);
+                setShippingCost(res.shipping_cost || 0);
                 // Note: sizing surcharge and VAT handled/displayed from derived values
             } catch (err) {
                 console.error('Pricing API failed:', err);
@@ -2620,15 +2432,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                                 {availableNeckTypes.map(n => (
                                     <option key={n.id} value={n.name}>
                                         {n.name}
-                                        {(() => {
-                                            const hasForceText = (n.name || '').includes('บังคับ');
-                                            if (Number(n.extraPrice || 0) > 0 && n.forceSlope) {
-                                                return hasForceText ? null : <span> (+{n.extraPrice} รวมใน basePrice, บังคับไหล่สโลป)</span>;
-                                            }
-                                            if (Number(n.extraPrice || 0) > 0) return <span> (+{n.extraPrice} รวมใน basePrice)</span>;
-                                            if (n.forceSlope) return hasForceText ? null : <span> (บังคับไหล่สโลป+40 บาท/ตัว)</span>;
-                                            return null;
-                                        })()}
+                                        {n.extraPrice > 0 && n.forceSlope ? (
+                                            <span> (+{n.extraPrice} รวมใน basePrice, บังคับไหล่สโลป)</span>
+                                        ) : n.extraPrice > 0 ? (
+                                            <span> (+{n.extraPrice} รวมใน basePrice)</span>
+                                        ) : n.forceSlope ? (
+                                            <span> (บังคับไหล่สโลป+40 บาท/ตัว)</span>
+                                        ) : null}
                                     </option>
                                 ))}
                             </select>
@@ -3180,16 +2990,9 @@ const ProductPage = () => {
                     <tbody className="divide-y divide-gray-200">
                         {paginatedItems.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50 transition group border-b border-gray-200">
-                                <td className="py-4 px-6 font-bold text-gray-700 text-center border-r border-gray-200">{collapseDuplicateAnnotation(item.name)}</td>
+                                <td className="py-4 px-6 font-bold text-gray-700 text-center border-r border-gray-200">{item.name}</td>
                                 <td className="py-4 px-6 text-center text-gray-600 font-medium border-r border-gray-200">
-                                    {(() => {
-                                        // Prefer cost_price, fall back to additional_cost or price_adjustment
-                                        const cp = Number(item.cost_price || 0);
-                                        const add = Number(item.additional_cost || 0);
-                                        const adj = Number(item.price_adjustment || 0);
-                                        const display = cp || add || adj || 0;
-                                        return display > 0 ? `฿${display.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
-                                    })()}
+                                    {item.cost_price ? `฿${parseFloat(item.cost_price).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
                                 </td>
                                 <td className="py-4 px-6 text-center">
                                     <div className="flex justify-center gap-3">
