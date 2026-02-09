@@ -1,9 +1,20 @@
 from fastapi import FastAPI, Request, status, Depends, HTTPException
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm 
 from sqlalchemy import text, inspect
 from app.db.base_class import Base
 from app.db.session import engine, SessionLocal
+
+# Import Models
+from app.models.user import User
+from app.models.order import Order
+from app.models.product import FabricType, NeckType, SleeveType
+from app.models.customer import Customer
+from app.models.supplier import Supplier
+from app.models.pricing_rule import PricingRule
+from app.models.company import Company
+from app.models.audit_log import AuditLog
+
 from app.api import auth, orders, products, suppliers, customers, pricing_rules, company, admin
 import logging
 
@@ -22,45 +33,52 @@ app.add_middleware(
 
 @app.on_event("startup")
 def initialize_system():
-    logger.info("🛠️ DATABASE: Creating tables...")
+    logger.info("🛠️ DATABASE: Checking tables...")
     Base.metadata.create_all(bind=engine)
     
     with engine.connect() as conn:
         try:
-            logger.info("🧹 SEED: Clearing and Inserting Neck Types...")
-            # 1. ล้างข้อมูลเก่าทิ้ง (ตามคำสั่ง)
+            logger.info("🧹 SEED: Syncing Product Data (Full Reset)...")
+            # 1. ล้างข้อมูลเก่า
             conn.execute(text("DELETE FROM fabric_types"))
             conn.execute(text("DELETE FROM sleeve_types"))
             conn.execute(text("DELETE FROM neck_types"))
             
-            # 2. ใส่ข้อมูลคอใหม่ (ใช้ชื่อสั้น เพื่อไม่ให้ UI แสดงชื่อซ้ำซ้อน)
-            # Backend จะรู้เองว่าเป็นคอพิเศษจากชื่อเหล่านี้
+            # 2. รายการคอใหม่ (ตามที่คุณระบุ 100%)
+            # หมายเหตุ: ใช้ชื่อเต็มตามที่คุณต้องการแสดงผล
             neck_list = [
-                "คอกลม", "คอวีชน", "คอวีไขว้", "คอวีตัด", "คอวีปก", "คอห้าเหลี่ยม",
-                "คอปกคางหมู (มีลิ้น)", 
-                "คอหยดนํ้า",
-                "คอห้าเหลี่ยมคางหมู (มีลิ้น)",
-                "คอห้าเหลี่ยมคางหมู (ไม่มีลื่น)",
-                "คอจีน", "คอวีปก (มีลิ้น)", "คอโปโล", "คอวาย", "คอเชิ้ตฐานตั้ง"
+                "คอกลม",
+                "คอวีชน",
+                "คอวีไขว้",
+                "คอวีตัด",
+                "คอวีปก",
+                "คอห้าเหลี่ยม",
+                "คอปกคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)",
+                "คอหยดนํ้า (บังคับไหล่สโลป+40 บาท/ตัว)",
+                "คอห้าเหลี่ยมคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)",
+                "คอห้าเหลี่ยมคางหมู (ไม่มีลื่น) (บังคับไหล่สโลป+40 บาท/ตัว)",
+                "คอจีน",
+                "คอวีปก (มีลิ้น)",
+                "คอโปโล",
+                "คอวาย",
+                "คอเชิ้ตฐานตั้ง"
             ]
             
-            # คอที่ต้องราคา 340 (บังคับไหล่สโลป)
-            special_necks = ["คอปกคางหมู", "คอหยด", "คอห้าเหลี่ยมคางหมู"]
-
             for name in neck_list:
-                is_special = any(x in name for x in special_necks)
-                # force_slope=1 เพื่อให้ Frontend รู้ว่าต้องติ๊กถูก
-                force_slope_flag = 1 if is_special else 0
-                # For special necks we set a 40 THB adjustment so sale/unit is 340 (base 300 + 40)
-                price_adj = 40 if is_special else 0
-                cost_price = 40 if is_special else 0
+                # เช็คเงื่อนไขราคา 340 (ถ้ามีวงเล็บบังคับไหล่สโลป)
+                # เราจะใส่ค่า additional_cost = 40 ลงใน DB เลย เพื่อให้หน้าสินค้าเห็นราคาถูกต้อง
+                is_special_340 = "(บังคับไหล่สโลป+40 บาท/ตัว)" in name
+                
+                add_cost = 40 if is_special_340 else 0
+                force_slope = 1 if is_special_340 else 0
+                
                 conn.execute(text("""
                     INSERT INTO neck_types 
                     (name, price_adjustment, additional_cost, force_slope, is_active, quantity, cost_price)
-                    VALUES (:n, :pa, 0, :fs, 1, 0, :cp)
-                """), {"n": name, "fs": force_slope_flag, "pa": price_adj, "cp": cost_price})
+                    VALUES (:n, 0, :ac, :fs, 1, 0, 0)
+                """), {"n": name, "ac": add_cost, "fs": force_slope})
             
-            # Admin User
+            # Create Admin
             user_check = conn.execute(text("SELECT * FROM users WHERE username='admin'")).fetchone()
             if not user_check:
                 pw_hash = "b2"
