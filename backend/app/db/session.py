@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# ✅ FIX: ใช้ Path ถาวรบน Azure (/home) เพื่อป้องกันข้อมูลหายและ Conflict
+# Path ถาวร
 SQLALCHEMY_DATABASE_URL = "sqlite:////home/blook_prod.db"
 
 engine = create_engine(

@@ -1,19 +1,9 @@
 from fastapi import FastAPI, Request, status, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm 
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import text, inspect
 from app.db.base_class import Base
 from app.db.session import engine, SessionLocal
-
-# Import Models
-from app.models.user import User
-from app.models.order import Order
-from app.models.product import FabricType, NeckType, SleeveType
-from app.models.customer import Customer
-from app.models.supplier import Supplier
-from app.models.pricing_rule import PricingRule
-from app.models.company import Company
-from app.models.audit_log import AuditLog
 
 from app.api import auth, orders, products, suppliers, customers, pricing_rules, company, admin
 import logging
@@ -33,19 +23,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 def initialize_system():
-    logger.info("🛠️ DATABASE: Checking tables...")
+    logger.info("🛠️ DATABASE: Creating tables...")
     Base.metadata.create_all(bind=engine)
     
     with engine.connect() as conn:
         try:
-            logger.info("🧹 SEED: Syncing Product Data (Full Reset)...")
-            # 1. ล้างข้อมูลเก่า
+            logger.info("🧹 SEED: Syncing Product Data...")
+            # 1. ลบข้อมูลที่ไม่เกี่ยวข้อง
             conn.execute(text("DELETE FROM fabric_types"))
             conn.execute(text("DELETE FROM sleeve_types"))
             conn.execute(text("DELETE FROM neck_types"))
             
-            # 2. รายการคอใหม่ (ตามที่คุณระบุ 100%)
-            # หมายเหตุ: ใช้ชื่อเต็มตามที่คุณต้องการแสดงผล
+            # 2. รายการคอตามที่คุณระบุ (ห้ามแก้ไข)
             neck_list = [
                 "คอกลม",
                 "คอวีชน",
@@ -65,13 +54,12 @@ def initialize_system():
             ]
             
             for name in neck_list:
-                # เช็คเงื่อนไขราคา 340 (ถ้ามีวงเล็บบังคับไหล่สโลป)
-                # เราจะใส่ค่า additional_cost = 40 ลงใน DB เลย เพื่อให้หน้าสินค้าเห็นราคาถูกต้อง
+                # ตั้งราคา 40 ถ้าชื่อมีวงเล็บบังคับ
                 is_special_340 = "(บังคับไหล่สโลป+40 บาท/ตัว)" in name
-                
                 add_cost = 40 if is_special_340 else 0
                 force_slope = 1 if is_special_340 else 0
                 
+                # Insert ลง DB
                 conn.execute(text("""
                     INSERT INTO neck_types 
                     (name, price_adjustment, additional_cost, force_slope, is_active, quantity, cost_price)

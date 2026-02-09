@@ -10,12 +10,11 @@ from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
 from app.models.customer import Customer
 from app.models.user import User
-from app.models.audit_log import AuditLog
-from app.models.product import NeckType # ✅ เพิ่ม Import เพื่อดึงราคาจาก DB
+from app.models.product import NeckType, SleeveType, FabricType # ✅ Import Models
 from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
 
-# ราคาฐาน (Base Price) - อันนี้ยังคงที่ได้
+# ราคาฐาน (Step Price)
 STEP_PRICING = {
     "roundVNeck": [
         {"minQty": 10, "maxQty": 30, "price": Decimal(240)},
@@ -25,7 +24,7 @@ STEP_PRICING = {
         {"minQty": 301, "maxQty": 99999, "price": Decimal(170)},
     ],
     "collarOthers": [
-        {"minQty": 10, "maxQty": 30, "price": Decimal(300)}, 
+        {"minQty": 10, "maxQty": 30, "price": Decimal(300)}, # ราคาฐาน 300
         {"minQty": 31, "maxQty": 50, "price": Decimal(260)},
         {"minQty": 51, "maxQty": 100, "price": Decimal(240)},
         {"minQty": 101, "maxQty": 300, "price": Decimal(220)},
@@ -35,7 +34,7 @@ STEP_PRICING = {
     "fashionPants": Decimal(280),
 }
 
-# ราคา Add-on พื้นฐาน (ถ้าใน DB ไม่มี)
+# Add-ons defaults
 DEFAULT_ADDON_PRICES = {
     "longSleeve": Decimal(40),
     "pocket": Decimal(20),
@@ -51,26 +50,12 @@ logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=List[OrderSchema])
 def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # ใช้ selectinload เพื่อประสิทธิภาพและความถูกต้อง
-    orders = (
-        db.query(OrderModel)
-        .options(selectinload(OrderModel.customer), selectinload(OrderModel.items))
-        .order_by(OrderModel.id.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-    
+    orders = db.query(OrderModel).options(selectinload(OrderModel.customer), selectinload(OrderModel.items)).order_by(OrderModel.id.desc()).offset(skip).limit(limit).all()
     results = []
     for o in orders:
         o_dict = o.__dict__.copy()
         if o.customer:
-            o_dict.update({
-                "customer_name": o.customer.name,
-                "phone": o.customer.phone,
-                "contact_channel": o.customer.channel,
-                "address": o.customer.address
-            })
+            o_dict.update({"customer_name": o.customer.name, "phone": o.customer.phone, "contact_channel": o.customer.channel, "address": o.customer.address})
         if o.items:
             items_list = []
             for i in o.items:
@@ -91,49 +76,41 @@ def calculate_item_price(item, order_prod_type, db: Session):
     qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
     p_type = getattr(item, "product_type", None) or order_prod_type or "shirt"
     
-    # 1. Base Price Logic
+    # 1. Base Price
     if p_type == "sportsPants": unit_price = STEP_PRICING["sportsPants"]
     elif p_type == "fashionPants": unit_price = STEP_PRICING["fashionPants"]
     else:
         neck_str = (item.neck_type or "").strip()
         is_round_v = "ปก" not in neck_str and any(k in neck_str for k in ["คอกลม", "คอวี"])
         table = STEP_PRICING["roundVNeck"] if is_round_v else STEP_PRICING["collarOthers"]
-        
         if qty >= 10:
             found = next((t for t in table if qty >= t["minQty"] and qty <= t["maxQty"]), None)
             unit_price = found["price"] if found else table[0]["price"]
         else:
             unit_price = Decimal(240) if is_round_v else Decimal(300)
 
-    # 2. Logic บังคับราคา 340 (Base 300 + Addon 40) และ Sync จาก DB
+    # 2. DB Sync Prices (สำคัญ: ดึงราคาจาก DB)
     neck_str = (item.neck_type or "").strip()
+    sleeve_str = (item.sleeve_type or "").strip()
     selected = getattr(item, "selected_add_ons", []) or []
-    
-    # ดึงข้อมูลคอจาก DB เพื่อดูราคา additional_cost จริงๆ (Sync กับหน้าสินค้า)
-    # ใช้ like เพื่อหา string ที่ใกล้เคียง
-    db_neck = db.query(NeckType).filter(NeckType.name == neck_str).first()
-    
-    slope_cost = Decimal(40) # Default
-    if db_neck and db_neck.additional_cost > 0:
-        slope_cost = Decimal(db_neck.additional_cost)
 
-    # กฎบังคับ
+    # Fetch DB Neck Price
+    db_neck = db.query(NeckType).filter(NeckType.name == neck_str).first()
+    slope_price_db = Decimal(db_neck.additional_cost) if db_neck and db_neck.additional_cost > 0 else Decimal(40)
+
+    # Force Options logic
     if "(บังคับไหล่สโลป" in neck_str:
-        if "slopeShoulder" not in selected:
-            selected = list(selected) + ["slopeShoulder"]
-    
+        if "slopeShoulder" not in selected: selected = list(selected) + ["slopeShoulder"]
     if "มีลิ้น" in neck_str and "collarTongue" not in selected:
         selected = list(selected) + ["collarTongue"]
 
-    # คำนวณ Addon Total
+    # Calculate Addon Total
     addon_sum = Decimal(0)
     for code in selected:
         cost = DEFAULT_ADDON_PRICES.get(code, Decimal(0))
-        
-        # Override ราคา slopeShoulder ด้วยค่าจาก DB (เพื่อให้ Sync กับหน้าสินค้า)
-        if code == "slopeShoulder":
-            cost = slope_cost
-            
+        # Override with DB prices
+        if code == "slopeShoulder": cost = slope_price_db
+        # ถ้ามี Addon อื่นๆ ที่ผูกกับ Table อื่นๆ ก็เพิ่ม Logic ตรงนี้ได้
         addon_sum += cost
 
     total_addon_line = addon_sum * qty
@@ -168,20 +145,15 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_u
 
     for item in order_in.items:
         qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-        # ส่ง db เข้าไปเพื่อดึงราคาล่าสุด
-        calc = calculate_item_price(item, order_in.product_type, db)
+        calc = calculate_item_price(item, order_in.product_type, db) # Pass DB
         
         items_total_price += calc["line_total"]
         items_total_cost += calc["line_cost"]
         item.selected_add_ons = calc["selected"] 
 
         order_items_data.append({
-            "data": item,
-            "qty": qty,
-            "base": calc["unit_price"],
-            "total": calc["line_total"],
-            "cost": calc["line_cost"],
-            "addon_total": calc["addon_total"]
+            "data": item, "qty": qty, "base": calc["unit_price"], "total": calc["line_total"],
+            "cost": calc["line_cost"], "addon_total": calc["addon_total"]
         })
 
     shipping = Decimal(str(order_in.shipping_cost or 0))
@@ -191,7 +163,6 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_u
     item_addons_grand = sum(x["addon_total"] for x in order_items_data)
     
     final_pre_vat = items_total_price + manual_addon + shipping - discount
-    
     if order_in.is_vat_included:
         grand_total = final_pre_vat
         vat = (final_pre_vat * 7) / 107
@@ -201,29 +172,15 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_u
 
     new_order = OrderModel(
         order_no=order_in.order_no or f"PO-{uuid.uuid4().hex[:6].upper()}",
-        customer_id=customer.id,
-        customer_name=clean_name,
-        contact_channel=customer.channel,
-        address=order_in.address,
-        phone=order_in.phone,
-        status=order_in.status,
-        grand_total=grand_total,
-        total_cost=items_total_cost,
-        vat_amount=vat,
-        shipping_cost=shipping,
-        add_on_cost=manual_addon,
-        add_on_options_total=item_addons_grand, # บันทึกยอดรวม Addon ที่คำนวณแล้ว
-        design_fee=design_fee,
-        discount_amount=discount,
-        is_vat_included=order_in.is_vat_included,
-        deadline=order_in.deadline,
-        usage_date=order_in.usage_date,
-        deposit_amount=order_in.deposit_amount,
-        deposit_1=order_in.deposit_1,
-        deposit_2=order_in.deposit_2,
+        customer_id=customer.id, customer_name=clean_name, contact_channel=customer.channel,
+        address=order_in.address, phone=order_in.phone, status=order_in.status,
+        grand_total=grand_total, total_cost=items_total_cost, vat_amount=vat,
+        shipping_cost=shipping, add_on_cost=manual_addon, add_on_options_total=item_addons_grand,
+        design_fee=design_fee, discount_amount=discount, is_vat_included=order_in.is_vat_included,
+        deadline=order_in.deadline, usage_date=order_in.usage_date,
+        deposit_amount=order_in.deposit_amount, deposit_1=order_in.deposit_1, deposit_2=order_in.deposit_2,
         balance_amount=grand_total - (order_in.deposit_1 or 0) - (order_in.deposit_2 or 0),
-        note=order_in.note,
-        created_by_id=current_user.id if current_user else None
+        note=order_in.note, created_by_id=current_user.id if current_user else None
     )
     db.add(new_order)
     db.flush()
@@ -231,18 +188,11 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_u
     for d in order_items_data:
         src = d["data"]
         ni = OrderItemModel(
-            order_id=new_order.id,
-            product_name=src.product_name,
-            fabric_type=src.fabric_type,
-            neck_type=src.neck_type,
-            sleeve_type=src.sleeve_type,
-            quantity_matrix=json.dumps(src.quantity_matrix),
-            total_qty=d["qty"],
-            price_per_unit=d["base"],      
-            total_price=d["total"],        
-            total_cost=d["cost"],
-            selected_add_ons=json.dumps(src.selected_add_ons),
-            item_addon_total=d["addon_total"]
+            order_id=new_order.id, product_name=src.product_name, fabric_type=src.fabric_type,
+            neck_type=src.neck_type, sleeve_type=src.sleeve_type,
+            quantity_matrix=json.dumps(src.quantity_matrix), total_qty=d["qty"],
+            price_per_unit=d["base"], total_price=d["total"], total_cost=d["cost"],
+            selected_add_ons=json.dumps(src.selected_add_ons), item_addon_total=d["addon_total"]
         )
         db.add(ni)
 
