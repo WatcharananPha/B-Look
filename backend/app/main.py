@@ -9,8 +9,18 @@ import os
 
 from app.db.session import engine, SessionLocal
 from app.db.base import Base
+
 # Import Router ทั้งหมด
-from app.api import auth, orders, products, suppliers, customers, pricing_rules, company, admin
+from app.api import (
+    auth,
+    orders,
+    products,
+    suppliers,
+    customers,
+    pricing_rules,
+    company,
+    admin,
+)
 
 # สร้าง Tables (ถ้ายังไม่มี)
 Base.metadata.create_all(bind=engine)
@@ -31,41 +41,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --- SYSTEM AUTO-REPAIR: Reset Admin on Startup ---
 @app.on_event("startup")
 def startup_repair():
     try:
         db = SessionLocal()
         # 1. เช็คว่ามี admin ไหม
-        result = db.execute(text("SELECT id FROM users WHERE username = 'admin'")).first()
-        
+        result = db.execute(
+            text("SELECT id FROM users WHERE username = 'admin'")
+        ).first()
+
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         hashed_pw = pwd_context.hash("password123")
 
         if not result:
             logger.warning("⚠️ Admin not found. Creating new admin...")
-            sql = text("""
+            sql = text(
+                """
                 INSERT INTO users (username, password_hash, full_name, role, is_active)
                 VALUES ('admin', :h, 'System Admin', 'owner', true)
-            """)
+            """
+            )
             db.execute(sql, {"h": hashed_pw})
         else:
             logger.info("♻️ Admin exists. Resetting password to 'password123'...")
             # บังคับแก้รหัสผ่านให้เป็นค่าที่เรารู้แน่นอน
-            sql = text("UPDATE users SET password_hash = :h, is_active = true WHERE username = 'admin'")
+            sql = text(
+                "UPDATE users SET password_hash = :h, is_active = true WHERE username = 'admin'"
+            )
             db.execute(sql, {"h": hashed_pw})
-            
+
         db.commit()
         logger.info("✅ SYSTEM READY: Login with 'admin' / 'password123'")
         # --- DEDUPE: Clean duplicate neck_types entries that may contain UI annotations
         try:
             from app.models.product import NeckType
+
             rows = db.query(NeckType).all()
             # normalize and group
             import re
+
             groups = {}
             for r in rows:
-                raw_name = (r.name or "")
+                raw_name = r.name or ""
                 n = raw_name.replace("นํ้า", "น้ำ")
                 n = re.sub(r"\(.*?\)", "", n).strip()
                 if not n:
@@ -83,7 +102,13 @@ def startup_repair():
                         db.add(g0)
                     continue
                 # pick keeper: prefer one with force_slope True, then higher cost_price
-                keeper = sorted(group, key=lambda x: (not bool(x.force_slope), -(float(x.cost_price or 0))))[0]
+                keeper = sorted(
+                    group,
+                    key=lambda x: (
+                        not bool(x.force_slope),
+                        -(float(x.cost_price or 0)),
+                    ),
+                )[0]
                 keeper.name = name_norm
                 db.add(keeper)
                 # delete others
@@ -93,14 +118,15 @@ def startup_repair():
                     try:
                         db.delete(rdel)
                     except Exception:
-                        logger.exception('Failed deleting duplicate neck row')
+                        logger.exception("Failed deleting duplicate neck row")
         except Exception:
-            logger.exception('Neck dedupe step failed')
+            logger.exception("Neck dedupe step failed")
 
         db.commit()
         db.close()
     except Exception as e:
         logger.error(f"❌ Startup Repair Failed: {e}")
+
 
 # --- ROUTERS ---
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
@@ -108,9 +134,12 @@ app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(suppliers.router, prefix="/api/v1/suppliers", tags=["Suppliers"])
 app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
-app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
+app.include_router(
+    pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"]
+)
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+
 
 # --- ROOT ENDPOINT (กัน Error Not Found หน้าแรก) ---
 @app.get("/")
@@ -118,5 +147,5 @@ def read_root():
     return {
         "status": "online",
         "message": "B-Look API is running correctly.",
-        "version": "2026.02.08.Fix"
+        "version": "2026.02.08.Fix",
     }

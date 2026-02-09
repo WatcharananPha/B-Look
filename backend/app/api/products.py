@@ -62,72 +62,13 @@ def delete_fabric(item_id: int, db: Session = Depends(get_db)):
 # --- NECKS ---
 @router.get("/necks", response_model=List[NeckTypeResponse])
 def get_necks(db: Session = Depends(get_db)):
-    rows = db.query(NeckType).filter(NeckType.is_active == True).all()
-
-    # Helper: normalize neck name (replace common misspelling, strip parentheses)
-    def normalize_name(s: str) -> str:
-        if not s:
-            return ""
-        n = s.replace("นํ้า", "น้ำ")
-        # remove parenthetical annotations
-        import re
-        n = re.sub(r"\(.*?\)", "", n)
-        n = " ".join(n.split()).strip()
-        return n
-
-    # Compute force_slope flag server-side so frontend doesn't rely on string matching
-    def compute_force(neck_name: str) -> bool:
-        if not neck_name:
-            return False
-        n = neck_name.replace("นํ้า", "น้ำ")
-        keys = ["คอปกคางหมู", "คอหยด", "คอห้าเหลี่ยมคางหมู"]
-        return any(k in n for k in keys)
-
-    # Build deduped map keyed by normalized name. Prefer persisted values and
-    # pick the highest-cost or most-specific record if duplicates exist.
-    dedup = {}
-    for r in rows:
-        raw = r.__dict__.copy()
-        raw.pop("_sa_instance_state", None)
-        name_norm = normalize_name(raw.get("name") or "")
-        if not name_norm:
-            continue
-        # determine force_slope: prefer DB column if set, otherwise compute
-        fs = getattr(r, "force_slope", None)
-        if fs is None:
-            fs = compute_force(raw.get("name") or "")
-        raw["force_slope"] = bool(fs)
-        raw["name"] = name_norm
-        # coerce numeric fields
-        try:
-            raw["cost_price"] = float(raw.get("cost_price") or 0)
-        except Exception:
-            raw["cost_price"] = 0.0
-
-        if name_norm in dedup:
-            existing = dedup[name_norm]
-            # prefer the one with higher cost_price or explicit force_slope
-            if raw["cost_price"] > existing.get("cost_price", 0):
-                dedup[name_norm] = raw
-            elif raw["force_slope"] and not existing.get("force_slope"):
-                dedup[name_norm] = raw
-            # otherwise keep existing
-        else:
-            dedup[name_norm] = raw
-
-    # Return as a list
-    return list(dedup.values())
+    return db.query(NeckType).filter(NeckType.is_active == True).all()
 
 
 @router.post("/necks")
 def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
-    # Normalize name before inserting to avoid annotated duplicates
-    name = (item.name or "").replace("นํ้า", "น้ำ")
-    import re
-    name = re.sub(r"\(.*?\)", "", name).strip()
-
     new_item = NeckType(
-        name=name,
+        name=item.name,
         price_adjustment=item.price_adjustment,
         quantity=item.quantity,
         cost_price=item.cost_price,
@@ -145,10 +86,7 @@ def update_neck(item_id: int, item: MasterCreate, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Not found")
 
     # Normalize name to keep consistent
-    name = (item.name or "").replace("นํ้า", "น้ำ")
-    import re
-    name = re.sub(r"\(.*?\)", "", name).strip()
-    db_item.name = name
+    db_item.name = item.name
     db_item.price_adjustment = item.price_adjustment
     db_item.quantity = item.quantity
     db_item.cost_price = item.cost_price
