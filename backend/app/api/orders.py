@@ -10,12 +10,12 @@ from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
 from app.models.customer import Customer
 from app.models.user import User
-from app.models.product import NeckType # ✅ ต้อง Import เพื่อดึงราคา
+from app.models.product import NeckType # Import เพื่อดึงราคาล่าสุด
 from app.models.audit_log import AuditLog
 from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
 
-# ราคาฐาน (Step Price) ยังคงที่
+# ราคาฐาน (Base Price)
 STEP_PRICING = {
     "roundVNeck": [
         {"minQty": 10, "maxQty": 30, "price": Decimal(240)},
@@ -25,7 +25,7 @@ STEP_PRICING = {
         {"minQty": 301, "maxQty": 99999, "price": Decimal(170)},
     ],
     "collarOthers": [
-        {"minQty": 10, "maxQty": 30, "price": Decimal(300)}, # ฐาน 300
+        {"minQty": 10, "maxQty": 30, "price": Decimal(300)}, # ราคาฐาน 300
         {"minQty": 31, "maxQty": 50, "price": Decimal(260)},
         {"minQty": 51, "maxQty": 100, "price": Decimal(240)},
         {"minQty": 101, "maxQty": 300, "price": Decimal(220)},
@@ -35,20 +35,23 @@ STEP_PRICING = {
     "fashionPants": Decimal(280),
 }
 
-# ค่า Default เผื่อหาใน DB ไม่เจอ
-DEFAULT_ADDONS = {
-    "collarTongue": Decimal(10),
-    "slopeShoulder": Decimal(40),
+# ราคา Add-on พื้นฐาน
+DEFAULT_ADDON_PRICES = {
     "longSleeve": Decimal(40),
-    "oversizeSlopeShoulder": Decimal(60)
+    "pocket": Decimal(20),
+    "numberName": Decimal(20),
+    "slopeShoulder": Decimal(40),
+    "collarTongue": Decimal(10),
+    "shortSleeveAlt": Decimal(20),
+    "oversizeSlopeShoulder": Decimal(60),
 }
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# ✅ 1. แก้ Order ซ้ำด้วย selectinload
 @router.get("/", response_model=List[OrderSchema])
 def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    # ✅ FIX: selectinload แก้ปัญหา Order ซ้ำ
     orders = (
         db.query(OrderModel)
         .options(selectinload(OrderModel.customer), selectinload(OrderModel.items))
@@ -72,25 +75,24 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
             items_list = []
             for i in o.items:
                 i_dict = i.__dict__.copy()
-                # Parse JSON
                 for k in ["quantity_matrix", "selected_add_ons"]:
                     val = i_dict.get(k)
                     if isinstance(val, str):
                         try: i_dict[k] = json.loads(val)
                         except: i_dict[k] = {} if k == "quantity_matrix" else []
-                    elif val is None: i_dict[k] = {} if k == "quantity_matrix" else []
+                    elif val is None:
+                        i_dict[k] = {} if k == "quantity_matrix" else []
                 i_dict["is_oversize"] = bool(i_dict.get("is_oversize", False))
                 items_list.append(i_dict)
             o_dict["items"] = items_list
         results.append(o_dict)
     return results
 
-# ✅ 2. ฟังก์ชันคำนวณราคาที่ดึงจาก DB จริงๆ
 def calculate_item_price(item, order_prod_type, db: Session):
     qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
     p_type = getattr(item, "product_type", None) or order_prod_type or "shirt"
     
-    # 2.1 Base Price
+    # 1. Base Price
     if p_type == "sportsPants": unit_price = STEP_PRICING["sportsPants"]
     elif p_type == "fashionPants": unit_price = STEP_PRICING["fashionPants"]
     else:
@@ -103,37 +105,27 @@ def calculate_item_price(item, order_prod_type, db: Session):
         else:
             unit_price = Decimal(240) if is_round_v else Decimal(300)
 
-    # 2.2 Addon Price (ดึงจาก DB)
+    # 2. Addon Price (DB Sync)
     neck_str = (item.neck_type or "").strip()
     selected = getattr(item, "selected_add_ons", []) or []
 
-    # ดึงราคาคอจาก DB (additional_cost)
-    # ใช้ชื่อคอในการค้นหา (Exact Match)
+    # ดึงราคาจาก DB
     db_neck = db.query(NeckType).filter(NeckType.name == neck_str).first()
-    
-    # ราคา slope จาก DB (ถ้ามี) ถ้าไม่มีใช้ Default 40
-    slope_cost_db = Decimal(40)
-    if db_neck and db_neck.additional_cost is not None:
-        slope_cost_db = Decimal(db_neck.additional_cost)
+    slope_price_db = Decimal(db_neck.additional_cost) if db_neck and db_neck.additional_cost is not None else Decimal(40)
 
-    # กฎบังคับ: ถ้าชื่อมี "บังคับไหล่สโลป" ต้องเลือก slopeShoulder
+    # Force Options
     if "(บังคับไหล่สโลป" in neck_str:
-        if "slopeShoulder" not in selected:
-            selected = list(selected) + ["slopeShoulder"]
-
-    # กฎบังคับ: ถ้าชื่อมี "มีลิ้น" ต้องเลือก collarTongue
+        if "slopeShoulder" not in selected: selected = list(selected) + ["slopeShoulder"]
     if "มีลิ้น" in neck_str and "collarTongue" not in selected:
         selected = list(selected) + ["collarTongue"]
+    if getattr(item, "is_oversize", False) and "oversizeSlopeShoulder" not in selected:
+        selected = list(selected) + ["oversizeSlopeShoulder"]
 
-    # รวมราคา Addon
+    # Calculate Addon Total
     addon_sum = Decimal(0)
     for code in selected:
-        cost = DEFAULT_ADDONS.get(code, Decimal(0))
-        
-        # 🔥 Override ราคาด้วยค่าจาก DB
-        if code == "slopeShoulder":
-            cost = slope_cost_db
-            
+        cost = DEFAULT_ADDON_PRICES.get(code, Decimal(0))
+        if code == "slopeShoulder": cost = slope_price_db
         addon_sum += cost
 
     total_addon_line = addon_sum * qty
@@ -168,19 +160,17 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_u
 
     for item in order_in.items:
         qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-        # ส่ง db เพื่อดึงราคา
         calc = calculate_item_price(item, order_in.product_type, db)
         
         items_total_price += calc["line_total"]
         items_total_cost += calc["line_cost"]
-        item.selected_add_ons = calc["selected"]
+        item.selected_add_ons = calc["selected"] 
 
         order_items_data.append({
             "data": item, "qty": qty, "base": calc["unit_price"], "total": calc["line_total"],
             "cost": calc["line_cost"], "addon_total": calc["addon_total"]
         })
 
-    # Financials
     shipping = Decimal(str(order_in.shipping_cost or 0))
     manual_addon = Decimal(str(order_in.add_on_cost or 0))
     discount = Decimal(str(order_in.discount_amount or 0))

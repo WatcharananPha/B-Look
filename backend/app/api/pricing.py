@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List, Dict, Optional
+from pydantic import BaseModel, Field
+from typing import List, Dict, Optional, Any, Union
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from app.db.session import get_db
@@ -11,7 +11,8 @@ router = APIRouter()
 class PricingRequestItem(BaseModel):
     product_type: str = "shirt"
     neck_type: str
-    quantity_matrix: Dict[str, int]
+    # รับได้ทั้ง Dict และ Str (เผื่อ Frontend ส่งผิด)
+    quantity_matrix: Union[Dict[str, int], str, None] = {}
     selected_add_ons: List[str] = []
     is_oversize: bool = False
 
@@ -20,13 +21,9 @@ class PricingRequest(BaseModel):
 
 @router.post("/calc")
 def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
-    """
-    Real-time price calculation endpoint
-    Used by frontend to preview price before saving order
-    """
     total_price = Decimal(0)
     
-    # Pricing Constants (Same as orders.py)
+    # Pricing Constants
     STEP_PRICING = {
         "roundVNeck": [
             {"min": 10, "max": 30, "price": 240},
@@ -57,18 +54,20 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
     results = []
 
     for item in payload.items:
-        qty = sum(item.quantity_matrix.values())
+        # Handle Quantity Matrix (Clean Data)
+        q_matrix = {}
+        if isinstance(item.quantity_matrix, dict):
+            q_matrix = item.quantity_matrix
+        
+        qty = sum(int(v) for v in q_matrix.values() if v)
         if qty == 0:
             continue
 
-        # 1. Determine Unit Price
+        # 1. Unit Price
         neck_str = (item.neck_type or "").strip()
         is_round_v = "ปก" not in neck_str and any(k in neck_str for k in ["คอกลม", "คอวี"])
         
-        # Default price
         unit_price = Decimal(240) if is_round_v else Decimal(300)
-        
-        # Step Pricing
         table = STEP_PRICING["roundVNeck"] if is_round_v else STEP_PRICING["collarOthers"]
         if qty >= 10:
             for step in table:
@@ -77,13 +76,13 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
                     break
 
         # 2. Add-ons Calculation
-        # Force logic similar to orders.py
         current_addons = set(item.selected_add_ons)
         
         # Check DB for slope price
         db_neck = db.query(NeckType).filter(NeckType.name == neck_str).first()
         slope_cost = Decimal(db_neck.additional_cost) if db_neck and db_neck.additional_cost else Decimal(40)
 
+        # Force Logic
         if "(บังคับไหล่สโลป" in neck_str or "คอปกคางหมู" in neck_str:
             current_addons.add("slopeShoulder")
         
@@ -97,7 +96,7 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
         for addon in current_addons:
             price = Decimal(ADDON_PRICES.get(addon, 0))
             if addon == "slopeShoulder":
-                price = slope_cost
+                price = slope_cost # Use DB Price
             addon_total += price
 
         line_total = (unit_price + addon_total) * qty

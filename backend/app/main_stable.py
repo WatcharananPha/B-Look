@@ -5,17 +5,6 @@ from sqlalchemy import text, inspect
 from app.db.base_class import Base
 from app.db.session import engine, SessionLocal
 
-# Import Models
-from app.models.user import User
-from app.models.order import Order
-from app.models.product import FabricType, NeckType, SleeveType
-from app.models.customer import Customer
-from app.models.supplier import Supplier
-from app.models.pricing_rule import PricingRule
-from app.models.company import Company
-from app.models.audit_log import AuditLog
-
-# Import Routers including pricing
 from app.api import auth, orders, products, suppliers, customers, pricing_rules, company, admin, pricing
 import logging
 
@@ -40,10 +29,12 @@ def initialize_system():
     with engine.connect() as conn:
         try:
             logger.info("🧹 SEED: Syncing Product Data...")
+            # 1. ล้างข้อมูลเก่า
             conn.execute(text("DELETE FROM fabric_types"))
             conn.execute(text("DELETE FROM sleeve_types"))
             conn.execute(text("DELETE FROM neck_types"))
             
+            # 2. เพิ่มรายการคอ (ตาม List เป๊ะๆ)
             neck_list = [
                 "คอกลม", "คอวีชน", "คอวีไขว้", "คอวีตัด", "คอวีปก", "คอห้าเหลี่ยม",
                 "คอปกคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)",
@@ -54,6 +45,7 @@ def initialize_system():
             ]
             
             for name in neck_list:
+                # ถ้ามีวงเล็บ 'บังคับไหล่สโลป' ให้ตั้งราคาเริ่มต้นเป็น 40 ใน DB เลย
                 is_special_340 = "(บังคับไหล่สโลป+40 บาท/ตัว)" in name
                 add_cost = 40 if is_special_340 else 0
                 force_slope = 1 if is_special_340 else 0
@@ -64,6 +56,7 @@ def initialize_system():
                     VALUES (:n, 0, :ac, :fs, 1, 0, 0)
                 """), {"n": name, "ac": add_cost, "fs": force_slope})
             
+            # Admin User
             user_check = conn.execute(text("SELECT * FROM users WHERE username='admin'")).fetchone()
             if not user_check:
                 pw_hash = "b2"
@@ -94,7 +87,6 @@ app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customer
 app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
-# ✅ Add Pricing Router
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 
 @app.get("/")
