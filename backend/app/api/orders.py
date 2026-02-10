@@ -50,6 +50,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("", response_model=List[OrderSchema])
 @router.get("/", response_model=List[OrderSchema])
 def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     # ✅ FIX: selectinload แก้ปัญหา Order ซ้ำ
@@ -65,6 +66,36 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     results = []
     for o in orders:
         o_dict = o.__dict__.copy()
+        # Normalize decimal-like fields to Decimal to satisfy Pydantic serializers
+        DECIMAL_FIELDS = [
+            "advance_hold",
+            "shipping_cost",
+            "add_on_cost",
+            "sizing_surcharge",
+            "add_on_options_total",
+            "design_fee",
+            "discount_value",
+            "discount_amount",
+            "deposit_amount",
+            "deposit_1",
+            "deposit_2",
+            "vat_amount",
+            "grand_total",
+            "balance_amount",
+            "total_cost",
+            "estimated_profit",
+        ]
+        for k in DECIMAL_FIELDS:
+            if k in o_dict:
+                v = o_dict.get(k)
+                if v is None:
+                    continue
+                if not isinstance(v, Decimal):
+                    try:
+                        o_dict[k] = Decimal(str(v))
+                    except Exception:
+                        # leave as-is on failure
+                        pass
         if o.customer:
             o_dict.update(
                 {
@@ -88,6 +119,26 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
                     elif val is None:
                         i_dict[k] = {} if k == "quantity_matrix" else []
                 i_dict["is_oversize"] = bool(i_dict.get("is_oversize", False))
+                # Normalize numeric fields in item to Decimal where appropriate
+                ITEM_DECIMAL_FIELDS = [
+                    "base_price",
+                    "price_per_unit",
+                    "cost_per_unit",
+                    "total_price",
+                    "total_cost",
+                    "total_qty",
+                    "item_addon_total",
+                ]
+                for fk in ITEM_DECIMAL_FIELDS:
+                    if fk in i_dict:
+                        vv = i_dict.get(fk)
+                        if vv is None:
+                            continue
+                        if not isinstance(vv, Decimal):
+                            try:
+                                i_dict[fk] = Decimal(str(vv))
+                            except Exception:
+                                pass
                 items_list.append(i_dict)
             o_dict["items"] = items_list
         results.append(o_dict)
@@ -171,6 +222,7 @@ def calculate_item_price(item, order_prod_type, db: Session):
     }
 
 
+@router.post("", status_code=status.HTTP_201_CREATED)
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_order(
     order_in: OrderCreate,
@@ -223,6 +275,13 @@ def create_order(
     discount = Decimal(str(order_in.discount_amount or 0))
     design_fee = Decimal(str(order_in.design_fee or 0))
     item_addons_grand = sum(x["addon_total"] for x in order_items_data)
+
+    # Guard: if manual addon equals computed addons, treat manual as 0 to avoid double-charging
+    try:
+        if manual_addon == Decimal(item_addons_grand):
+            manual_addon = Decimal(0)
+    except Exception:
+        pass
 
     final_pre_vat = items_total_price + manual_addon + shipping - discount
     if order_in.is_vat_included:
@@ -287,12 +346,134 @@ def create_order(
 
 
 @router.put("/{order_id}", response_model=OrderSchema)
-def update_order(order_id: int, order_in: OrderCreate, db: Session = Depends(get_db)):
+def update_order(
+    order_id: int,
+    order_in: OrderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
     existing = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not existing:
         raise HTTPException(status_code=404)
+
+    # Sync / find customer (same logic as create_order)
+    clean_name = order_in.customer_name.strip() if order_in.customer_name else "Unknown"
+    customer = db.query(Customer).filter(Customer.name == clean_name).first()
+    if not customer:
+        customer = Customer(
+            name=clean_name,
+            phone=order_in.phone,
+            channel=order_in.contact_channel,
+            address=order_in.address,
+            customer_code=order_in.customer_code,
+        )
+        db.add(customer)
+        db.flush()
+    else:
+        # update contact fields from payload
+        customer.phone = order_in.phone
+        customer.channel = order_in.contact_channel
+        customer.address = order_in.address
+        db.add(customer)
+
+    # Remove existing items and recalculate totals using same helpers
     db.query(OrderItemModel).filter(OrderItemModel.order_id == order_id).delete()
-    return create_order(order_in, db, None)
+
+    items_total_price = Decimal(0)
+    items_total_cost = Decimal(0)
+    order_items_data = []
+
+    for item in order_in.items:
+        qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
+        calc = calculate_item_price(item, order_in.product_type, db)
+        items_total_price += calc["line_total"]
+        items_total_cost += calc["line_cost"]
+        item.selected_add_ons = calc["selected"]
+        order_items_data.append(
+            {
+                "data": item,
+                "qty": qty,
+                "base": calc["unit_price"],
+                "total": calc["line_total"],
+                "cost": calc["line_cost"],
+                "addon_total": calc["addon_total"],
+            }
+        )
+
+    shipping = Decimal(str(order_in.shipping_cost or 0))
+    manual_addon = Decimal(str(order_in.add_on_cost or 0))
+    discount = Decimal(str(order_in.discount_amount or 0))
+    design_fee = Decimal(str(order_in.design_fee or 0))
+    item_addons_grand = sum(x["addon_total"] for x in order_items_data)
+
+    # Guard: if manual addon equals computed addons, treat manual as 0 to avoid double-charging
+    try:
+        if manual_addon == Decimal(item_addons_grand):
+            manual_addon = Decimal(0)
+    except Exception:
+        pass
+
+    final_pre_vat = items_total_price + manual_addon + shipping - discount
+    if order_in.is_vat_included:
+        grand_total = final_pre_vat
+        vat = Decimal(0)
+    else:
+        vat = (final_pre_vat * Decimal(0.07)).quantize(Decimal("0.01"))
+        grand_total = final_pre_vat + vat
+
+    # Update existing order fields (preserve order_no)
+    existing.customer_id = customer.id
+    existing.customer_name = clean_name
+    existing.contact_channel = customer.channel
+    existing.address = order_in.address
+    existing.phone = order_in.phone
+    existing.status = order_in.status
+    existing.grand_total = grand_total
+    existing.total_cost = items_total_cost
+    existing.vat_amount = vat
+    existing.shipping_cost = shipping
+    existing.add_on_cost = manual_addon
+    existing.add_on_options_total = item_addons_grand
+    existing.design_fee = design_fee
+    existing.discount_amount = discount
+    existing.is_vat_included = order_in.is_vat_included
+    existing.deadline = order_in.deadline
+    existing.usage_date = order_in.usage_date
+    existing.deposit_amount = order_in.deposit_amount
+    existing.deposit_1 = order_in.deposit_1
+    existing.deposit_2 = order_in.deposit_2
+    existing.balance_amount = (
+        grand_total - (order_in.deposit_1 or 0) - (order_in.deposit_2 or 0)
+    )
+    existing.note = order_in.note
+    existing.created_by_id = current_user.id if current_user else existing.created_by_id
+
+    db.add(existing)
+    db.flush()
+
+    # Recreate order items
+    for d in order_items_data:
+        src = d["data"]
+        ni = OrderItemModel(
+            order_id=existing.id,
+            product_name=src.product_name,
+            fabric_type=src.fabric_type,
+            neck_type=src.neck_type,
+            sleeve_type=src.sleeve_type,
+            quantity_matrix=json.dumps(src.quantity_matrix),
+            total_qty=d["qty"],
+            price_per_unit=d["base"],
+            total_price=d["total"],
+            total_cost=d["cost"],
+            selected_add_ons=json.dumps(src.selected_add_ons),
+            item_addon_total=d["addon_total"],
+        )
+        db.add(ni)
+
+    db.commit()
+    db.refresh(existing)
+    # Return serialized dict similar to read_order to satisfy response_model types
+    return read_order(order_id, db)
 
 
 @router.delete("/{order_id}", status_code=204)
@@ -344,7 +525,55 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
                 elif val is None:
                     i_dict[k] = {} if k == "quantity_matrix" else []
             i_dict["is_oversize"] = bool(i_dict.get("is_oversize", False))
+            # Normalize numeric fields in item to Decimal where appropriate
+            ITEM_DECIMAL_FIELDS = [
+                "base_price",
+                "price_per_unit",
+                "cost_per_unit",
+                "total_price",
+                "total_cost",
+                "total_qty",
+                "item_addon_total",
+            ]
+            for fk in ITEM_DECIMAL_FIELDS:
+                if fk in i_dict:
+                    vv = i_dict.get(fk)
+                    if vv is None:
+                        continue
+                    if not isinstance(vv, Decimal):
+                        try:
+                            i_dict[fk] = Decimal(str(vv))
+                        except Exception:
+                            pass
             items_list.append(i_dict)
         o_dict["items"] = items_list
-
+    # Normalize decimal-like fields to Decimal to satisfy Pydantic serializers
+    DECIMAL_FIELDS = [
+        "advance_hold",
+        "shipping_cost",
+        "add_on_cost",
+        "sizing_surcharge",
+        "add_on_options_total",
+        "design_fee",
+        "discount_value",
+        "discount_amount",
+        "deposit_amount",
+        "deposit_1",
+        "deposit_2",
+        "vat_amount",
+        "grand_total",
+        "balance_amount",
+        "total_cost",
+        "estimated_profit",
+    ]
+    for k in DECIMAL_FIELDS:
+        if k in o_dict:
+            v = o_dict.get(k)
+            if v is None:
+                continue
+            if not isinstance(v, Decimal):
+                try:
+                    o_dict[k] = Decimal(str(v))
+                except Exception:
+                    pass
     return o_dict

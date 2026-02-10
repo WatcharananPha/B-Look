@@ -1192,7 +1192,7 @@ const DashboardPage = ({ onEdit }) => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const orders = await fetchWithAuth('/orders/');
+                const orders = await fetchWithAuth('/orders');
                 const data = orders || [];
                 
                 // --- 1. Apply Brand Filter First ---
@@ -2219,14 +2219,13 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     // Ensure manual block/other fee isn't accidentally equal to computed add-on totals
     // (prevents double-counting when computedAddOnCost changes)
     useEffect(() => {
-        if (!editingOrder) {
-            try {
-                if (Number(manualAddOnCost) && Number(computedAddOnCost) && Number(manualAddOnCost) === Number(computedAddOnCost)) {
-                    setManualAddOnCost(0);
-                }
-            } catch {
-                // noop
+        try {
+            // If manual add-on equals computed add-on, clear manual to avoid double-counting
+            if (Number(manualAddOnCost) && Number(computedAddOnCost) && Number(manualAddOnCost) === Number(computedAddOnCost)) {
+                setManualAddOnCost(0);
             }
+        } catch {
+            // noop
         }
     }, [computedAddOnCost, selectedNeck, editingOrder, manualAddOnCost]);
 
@@ -2407,7 +2406,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
         console.log("Sending order data:", JSON.stringify(orderData, null, 2));
 
-        const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders/';
+        const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders';
         const method = editingOrder ? 'PUT' : 'POST';
         
         const response = await fetchWithAuth(url, {
@@ -3557,7 +3556,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
   const fetchOrders = useCallback(async () => {
       setLoading(true);
       try {
-          const data = await fetchWithAuth('/orders/');
+          const data = await fetchWithAuth('/orders');
           setOrders(data || []);
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
