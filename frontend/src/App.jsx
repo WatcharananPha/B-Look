@@ -2012,7 +2012,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             fetchMasters();
         }, [editingOrder, onNotify, setAddOnDefinitions, setAddOnOptions, setAvailableNeckTypes]);
 
-  const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
+    const totalQty = Object.values(quantities).reduce((a, b) => Number(a) + Number(b), 0);
 
     const isOversizeAllowed = useMemo(
         () => SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n)),
@@ -2255,19 +2255,19 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   // NEW: Calculate sizing surcharge
     const sizingSurcharge = productType === 'shirt' ? oversizeSurchargeQty * 100 : 0;
 
-  const productSubtotal = totalQty * basePrice;
+    const productSubtotal = Number(totalQty) * Number(basePrice || 0);
   // neckExtraPrice รวมเข้า basePrice แล้ว ไม่ต้องบวกแยก
-    const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + manualAddOnCost + shippingCost - discount;
-    
+    const totalBeforeCalc = Number(productSubtotal || 0) + Number(sizingSurcharge || 0) + Number(addOnOptionsTotal || 0) + Number(manualAddOnCost || 0) + Number(shippingCost || 0) - Number(discount || 0);
+
     let vatAmount = 0, grandTotal = 0;
     if (isVatIncluded) {
         // VAT already included in prices
-        vatAmount = totalBeforeCalc * (config.vat_rate / (1 + config.vat_rate));
-        grandTotal = totalBeforeCalc;
+        vatAmount = Number(totalBeforeCalc) * (Number(config.vat_rate) / (1 + Number(config.vat_rate)));
+        grandTotal = Number(totalBeforeCalc);
     } else {
         // VAT not included yet
-        vatAmount = totalBeforeCalc * config.vat_rate;
-        grandTotal = totalBeforeCalc + vatAmount;
+        vatAmount = Number(totalBeforeCalc) * Number(config.vat_rate);
+        grandTotal = Number(totalBeforeCalc) + Number(vatAmount);
     }
   
   // NEW: 50/50 deposit calculation

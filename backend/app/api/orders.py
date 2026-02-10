@@ -284,12 +284,15 @@ def create_order(
         pass
 
     final_pre_vat = items_total_price + manual_addon + shipping - discount
+    # VAT handling: support both VAT-included and VAT-excluded consistently
     if order_in.is_vat_included:
-        grand_total = final_pre_vat
-        vat = (final_pre_vat * 7) / 107
+        # final_pre_vat already includes VAT. Extract the VAT portion.
+        vat = (final_pre_vat * Decimal("7")) / Decimal("107")
+        vat = vat.quantize(Decimal("0.01"))
+        grand_total = final_pre_vat.quantize(Decimal("0.01"))
     else:
-        vat = final_pre_vat * Decimal("0.07")
-        grand_total = final_pre_vat + vat
+        vat = (final_pre_vat * Decimal("0.07")).quantize(Decimal("0.01"))
+        grand_total = (final_pre_vat + vat).quantize(Decimal("0.01"))
 
     new_order = OrderModel(
         order_no=order_in.order_no or f"PO-{uuid.uuid4().hex[:6].upper()}",
@@ -342,7 +345,8 @@ def create_order(
 
     db.commit()
     db.refresh(new_order)
-    return new_order
+    # Return serialized representation to match update_order/read_order output
+    return read_order(new_order.id, db)
 
 
 @router.put("/{order_id}", response_model=OrderSchema)
@@ -414,12 +418,14 @@ def update_order(
         pass
 
     final_pre_vat = items_total_price + manual_addon + shipping - discount
+    # VAT handling must match create_order logic
     if order_in.is_vat_included:
-        grand_total = final_pre_vat
-        vat = Decimal(0)
+        vat = (final_pre_vat * Decimal("7")) / Decimal("107")
+        vat = vat.quantize(Decimal("0.01"))
+        grand_total = final_pre_vat.quantize(Decimal("0.01"))
     else:
-        vat = (final_pre_vat * Decimal(0.07)).quantize(Decimal("0.01"))
-        grand_total = final_pre_vat + vat
+        vat = (final_pre_vat * Decimal("0.07")).quantize(Decimal("0.01"))
+        grand_total = (final_pre_vat + vat).quantize(Decimal("0.01"))
 
     # Update existing order fields (preserve order_no)
     existing.customer_id = customer.id
