@@ -123,6 +123,23 @@ def startup_repair():
         except Exception:
             logger.exception("Neck dedupe step failed")
 
+        # Ensure forced-slope necks have a sensible additional_cost (default 40)
+        try:
+            from app.models.product import NeckType
+
+            slope_rows = db.query(NeckType).filter(NeckType.force_slope == True).all()
+            for r in slope_rows:
+                try:
+                    if r.additional_cost is None or float(r.additional_cost) == 0:
+                        r.additional_cost = 40
+                        db.add(r)
+                except Exception:
+                    # If conversion fails, still set to default
+                    r.additional_cost = 40
+                    db.add(r)
+        except Exception:
+            logger.exception("Failed ensuring additional_cost for forced-slope necks")
+
         db.commit()
         db.close()
     except Exception as e:

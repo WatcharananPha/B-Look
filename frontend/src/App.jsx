@@ -1640,8 +1640,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
   const [basePrice, setBasePrice] = useState(150);
-    const [productType, setProductType] = useState("shirt");
-  const [addOnCost, setAddOnCost] = useState(0);
+        const [productType, setProductType] = useState("shirt");
+    // computedAddOnCost: sum of selected add-on options provided by pricing API
+    const [computedAddOnCost, setComputedAddOnCost] = useState(0);
+    // manualAddOnCost: user-entered block/other fees (ค่าบล็อก/อื่นๆ)
+    const [manualAddOnCost, setManualAddOnCost] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
   const [discount, setDiscount] = useState(0);
   const [isVatIncluded, setIsVatIncluded] = useState(true);
@@ -1766,7 +1769,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             total_cost: 0
         };
         // include per-item add-ons and oversize flag so backend can persist and re-calc
-        const sel = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
+        const addonsSourceForSel = (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0) ? addOnDefinitionsRef.current : ADDON_OPTIONS;
+        const sel = addonsSourceForSel.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
             if (id === 'slopeShoulder' && isSlopeForcedByNeck) return false;
             return true;
         });
@@ -1807,7 +1811,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setDeposit1(editingOrder.deposit_1 || 0);
         setDeposit2(editingOrder.deposit_2 || 0);
         setShippingCost(editingOrder.shipping_cost || 0);
-        setAddOnCost(editingOrder.add_on_cost || 0);
+        setManualAddOnCost(editingOrder.add_on_cost || 0);
         setDiscount(editingOrder.discount_amount || 0);
         setIsVatIncluded(editingOrder.is_vat_included || false);
         
@@ -1876,7 +1880,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setDeposit2(0);
         setProductType("shirt");
         setShippingCost(0);
-        setAddOnCost(0);
+        setManualAddOnCost(0);
         setDiscount(0);
         setIsVatIncluded(true);
         setNote("");
@@ -2106,7 +2110,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                         baseUnit = (table && table.length > 0) ? table[0].price : 0;
                     }
                     setBasePrice(Number(baseUnit) || 0);
-                    setAddOnCost(0);
+                    setComputedAddOnCost(0);
                     setShippingCost(0);
                     return;
                 }
@@ -2115,15 +2119,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                 const selectedAddOns = (addOnDefinitions || []).filter(opt => addOnOptions[opt.id]).map(o => o.id);
 
                 const payload = {
-                    total_qty: totalQty,
-                    product_type: productType,
-                    quantity_matrix: quantities,
-                    product_is_oversize: isOversize,
-                    fabric_name: selectedFabric || null,
-                    neck_name: selectedNeck || null,
-                    sleeve_name: selectedSleeve || null,
-                    addon_ids: selectedAddOns,
-                    is_vat_included: isVatIncluded
+                    items: [
+                        {
+                            product_type: productType,
+                            neck_type: selectedNeck || "",
+                            quantity_matrix: quantities,
+                            selected_add_ons: selectedAddOns,
+                            is_oversize: isOversize,
+                        }
+                    ]
                 };
 
                 const res = await fetchWithAuth('/pricing/calc', {
@@ -2135,7 +2139,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
                 if (res) {
                     setBasePrice(res.price_per_unit || 0);
-                    setAddOnCost(res.item_addon_total || 0);
+                    setComputedAddOnCost(res.item_addon_total || 0);
                     setShippingCost(res.shipping_cost || 0);
                 } else {
                     // Server didn't respond — fallback to local calculation so UI remains usable
@@ -2189,7 +2193,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                     else shipping_cost_local = 230 + ((totalQty - 100) * 50);
 
                     setBasePrice(Number(base_unit) || 0);
-                    setAddOnCost(Number(item_addon_total_local) || 0);
+                    setComputedAddOnCost(Number(item_addon_total_local) || 0);
                     setShippingCost(Number(shipping_cost_local) || 0);
                 }
                 // Note: sizing surcharge and VAT handled/displayed from derived values
@@ -2212,6 +2216,20 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         addOnDefinitions
     ]);
 
+    // Ensure manual block/other fee isn't accidentally equal to computed add-on totals
+    // (prevents double-counting when computedAddOnCost changes)
+    useEffect(() => {
+        if (!editingOrder) {
+            try {
+                if (Number(manualAddOnCost) && Number(computedAddOnCost) && Number(manualAddOnCost) === Number(computedAddOnCost)) {
+                    setManualAddOnCost(0);
+                }
+            } catch {
+                // noop
+            }
+        }
+    }, [computedAddOnCost, selectedNeck, editingOrder, manualAddOnCost]);
+
     // Shipping cost is calculated on the backend now; frontend reads it from pricing API.
 
   // neckExtraPrice ตอนนี้รวมเข้า basePrice แล้ว ไม่ต้อง setNeckExtraPrice แยก
@@ -2220,8 +2238,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     // NEW: Calculate Add-on Options total
     const addOnOptionsTotal = useMemo(() => {
                 if (productType !== 'shirt') return 0;
-        // If backend provided `addOnCost`, prefer that authoritative value
-        if (addOnCost && Number(addOnCost) > 0) return Number(addOnCost);
+        // If backend provided computed add-on total, prefer that authoritative value
+    if (computedAddOnCost && Number(computedAddOnCost) > 0) return Number(computedAddOnCost);
         return (addOnDefinitions || []).reduce((total, opt) => {
                 // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
                 // but for our special UI necks we want to show 300 + slope add-on, so count it there.
@@ -2233,14 +2251,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             }
             return total;
         }, 0);
-        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck, addOnDefinitions, selectedNeck, addOnCost]);
+        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck, addOnDefinitions, selectedNeck, computedAddOnCost]);
 
   // NEW: Calculate sizing surcharge
     const sizingSurcharge = productType === 'shirt' ? oversizeSurchargeQty * 100 : 0;
 
   const productSubtotal = totalQty * basePrice;
   // neckExtraPrice รวมเข้า basePrice แล้ว ไม่ต้องบวกแยก
-  const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + addOnCost + shippingCost - discount;
+    const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + manualAddOnCost + shippingCost - discount;
     
     let vatAmount = 0, grandTotal = 0;
     if (isVatIncluded) {
@@ -2368,7 +2386,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             design_fee: Number(designFee) || 0,
             product_type: productType,
             shipping_cost: Number(shippingCost) || 0,
-            add_on_cost: Number(addOnCost) || 0,
+                add_on_cost: Number(manualAddOnCost) || 0,
             sizing_surcharge: Number(sizingSurcharge) || 0,
             add_on_options_total: Number(addOnOptionsTotal) || 0,
             discount_type: "THB",
@@ -2467,8 +2485,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             sizingSurcharge,
             oversizeSurchargeQty,
             addOnOptionsTotal,
-            selectedAddOns: ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]),
-            addOnCost, 
+            // Use authoritative add-on definitions (backend or user-edited) for preview display
+            selectedAddOns: (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0 ? addOnDefinitionsRef.current : ADDON_OPTIONS).filter(opt => addOnOptions[opt.id]),
+            manualAddOnCost, 
             shippingCost, 
             discount, 
             isVatIncluded, 
@@ -2617,20 +2636,26 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">คอเสื้อ</label>
                             <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)} disabled={productType !== 'shirt'}>
                                 <option value="">-- เลือกคอ --</option>
-                                {availableNeckTypes.map(n => (
-                                    <option key={n.id} value={n.name}>
-                                        {n.name}
-                                        {(() => {
-                                            const hasForceText = (n.name || '').includes('บังคับ');
-                                            if (Number(n.extraPrice || 0) > 0 && n.forceSlope) {
-                                                return hasForceText ? null : <span> (+{n.extraPrice} รวมใน basePrice, บังคับไหล่สโลป)</span>;
-                                            }
-                                            if (Number(n.extraPrice || 0) > 0) return <span> (+{n.extraPrice} รวมใน basePrice)</span>;
-                                            if (n.forceSlope) return hasForceText ? null : <span> (บังคับไหล่สโลป+40 บาท/ตัว)</span>;
-                                            return null;
-                                        })()}
-                                    </option>
-                                ))}
+                                {availableNeckTypes.map(n => {
+                                    const cleanedName = collapseDuplicateAnnotation(n.name || '');
+                                    const hasForceText = (cleanedName || '').includes('บังคับ');
+                                    // Determine slope price: prefer neck.extraPrice, fallback to backend addon definition, default 40
+                                    const slopeAddonDef = (addOnDefinitions || []).find(a => a.id === 'slopeShoulder');
+                                    const slopePrice = Number(n.extraPrice || 0) > 0 ? Number(n.extraPrice) : (slopeAddonDef ? Number(slopeAddonDef.price) : 40);
+                                    return (
+                                        <option key={n.id} value={cleanedName}>
+                                            {cleanedName}
+                                            {(() => {
+                                                if (Number(n.extraPrice || 0) > 0 && n.forceSlope) {
+                                                    return hasForceText ? null : <span> (+{slopePrice} รวมใน basePrice, บังคับไหล่สโลป)</span>;
+                                                }
+                                                if (Number(n.extraPrice || 0) > 0) return <span> (+{n.extraPrice} รวมใน basePrice)</span>;
+                                                if (n.forceSlope) return hasForceText ? null : <span> (บังคับไหล่สโลป+{slopePrice} บาท/ตัว)</span>;
+                                                return null;
+                                            })()}
+                                        </option>
+                                    );
+                                })}
                             </select>
                             {neckExtraPrice > 0 && (
                                 <div className="mt-1 text-xs text-orange-600 font-medium">
@@ -2844,7 +2869,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                                     </div>
                                 )}
                                 
-                                <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
+                                <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={manualAddOnCost} onChange={e => setManualAddOnCost(Number(e.target.value))}/></div>
                                 <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
                                   <span className="font-semibold">ค่าขนส่ง (อัตโนมัติ)</span>
                                   <span className="font-bold">{shippingCost.toLocaleString()} ฿</span>
@@ -2971,7 +2996,7 @@ const ProductPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); 
   const [editingItem, setEditingItem] = useState(null);
-  const [newItem, setNewItem] = useState({ name: "", quantity: 0, cost_price: 0 });
+    const [newItem, setNewItem] = useState({ name: "", quantity: 0, cost_price: 0, additional_cost: 0 });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -2990,7 +3015,7 @@ const ProductPage = () => {
 
   const openAddModal = () => {
       setModalMode("add");
-      setNewItem({ name: "", quantity: 0, cost_price: 0 });
+      setNewItem({ name: "", quantity: 0, cost_price: 0, additional_cost: 0 });
       setIsModalOpen(true);
   };
 
@@ -3000,7 +3025,8 @@ const ProductPage = () => {
       setNewItem({ 
           name: item.name, 
           quantity: item.quantity || 0,
-          cost_price: item.cost_price || 0 
+          cost_price: item.cost_price || 0,
+          additional_cost: item.additional_cost || item.cost_price || 0
       });
       setIsModalOpen(true);
   };
@@ -3008,9 +3034,10 @@ const ProductPage = () => {
   const handleAdd = async () => {
       try {
           const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
+          const payload = { ...newItem, additional_cost: newItem.additional_cost !== undefined ? newItem.additional_cost : newItem.cost_price };
           await fetchWithAuth(endpoint, {
               method: 'POST',
-              body: JSON.stringify(newItem)
+              body: JSON.stringify(payload)
           });
           setIsModalOpen(false);
           setNewItem({ name: "", quantity: 0, cost_price: 0 });
@@ -3021,13 +3048,14 @@ const ProductPage = () => {
   const handleEdit = async () => {
       try {
           const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
+          const payload = { ...newItem, additional_cost: newItem.additional_cost !== undefined ? newItem.additional_cost : newItem.cost_price };
           await fetchWithAuth(`${endpoint}/${editingItem.id}`, {
               method: 'PUT',
-              body: JSON.stringify(newItem)
+              body: JSON.stringify(payload)
           });
           setIsModalOpen(false);
           setEditingItem(null);
-          setNewItem({ name: "", quantity: 0, cost_price: 0 });
+          setNewItem({ name: "", quantity: 0, cost_price: 0, additional_cost: 0 });
           fetchItems();
       } catch (e) { alert("Failed to update: " + e.message); }
   };

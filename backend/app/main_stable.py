@@ -1,3 +1,5 @@
+# [File: backend/app/main_stable.py]
+
 from fastapi import FastAPI, Request, status, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
@@ -5,6 +7,7 @@ from sqlalchemy import text, inspect
 from app.db.base_class import Base
 from app.db.session import engine, SessionLocal
 
+# Import ให้ครบ
 from app.api import auth, orders, products, suppliers, customers, pricing_rules, company, admin, pricing
 import logging
 
@@ -23,18 +26,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 def initialize_system():
+    logger.info("🚀 STARTUP: Registering Routers...") # เพิ่ม Log
     logger.info("🛠️ DATABASE: Checking tables...")
     Base.metadata.create_all(bind=engine)
     
     with engine.connect() as conn:
         try:
             logger.info("🧹 SEED: Syncing Product Data...")
-            # 1. ล้างข้อมูลเก่า
+            # ... (ส่วน Seed เดิม ปล่อยไว้เหมือนเดิม) ...
             conn.execute(text("DELETE FROM fabric_types"))
             conn.execute(text("DELETE FROM sleeve_types"))
             conn.execute(text("DELETE FROM neck_types"))
             
-            # 2. เพิ่มรายการคอ (ตาม List เป๊ะๆ)
             neck_list = [
                 "คอกลม", "คอวีชน", "คอวีไขว้", "คอวีตัด", "คอวีปก", "คอห้าเหลี่ยม",
                 "คอปกคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)",
@@ -45,7 +48,6 @@ def initialize_system():
             ]
             
             for name in neck_list:
-                # ถ้ามีวงเล็บ 'บังคับไหล่สโลป' ให้ตั้งราคาเริ่มต้นเป็น 40 ใน DB เลย
                 is_special_340 = "(บังคับไหล่สโลป+40 บาท/ตัว)" in name
                 add_cost = 40 if is_special_340 else 0
                 force_slope = 1 if is_special_340 else 0
@@ -56,7 +58,6 @@ def initialize_system():
                     VALUES (:n, 0, :ac, :fs, 1, 0, 0)
                 """), {"n": name, "ac": add_cost, "fs": force_slope})
             
-            # Admin User
             user_check = conn.execute(text("SELECT * FROM users WHERE username='admin'")).fetchone()
             if not user_check:
                 pw_hash = "b2"
@@ -80,6 +81,7 @@ def login_stable(form_data: OAuth2PasswordRequestForm = Depends()):
 def read_users_me():
     return {"id": 1, "username": "admin", "full_name": "System Admin", "role": "owner", "is_active": True}
 
+# Register Routers
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(suppliers.router, prefix="/api/v1/suppliers", tags=["Suppliers"])
@@ -87,8 +89,10 @@ app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customer
 app.include_router(pricing_rules.router, prefix="/api/v1/pricing-rules", tags=["Pricing Rules"])
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+# ✅ สำคัญ: ต้องมีบรรทัดนี้
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 
 @app.get("/")
 def read_root():
-    return {"message": "Production System Ready", "status": "ok"}
+    # ✅ เปลี่ยนข้อความเพื่อเช็คเวอร์ชัน
+    return {"message": "Production System Ready", "status": "ok", "version": "v2-with-pricing"}

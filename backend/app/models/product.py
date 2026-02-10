@@ -29,13 +29,10 @@ class NeckType(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     price_adjustment = Column(DECIMAL(10, 2), default=0)
-
-    # ✅ ต้องมี
     quantity = Column(Integer, default=0)
     cost_price = Column(DECIMAL(10, 2), default=0)
 
     additional_cost = Column(DECIMAL(10, 2), default=0)
-    # When true this neck forces the shoulder to be a slope; pricing included
     force_slope = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
 
