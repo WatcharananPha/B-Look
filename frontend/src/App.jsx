@@ -363,8 +363,10 @@ const fetchWithAuth = async (endpoint, options = {}) => {
     }
     if (response.status === 403) {
         const errorData = await response.json().catch(() => ({}));
-        // If it's a credential validation error, treat it like 401
-        if (errorData.detail && errorData.detail.includes('Could not validate credentials')) {
+        const www = response.headers && response.headers.get ? response.headers.get('www-authenticate') : null;
+        // If backend explicitly indicates authentication failure (WWW-Authenticate header)
+        // or the detail message indicates credential validation, treat like 401 and logout.
+        if (www || (errorData.detail && errorData.detail.includes('Could not validate credentials'))) {
             const hadToken = Boolean(token);
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_role');

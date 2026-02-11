@@ -1,4 +1,5 @@
 from typing import Generator, Optional
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -11,6 +12,7 @@ from app.db.session import get_db
 from app.models.user import User
 
 reusable_oauth2 = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/token")
+logger = logging.getLogger(__name__)
 
 
 def get_current_user(
@@ -28,19 +30,25 @@ def get_current_user(
         )
         token_data = payload.get("sub")
         if token_data is None:
+            logger.debug("Token decoded but 'sub' missing in payload")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials: Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
             )
     except jwt.ExpiredSignatureError:
+        logger.info("Expired token presented")
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials: Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     except (JWTError, ValidationError) as e:
+        logger.warning("JWT validation error: %s", str(e))
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     # ป้องกันปัญหากรณี Token เก็บเป็น ID แต่ Code ไปหา Username
