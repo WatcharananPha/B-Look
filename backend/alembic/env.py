@@ -7,6 +7,15 @@ from sqlalchemy import pool
 from alembic import context
 
 # --- Import App Config & Models ---
+import sys
+import pathlib
+
+# Ensure the `backend` package root is on sys.path so `import app` works
+# env.py lives at backend/alembic/env.py; parents[1] -> backend/
+proj_root = pathlib.Path(__file__).resolve().parents[1]
+if str(proj_root) not in sys.path:
+    sys.path.insert(0, str(proj_root))
+
 from app.core.config import settings
 from app.db.base import Base
 
@@ -65,9 +74,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

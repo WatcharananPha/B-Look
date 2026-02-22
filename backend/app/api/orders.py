@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, selectinload
-from typing import List
+from typing import List, Optional, Literal
+from pydantic import BaseModel
 from decimal import Decimal
 import uuid
 import json
@@ -296,12 +297,14 @@ def create_order(
 
     new_order = OrderModel(
         order_no=order_in.order_no or f"PO-{uuid.uuid4().hex[:6].upper()}",
+        # Public UUID used for customer payment link
+        order_uuid=uuid.uuid4().hex,
         customer_id=customer.id,
         customer_name=clean_name,
         contact_channel=customer.channel,
         address=order_in.address,
         phone=order_in.phone,
-        status=order_in.status,
+        status=order_in.status or "WAITING_BOOKING",
         grand_total=grand_total,
         total_cost=items_total_cost,
         vat_amount=vat,
@@ -583,3 +586,86 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
                 except Exception:
                     pass
     return o_dict
+
+
+# --- Admin: Approve / Reject Slip Endpoint ---
+
+
+class ApproveSlipRequest(BaseModel):
+    installment: Literal["booking", "deposit", "balance"]
+    approved: bool
+    note: Optional[str] = None
+
+
+def _send_notification(target: str, subject: str, message: str) -> None:
+    """Placeholder notification sender — extend to send LINE/email/team messages."""
+    logger.info("Notify %s: %s - %s", target, subject, message)
+
+
+@router.patch("/{order_id}/approve-slip")
+def approve_slip(
+    order_id: int,
+    payload: ApproveSlipRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    # Find order
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
+
+    # Expected status mapping for installments -> next status
+    expected_waiting = {
+        "booking": "WAITING_BOOKING",
+        "deposit": "WAITING_DEPOSIT",
+        "balance": "WAITING_BALANCE",
+    }
+    next_status = {
+        "booking": "BOOKING_VERIFIED",
+        "deposit": "PRODUCTION",
+        "balance": "COMPLETED",
+    }
+
+    old_status = getattr(order, "status", None)
+
+    if payload.approved:
+        # Move order forward according to the mapping. This is idempotent.
+        new_status = next_status.get(payload.installment)
+        order.status = new_status
+    else:
+        # On reject, set a rejection status to make it visible in admin.
+        order.status = "SLIP_REJECTED"
+
+    db.add(order)
+
+    # Create audit log
+    details = {
+        "installment": payload.installment,
+        "approved": payload.approved,
+        "note": payload.note,
+        "changed_from": old_status,
+        "changed_to": order.status,
+        "admin": getattr(current_user, "username", None),
+    }
+    audit = AuditLog(
+        action=("APPROVE_SLIP" if payload.approved else "REJECT_SLIP"),
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps(details),
+    )
+    db.add(audit)
+
+    db.commit()
+
+    # Send notification (placeholder)
+    try:
+        target = order.customer_name or "customer"
+        subject = f"Slip {'approved' if payload.approved else 'rejected'} for order {order.order_no}"
+        message = f"Installment: {payload.installment}. Note: {payload.note or '-'}"
+        _send_notification(target, subject, message)
+    except Exception:
+        logger.exception("Failed to send notification after slip approval")
+
+    return {"ok": True, "order_id": order.id, "status": order.status}

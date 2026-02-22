@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin Order Helper</title>
+    <style>
+      body{font-family:Inter,system-ui,Arial;margin:0;padding:0;background:#fff}
+      .wrap{max-width:900px;margin:24px auto;padding:16px}
+      .row{display:flex;gap:12px}
+      img{max-width:240px;border:1px solid #eee;border-radius:8px}
+      button{background:#2563eb;color:#fff;padding:8px 12px;border-radius:6px;border:0}
+      input,textarea{width:100%;padding:8px;border:1px solid #ddd;border-radius:6px}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h2>Admin Order Helper</h2>
+      <p class="muted">ใช้ token ของแอดมินเพื่อเรียก API และอนุมัติสลิป</p>
+
+      <div style="margin-bottom:12px">
+        <label>API Token (Bearer):</label>
+        <input id="token" placeholder="Bearer ey.." />
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label>Order ID:</label>
+        <input id="orderId" placeholder="Order numeric id" />
+      </div>
+
+      <div style="margin-bottom:12px" class="row">
+        <button id="load">Load Order</button>
+        <button id="copyLink">Copy Public Payment Link</button>
+      </div>
+
+      <div id="result"></div>
+    </div>
+
+    <script>
+      const tokenEl = document.getElementById('token');
+      const idEl = document.getElementById('orderId');
+      const res = document.getElementById('result');
+
+      document.getElementById('load').addEventListener('click', ()=>{
+        const id = idEl.value.trim();
+        const tok = tokenEl.value.trim();
+        if(!id || !tok){alert('กรุณากรอก token และ order id');return}
+        fetch(`/api/v1/orders/${id}`,{headers:{'Authorization':tok}})
+          .then(r=>r.ok? r.json(): r.text().then(t=>Promise.reject(t)))
+          .then(show)
+          .catch(e=>{console.error(e);alert('Failed to load order')})
+      })
+
+      function show(o){
+        const uuid = o.order_uuid || '';
+        const publicLink = `${location.origin}/payment.html?u=${encodeURIComponent(uuid)}`;
+        let html = `<p><strong>Order</strong>: ${o.order_no} (id:${o.id})</p>`;
+        html += `<p><strong>Status</strong>: ${o.status}</p>`;
+        html += `<p><strong>Public Link</strong>: <input id="plink" value="${publicLink}" /></p>`;
+        html += '<div style="display:flex;gap:12px;margin-top:8px">';
+        ['slip_booking_url','slip_deposit_url','slip_balance_url'].forEach(k=>{
+          if(o[k]) html += `<div><p>${k}</p><img src="${o[k]}"/></div>`;
+        })
+        html += '</div>';
+        html += `<div style="margin-top:12px"><button id="approve">Advance Status</button></div>`;
+        res.innerHTML = html;
+
+        document.getElementById('copyLink').addEventListener('click', ()=>{
+          const pl = document.getElementById('plink'); pl.select(); document.execCommand('copy'); alert('Copied')
+        })
+
+        document.getElementById('approve').addEventListener('click', ()=>{
+          const tok = tokenEl.value.trim();
+          // determine next status
+          let next = '';
+          if(o.status === 'WAITING_BOOKING') next = 'WAITING_DEPOSIT';
+          else if(o.status === 'WAITING_DEPOSIT') next = 'WAITING_BALANCE';
+          else if(o.status === 'WAITING_BALANCE') next = 'PAID';
+          else next = 'PAID';
+
+          if(!confirm('Set status to '+next+' ?')) return;
+          fetch(`/api/v1/admin/orders/${o.id}/approve`,{
+            method:'POST',
+            headers:{'Authorization':tok,'Content-Type':'application/json'},
+            body: JSON.stringify({next_status: next})
+          }).then(r=>r.ok? r.json(): r.text().then(t=>Promise.reject(t)))
+            .then(updated=>{alert('Status updated'); show(updated)})
+            .catch(e=>{console.error(e); alert('Failed to update')})
+        })
+      }
+    </script>
+  </body>
+</html>

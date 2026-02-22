@@ -7,7 +7,11 @@ import {
   Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag
 } from 'lucide-react';
 import LoginPage from './login';
+import CustomerPayment from './publicPages/CustomerPayment';
+import PaymentSuccess from './publicPages/PaymentSuccess';
+import OrderAdminExtras from './components/OrderAdminExtras';
 
+/* eslint-disable react-hooks/rules-of-hooks */
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const LOGO_URL = "/logo.jpg"; 
 
@@ -922,20 +926,29 @@ const buildInvoiceDataFromOrder = (order) => {
 
 // 2.1 ORDER DETAIL MODAL (Reuses invoice structure)
 const OrderDetailModal = ({ order, onClose }) => {
-  if (!order) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
-        <div className="bg-white p-8 rounded-xl text-center">
-          <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
-          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
-        </div>
-      </div>
-    );
-  }
+    if (!order) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
+                <div className="bg-white p-8 rounded-xl text-center">
+                    <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
+                    <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
+                </div>
+            </div>
+        );
+    }
 
     const data = buildInvoiceDataFromOrder(order);
 
-    return <InvoiceModal data={data} onClose={onClose} />;
+    // Render the Invoice modal and, for admin users, show the admin extras
+    return (
+        <>
+            <InvoiceModal data={data} onClose={onClose} />
+            {/* Admin extras positioned so it appears above the modal (top-right) */}
+            <div style={{position:'fixed', right:24, top:96, zIndex:70}}>
+                <OrderAdminExtras order={order} onApproved={() => { /* no-op: caller may refresh list */ }} />
+            </div>
+        </>
+    );
 };
 
 // 2.7 USER MANAGEMENT PAGE
@@ -4369,6 +4382,17 @@ const NavItem = ({ icon, label, active, onClick }) => (
 
 // --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
+    // Public payment pages (mounted before admin UI)
+    try{
+        const _pathname = window.location.pathname || '';
+        if(_pathname.startsWith('/pay/')){
+            const uuid = _pathname.split('/pay/')[1] || '';
+            return <CustomerPayment uuid={uuid} />;
+        }
+        if(_pathname === '/payment-success'){
+            return <PaymentSuccess />;
+        }
+    } catch { /* ignore when SSR or not available */ }
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
   const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'user'); // Add State for Role
   const [currentPage, setCurrentPage] = useState('dashboard');

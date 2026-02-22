@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Payment Submitted</title>
+    <style>
+      body{font-family:Inter,system-ui,Arial;margin:0;padding:0;background:#f7fafc}
+      .wrap{max-width:520px;margin:0 auto;padding:16px}
+      .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,0.06);text-align:center}
+      h1{font-size:20px;margin:0 0 8px}
+      .muted{color:#666;font-size:14px}
+      a.btn{display:inline-block;margin-top:12px;background:#0ea5a4;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>ส่งสลิปเรียบร้อยแล้ว</h1>
+        <p class="muted">ขอบคุณ — ระบบจะแจ้งให้ผู้ขายตรวจสอบและยืนยันการชำระเงิน</p>
+        <p id="info"></p>
+        <a id="back" class="btn" href="/">กลับสู่หน้าแรก</a>
+      </div>
+    </div>
+
+    <script>
+      const qs = new URLSearchParams(location.search);
+      const u = qs.get('u');
+      const r = qs.get('r');
+      const info = document.getElementById('info');
+      if(u) info.innerHTML = `Order: <strong>${u}</strong><br/>ไฟล์สลิป: ${r || 'n/a'}`;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Payment Portal</title>
+    <style>
+      body{font-family:Inter,system-ui,Arial;margin:0;padding:0;background:#f7fafc}
+      .wrap{max-width:520px;margin:0 auto;padding:16px}
+      .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+      h1{font-size:20px;margin:0 0 8px}
+      .muted{color:#666;font-size:14px}
+      button{background:#0ea5a4;color:#fff;border:0;padding:12px 16px;border-radius:8px;font-size:16px}
+      input[type=file]{display:block;margin-top:12px}
+      .center{display:flex;gap:8px;align-items:center}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>ชำระเงินค่าสินค้า</h1>
+        <p class="muted">กรุณาแนบสลิปเพื่อยืนยันการชำระเงิน — หน้าไม่ต้องล็อกอิน</p>
+        <div id="content">Loading…</div>
+      </div>
+    </div>
+
+    <script>
+      // Read order UUID from query param ?u=...
+      const qs = new URLSearchParams(location.search);
+      const orderUuid = qs.get('u');
+      const apiBase = '/api/public';
+
+      if (!orderUuid) {
+        document.getElementById('content').innerHTML = '<p class="muted">Missing order UUID. โปรดขอ URL ใหม่จากผู้ขาย</p>';
+      } else {
+        fetch(`${apiBase}/orders/${orderUuid}`)
+          .then(r=>r.ok ? r.json() : Promise.reject(r))
+          .then(renderOrder)
+          .catch(err=>{
+            console.error(err);
+            document.getElementById('content').innerHTML = '<p class="muted">ไม่พบคำสั่งซื้อ หรือ ลิงก์หมดอายุ</p>';
+          })
+      }
+
+      function renderOrder(o){
+        const amount = o.amount_due || 0;
+        const status = (o.status||'').toUpperCase();
+        const instMap = {
+          'WAITING_BOOKING':'booking',
+          'WAITING_DEPOSIT':'deposit',
+          'WAITING_BALANCE':'balance'
+        };
+
+        const inst = instMap[status] || 'booking';
+
+        let html = `
+          <p><strong>Order:</strong> ${o.order_no}</p>
+          <p><strong>สถานะ:</strong> ${o.status}</p>
+          <p><strong>ยอดที่ต้องชำระตอนนี้:</strong> <span id="amt">${amount.toFixed ? amount.toFixed(2) : amount}</span> ฿</p>
+          <div>
+            <label class="muted">อัปโหลดสลิป (${inst})</label>
+            <input id="file" type="file" accept="image/*" />
+          </div>
+          <div style="margin-top:12px" class="center">
+            <button id="payBtn">อัปโหลดสลิปและแจ้งชำระ</button>
+          </div>
+        `;
+
+        document.getElementById('content').innerHTML = html;
+
+        document.getElementById('payBtn').addEventListener('click', ()=>{
+          const f = document.getElementById('file').files[0];
+          if(!f){alert('กรุณาเลือกไฟล์สลิป');return}
+          const fd = new FormData();
+          fd.append('installment', inst);
+          fd.append('file', f, f.name);
+
+          document.getElementById('payBtn').disabled = true;
+          fetch(`${apiBase}/orders/${orderUuid}/slip`, {method:'POST', body:fd})
+            .then(r=>r.json())
+            .then(resp=>{
+              // On success redirect to success page
+              location.href = `/success.html?u=${encodeURIComponent(orderUuid)}&r=${encodeURIComponent(resp.url)}`;
+            })
+            .catch(e=>{
+              console.error(e); alert('อัปโหลดล้มเหลว'); document.getElementById('payBtn').disabled=false;
+            })
+        })
+      }
+    </script>
+  </body>
+</html>

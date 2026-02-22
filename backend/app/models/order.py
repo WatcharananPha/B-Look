@@ -38,7 +38,8 @@ class Order(Base):
     deadline = Column(DateTime(timezone=True), nullable=True)
     usage_date = Column(DateTime(timezone=True), nullable=True)
     urgency_level = Column(String, default="normal")  # normal, warning, critical
-    status = Column(String, default="draft")  # draft, production, delivered
+    # New status values for payment flow: WAITING_BOOKING, WAITING_DEPOSIT, WAITING_BALANCE, etc.
+    status = Column(String, default="WAITING_BOOKING")
 
     # Financials
     is_vat_included = Column(Boolean, default=True)
@@ -60,6 +61,12 @@ class Order(Base):
     deposit_2 = Column(DECIMAL(10, 2), default=0)
 
     balance_amount = Column(DECIMAL(10, 2), default=0)
+
+    # Public payment link secret and slip URLs
+    order_uuid = Column(String, unique=True, index=True, nullable=True)
+    slip_booking_url = Column(String, nullable=True)
+    slip_deposit_url = Column(String, nullable=True)
+    slip_balance_url = Column(String, nullable=True)
 
     # Cost & Profit
     total_cost = Column(DECIMAL(10, 2), default=0)

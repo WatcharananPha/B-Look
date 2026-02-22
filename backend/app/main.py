@@ -9,6 +9,8 @@ import os
 
 from app.db.session import engine, SessionLocal
 from app.db.base import Base
+from app.core.config import settings
+from fastapi.staticfiles import StaticFiles
 
 # Import Router ทั้งหมด
 from app.api import (
@@ -21,13 +23,29 @@ from app.api import (
     company,
     pricing,
     admin,
+    public,
 )
-
-# สร้าง Tables (ถ้ายังไม่มี)
-Base.metadata.create_all(bind=engine)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# สร้าง Tables เฉพาะเมื่อรันในโหมดพัฒนา (SQLite/local) เท่านั้น
+try:
+    is_sqlite = (
+        getattr(settings, "DATABASE_URL", "").startswith("sqlite")
+        or getattr(engine, "dialect", None)
+        and getattr(engine.dialect, "name", "") == "sqlite"
+    )
+except Exception:
+    is_sqlite = False
+
+if is_sqlite:
+    logger.info(
+        "create_all(): detected sqlite - running metadata.create_all() for dev environment"
+    )
+    Base.metadata.create_all(bind=engine)
+else:
+    logger.info("Skipping create_all(): not running in sqlite dev environment")
 
 app = FastAPI(title="B-Look OMS API (Production)")
 
@@ -146,6 +164,10 @@ def startup_repair():
         logger.error(f"❌ Startup Repair Failed: {e}")
 
 
+# Ensure static directory exists for uploaded slips
+os.makedirs(os.path.join(os.getcwd(), "static", "slips"), exist_ok=True)
+
+
 # --- ROUTERS ---
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
@@ -158,6 +180,12 @@ app.include_router(
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(public.router, prefix="/api/public", tags=["Public"])
+
+# Serve uploaded slips
+app.mount(
+    "/static", StaticFiles(directory=os.path.join(os.getcwd(), "static")), name="static"
+)
 
 
 # --- ROOT ENDPOINT (กัน Error Not Found หน้าแรก) ---
