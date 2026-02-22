@@ -180,7 +180,7 @@ app.include_router(
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
-app.include_router(public.router, prefix="/api/public", tags=["Public"])
+app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 
 # Serve uploaded slips
 app.mount(

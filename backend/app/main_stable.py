@@ -1,6 +1,7 @@
 # [File: backend/app/main_stable.py]
 
 from fastapi import FastAPI, Request, status, Depends, HTTPException
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import text, inspect
@@ -18,6 +19,7 @@ from app.api import (
     company,
     admin,
     pricing,
+    public,
 )
 import logging
 
@@ -25,6 +27,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="B-Look Production System")
+
+# Serve uploaded slip images from backend/static/slips
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Use application's security helper to create proper JWTs for the stable login
 from app.core import security
@@ -141,6 +146,7 @@ app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 # ✅ สำคัญ: ต้องมีบรรทัดนี้
 app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
+app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 
 
 @app.get("/")

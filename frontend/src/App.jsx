@@ -1754,6 +1754,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+    const [paymentUrl, setPaymentUrl] = useState(null);
     // NEW: Hold multiple items for this order
     const [orderItems, setOrderItems] = useState([]);
 
@@ -2389,6 +2390,42 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             return;
         }
 
+        // If we're editing an existing order, prefer preserving stored per-item
+        // pricing for items that haven't changed in identity/quantities/add-ons.
+        // This prevents accidental recalculation when the user only edits metadata/status.
+        if (editingOrder && editingOrder.items && editingOrder.items.length > 0) {
+            try {
+                const savedItems = editingOrder.items.map(it => {
+                    let qm = it.quantity_matrix;
+                    try { if (typeof qm === 'string') qm = JSON.parse(qm); } catch(e) { qm = qm; }
+                    return { ...it, quantity_matrix: qm };
+                });
+
+                finalItems = finalItems.map(fi => {
+                    const match = savedItems.find(si =>
+                        (si.product_name || '') === (fi.product_name || '') &&
+                        (si.fabric_type || '') === (fi.fabric_type || '') &&
+                        (si.neck_type || '') === (fi.neck_type || '') &&
+                        (si.sleeve_type || '') === (fi.sleeve_type || '') &&
+                        JSON.stringify(si.quantity_matrix || {}) === JSON.stringify(fi.quantity_matrix || {}) &&
+                        JSON.stringify(si.selected_add_ons || []) === JSON.stringify(fi.selected_add_ons || []) &&
+                        Boolean(si.is_oversize) === Boolean(fi.is_oversize)
+                    );
+                    if (match) {
+                        // Copy persisted pricing fields when available
+                        fi.price_per_unit = (match.price_per_unit !== undefined) ? match.price_per_unit : fi.price_per_unit;
+                        fi.total_price = (match.total_price !== undefined) ? match.total_price : fi.total_price;
+                        fi.total_cost = (match.total_cost !== undefined) ? match.total_cost : fi.total_cost;
+                        fi.item_addon_total = (match.item_addon_total !== undefined) ? match.item_addon_total : fi.item_addon_total;
+                        fi.slope_included_in_base = (match.slope_included_in_base !== undefined) ? match.slope_included_in_base : fi.slope_included_in_base;
+                    }
+                    return fi;
+                });
+            } catch (err) {
+                console.error('Error while preserving saved item prices:', err);
+            }
+        }
+
         const orderData = {
             order_no: customerId.trim(),
             customer_name: customerName && customerName.trim() !== "" ? customerName.trim() : null,
@@ -2430,13 +2467,24 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         });
         
         console.log("Order saved successfully:", response);
+        // If backend returned a public UUID, build a payment link for customer
+        if (response && response.order_uuid) {
+            const payPath = `/pay/${response.order_uuid}`;
+            const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+            setPaymentUrl(`${origin}${payPath}`);
+        } else {
+            setPaymentUrl(null);
+        }
+
         onNotify(editingOrder ? "แก้ไขออเดอร์สำเร็จ" : "สร้างออเดอร์สำเร็จ", "success");
         setShowSuccess(true);
-        
-        // Navigate back to order list after 1.5 seconds
-        setTimeout(() => {
-            onNavigate('order_list');
-        }, 1500);
+
+        // If there's no immediate payment link, auto-navigate back after 1.5s
+        if (!response || !response.order_uuid) {
+            setTimeout(() => {
+                onNavigate('order_list');
+            }, 1500);
+        }
     } catch (e) {
         console.error("Order save error:", e);
         onNotify("บันทึกไม่สำเร็จ: " + e.message, "error");
@@ -2524,7 +2572,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                 <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full">
                     <div className="w-16 sm:w-20 h-16 sm:h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5"><CheckCircle size={40} className="sm:w-12 sm:h-12 text-emerald-500"/></div>
                     <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">บันทึกสำเร็จ!</h3>
-                    <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                    {/* If a payment URL exists, show it under the success text */}
+                    {paymentUrl ? (
+                        <div className="mt-2 text-sm text-slate-700">
+                            <div className="mb-3">บันทึกเสร็จสิ้น — ส่งลิงก์จ่ายเงินให้ลูกค้าได้ทันที</div>
+                            <a href={paymentUrl} target="_blank" rel="noreferrer" className="inline-block text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-bold mr-2">จ่ายตอนนี้</a>
+                            <button onClick={() => { navigator.clipboard.writeText(paymentUrl); onNotify('คัดลอกลิงก์การจ่ายเงินแล้ว', 'success'); }} className="inline-block text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg font-medium">คัดลอกลิงก์</button>
+                            <div className="mt-3 text-xs text-gray-500 break-all">{paymentUrl}</div>
+                            <button onClick={() => { setShowSuccess(false); setPaymentUrl(null); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                        </div>
+                    ) : (
+                        <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                    )}
                 </div>
             </div>
         )}
