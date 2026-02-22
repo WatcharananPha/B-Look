@@ -1702,6 +1702,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     useEffect(() => { addOnDefinitionsRef.current = addOnDefinitions; }, [addOnDefinitions]);
     const availableNeckTypesRef = useRef(availableNeckTypes);
     useEffect(() => { availableNeckTypesRef.current = availableNeckTypes; }, [availableNeckTypes]);
+    // Ref to prevent automatic recalculation while initializing form from existing order
+    const skipAutoCalc = useRef(false);
   
   // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
   
@@ -1806,9 +1808,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setOrderItems(prev => prev.filter((_, i) => i !== index));
     };
 
-  // Initialize form when editing an order
-  useEffect(() => {
-    if (editingOrder) {
+    // Initialize form when editing an order
+    useEffect(() => {
+        if (editingOrder) {
+                // Prevent the pricing effect from recalculating while we populate historical values
+                skipAutoCalc.current = true;
         // Basic Info
         setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
@@ -1842,19 +1846,38 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             setSelectedFabric(firstItem.fabric_type || "");
             setSelectedNeck(firstItem.neck_type || "");
             setSelectedSleeve(firstItem.sleeve_type || "");
-            // ✅ FIX: Don't load price from DB - let useEffect recalculate based on STEP_PRICING
-            // This prevents perpetuating wrong prices from old orders
-            // setBasePrice(firstItem.price_per_unit || 0);
+            // ✅ FIX: Load historical base price and add-ons from the saved order
+            // Lock automatic recalculation so the UI preserves historical pricing
+            setBasePrice(firstItem.price_per_unit || 0);
+
+            // Restore selected add-ons from stored order data so they are reflected in UI
+            if (firstItem.selected_add_ons) {
+                try {
+                    const selAddons = typeof firstItem.selected_add_ons === 'string'
+                        ? JSON.parse(firstItem.selected_add_ons)
+                        : firstItem.selected_add_ons;
+                    if (Array.isArray(selAddons)) {
+                        setAddOnOptions(prev => {
+                            const next = { ...prev };
+                            Object.keys(next).forEach(k => next[k] = false);
+                            selAddons.forEach(id => next[id] = true);
+                            return next;
+                        });
+                    }
+                } catch {
+                    // ignore parse issues
+                }
+            }
             
             // Parse and set quantities
             if (firstItem.quantity_matrix) {
                 try {
-                    const matrix = typeof firstItem.quantity_matrix === 'string' 
-                        ? JSON.parse(firstItem.quantity_matrix) 
+                    const matrix = typeof firstItem.quantity_matrix === 'string'
+                        ? JSON.parse(firstItem.quantity_matrix)
                         : firstItem.quantity_matrix;
                     setQuantities(matrix);
-                } catch (e) {
-                    console.error('Error parsing quantity_matrix:', e);
+                } catch (err) {
+                    console.error('Error parsing quantity_matrix:', err);
                 }
             }
             // If order has additional items, populate orderItems list
@@ -1879,6 +1902,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setIsOversize(editingOrder.is_oversize || false);
         setDesignFee(editingOrder.design_fee || 0);
         setProductType(editingOrder.product_type || "shirt");
+        // Unlock auto-calculation after a short delay to allow state propagation
+        setTimeout(() => { skipAutoCalc.current = false; }, 800);
     } else {
         // Reset form for new order
         setBrand(BRANDS[0]);
@@ -1910,7 +1935,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setIsOversize(false);
         setDesignFee(0);
                 setAddOnOptions(buildAddOnOptionsState(addOnDefinitions));
-    }
+        }
     }, [editingOrder, addOnDefinitions]);
 
   // Fetch master data
@@ -2104,6 +2129,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
     // NEW: Calculate pricing server-side — call backend pricing API
     useEffect(() => {
+        if (skipAutoCalc.current) return; // Prevent recalculation while initializing historical order
         let mounted = true;
         const calc = async () => {
             try {
@@ -2349,7 +2375,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         console.log("===========================");
         
         // Build final items list: combine previously added items and current form item (if any)
-        const finalItems = [...orderItems];
+        let finalItems = [...orderItems];
         if (totalQty > 0) {
             const productName = productType === 'sportsPants'
                 ? 'กางเกงกีฬา'
@@ -2397,7 +2423,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             try {
                 const savedItems = editingOrder.items.map(it => {
                     let qm = it.quantity_matrix;
-                    try { if (typeof qm === 'string') qm = JSON.parse(qm); } catch(e) { qm = qm; }
+                    try {
+                        if (typeof qm === 'string') qm = JSON.parse(qm);
+                    } catch {
+                        qm = {};
+                    }
                     return { ...it, quantity_matrix: qm };
                 });
 
@@ -3666,18 +3696,10 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
       try {
           const order = orders.find(o => o.id === orderId);
           if (!order) return;
-          
-          await fetchWithAuth(`/orders/${orderId}`, {
-              method: 'PUT',
-              body: JSON.stringify({
-                  ...order,
-                  status: newStatus,
-                  customer_name: order.customer_name,
-                  phone: order.phone,
-                  contact_channel: order.contact_channel,
-                  address: order.address,
-                  items: []
-              })
+          // Use dedicated PATCH endpoint to update only status and avoid touching items
+          await fetchWithAuth(`/orders/${orderId}/status`, {
+              method: 'PATCH',
+              body: JSON.stringify({ status: newStatus })
           });
           onNotify(`เปลี่ยนสถานะเป็น ${newStatus} สำเร็จ`, "success");
           fetchOrders();

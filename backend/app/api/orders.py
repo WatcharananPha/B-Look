@@ -645,6 +645,14 @@ def update_order(
         for k, ei in list(existing_map.items()):
             if k not in used_keys:
                 try:
+                    # Remove from the parent relationship first to avoid SQLAlchemy
+                    # attempting to cascade-save a deleted/transient instance.
+                    if getattr(existing, "items", None) and ei in existing.items:
+                        try:
+                            existing.items.remove(ei)
+                        except ValueError:
+                            pass
+
                     db.delete(ei)
                 except Exception:
                     # best-effort: ignore delete failures here and continue
@@ -819,6 +827,50 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
                 except Exception:
                     pass
     return o_dict
+
+
+# --- Patch: Dedicated endpoint to update only order status (avoids touching items) ---
+class UpdateOrderStatus(BaseModel):
+    status: str
+
+
+@router.patch("/{order_id}/status", response_model=OrderSchema)
+def update_order_status(
+    order_id: int,
+    payload: UpdateOrderStatus,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    existing = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    old_status = getattr(existing, "status", None)
+    existing.status = payload.status
+    db.add(existing)
+
+    # Create an audit log entry for traceability
+    details = {
+        "changed_from": old_status,
+        "changed_to": payload.status,
+        "admin": getattr(current_user, "username", "Unknown"),
+        "note": "Quick status update via PATCH /status",
+    }
+    try:
+        audit = AuditLog(
+            action="UPDATE_STATUS",
+            target_type="order",
+            target_id=str(existing.id),
+            details=json.dumps(details),
+        )
+        db.add(audit)
+    except Exception:
+        # Non-fatal: don't block status change if audit log fails
+        logger.exception("Failed to create audit log for status update")
+
+    db.commit()
+    db.refresh(existing)
+    return read_order(order_id, db)
 
 
 # --- Admin: Approve / Reject Slip Endpoint ---
