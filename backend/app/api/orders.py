@@ -497,80 +497,164 @@ def update_order(
             items_total_price += ei["total_price"]
             items_total_cost += ei["total_cost"]
     else:
-        # Remove existing items and recalculate totals using same helpers
-        # Because bulk-delete leaves ORM instances in-memory marked as deleted,
-        # capture current instances, perform the delete, then expunge them
-        # from the session to avoid 'Instance ... has been deleted' errors.
-        to_expunge = list(existing.items) if getattr(existing, "items", None) else []
-        db.query(OrderItemModel).filter(OrderItemModel.order_id == order_id).delete()
+        # In-place update strategy:
+        # - Match incoming items to existing OrderItem rows by identity (product attrs + qty matrix + add-ons + oversize)
+        # - For matched items: update quantity_matrix/total_qty but preserve persisted pricing fields
+        # - For unmatched incoming items: create new OrderItem rows (use provided pricing if present, else recalc)
+        # - For existing items not present in incoming payload: delete them
+        existing_map = {}
+        for ei in list(existing.items or []):
+            try:
+                qm = json.loads(ei.quantity_matrix) if ei.quantity_matrix else {}
+            except Exception:
+                qm = {}
+            try:
+                sa = json.loads(ei.selected_add_ons) if ei.selected_add_ons else []
+            except Exception:
+                sa = []
+            key = (
+                (ei.product_name or "").strip(),
+                (ei.fabric_type or "").strip(),
+                (ei.neck_type or "").strip(),
+                (ei.sleeve_type or "").strip(),
+                json.dumps(qm, sort_keys=True),
+                json.dumps(sa, sort_keys=True),
+                bool(ei.is_oversize),
+            )
+            existing_map[key] = ei
+
+        used_keys = set()
+
+        # Process incoming items: update existing rows when possible, else create
+        for item in order_in.items:
+            qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
+            # normalize selected_add_ons for comparison
+            sel = item.selected_add_ons or []
+            key = (
+                (item.product_name or "").strip(),
+                (item.fabric_type or "").strip(),
+                (item.neck_type or "").strip(),
+                (item.sleeve_type or "").strip(),
+                json.dumps(item.quantity_matrix or {}, sort_keys=True),
+                json.dumps(sel, sort_keys=True),
+                bool(getattr(item, "is_oversize", False)),
+            )
+
+            if key in existing_map:
+                # Update the existing OrderItem in-place and preserve pricing
+                ei = existing_map[key]
+                used_keys.add(key)
+                try:
+                    ei.quantity_matrix = json.dumps(item.quantity_matrix or {})
+                except Exception:
+                    ei.quantity_matrix = json.dumps({})
+                ei.total_qty = int(qty)
+                # Keep persisted pricing fields intact
+                base_price = Decimal(str(ei.price_per_unit or 0))
+                total_price = Decimal(str(ei.total_price or 0))
+                total_cost = Decimal(str(ei.total_cost or 0))
+                addon_total = Decimal(str(ei.item_addon_total or 0))
+
+                items_total_price += total_price
+                items_total_cost += total_cost
+
+                # ensure selected_add_ons on payload matches stored selection
+                try:
+                    item.selected_add_ons = (
+                        json.loads(ei.selected_add_ons) if ei.selected_add_ons else []
+                    )
+                except Exception:
+                    item.selected_add_ons = sel
+
+                db.add(ei)
+                order_items_data.append(
+                    {
+                        "data": item,
+                        "qty": qty,
+                        "base": base_price,
+                        "total": total_price,
+                        "cost": total_cost,
+                        "addon_total": addon_total,
+                    }
+                )
+            else:
+                # New or changed item: either use client-provided pricing or recalc
+                try:
+                    provided_price = (
+                        Decimal(str(item.price_per_unit))
+                        if getattr(item, "price_per_unit", None) is not None
+                        else None
+                    )
+                    provided_total = (
+                        Decimal(str(item.total_price))
+                        if getattr(item, "total_price", None) is not None
+                        else None
+                    )
+                except Exception:
+                    provided_price = None
+                    provided_total = None
+
+                if provided_price is not None and provided_total is not None:
+                    unit_price = provided_price
+                    line_total = provided_total
+                    line_cost = Decimal(str(getattr(item, "total_cost", 0) or 0))
+                    selected = getattr(item, "selected_add_ons", []) or []
+                    addon_total = Decimal(
+                        str(getattr(item, "item_addon_total", 0) or 0)
+                    )
+                else:
+                    calc = calculate_item_price(item, order_in.product_type, db)
+                    unit_price = calc["unit_price"]
+                    line_total = calc["line_total"]
+                    line_cost = calc["line_cost"]
+                    selected = calc["selected"]
+                    addon_total = calc["addon_total"]
+
+                items_total_price += line_total
+                items_total_cost += line_cost
+                # synchronize selected_add_ons back to payload object
+                item.selected_add_ons = selected
+
+                ni = OrderItemModel(
+                    order_id=existing.id,
+                    product_name=item.product_name,
+                    fabric_type=item.fabric_type,
+                    neck_type=item.neck_type,
+                    sleeve_type=item.sleeve_type,
+                    quantity_matrix=json.dumps(item.quantity_matrix or {}),
+                    total_qty=qty,
+                    price_per_unit=unit_price,
+                    total_price=line_total,
+                    total_cost=line_cost,
+                    selected_add_ons=json.dumps(item.selected_add_ons or []),
+                    item_addon_total=addon_total,
+                )
+                db.add(ni)
+                order_items_data.append(
+                    {
+                        "data": item,
+                        "qty": qty,
+                        "base": unit_price,
+                        "total": line_total,
+                        "cost": line_cost,
+                        "addon_total": addon_total,
+                    }
+                )
+
+        # Delete any existing items that were not present in incoming payload
+        for k, ei in list(existing_map.items()):
+            if k not in used_keys:
+                try:
+                    db.delete(ei)
+                except Exception:
+                    # best-effort: ignore delete failures here and continue
+                    logger.exception("Failed to delete OrderItem during update: %s", ei)
+
+        # Flush to persist new/deleted items before continuing
         try:
             db.flush()
         except Exception:
             pass
-        for ei in to_expunge:
-            try:
-                db.expunge(ei)
-            except Exception:
-                # ignore expunge failures
-                pass
-        # Ensure the relationship is cleared in-memory
-        try:
-            existing.items = []
-            db.expire(existing, ["items"])
-        except Exception:
-            pass
-
-        for item in order_in.items:
-            qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
-
-            # If client provided explicit pricing fields, prefer them to avoid
-            # recalculating (preserve original stored prices when editing metadata).
-            try:
-                provided_price = (
-                    Decimal(str(item.price_per_unit))
-                    if getattr(item, "price_per_unit", None)
-                    else None
-                )
-                provided_total = (
-                    Decimal(str(item.total_price))
-                    if getattr(item, "total_price", None)
-                    else None
-                )
-            except Exception:
-                provided_price = None
-                provided_total = None
-
-            if provided_price is not None and provided_total is not None:
-                # Use client-provided values (assume frontend supplies consistent totals)
-                unit_price = provided_price
-                line_total = provided_total
-                line_cost = Decimal(str(getattr(item, "total_cost", 0) or 0))
-                selected = getattr(item, "selected_add_ons", []) or []
-                addon_total = Decimal(str(getattr(item, "item_addon_total", 0) or 0))
-            else:
-                # Fallback to recalculation when no explicit prices provided
-                calc = calculate_item_price(item, order_in.product_type, db)
-                unit_price = calc["unit_price"]
-                line_total = calc["line_total"]
-                line_cost = calc["line_cost"]
-                selected = calc["selected"]
-                addon_total = calc["addon_total"]
-
-            items_total_price += line_total
-            items_total_cost += line_cost
-            # synchronize selected_add_ons back to payload object
-            item.selected_add_ons = selected
-
-            order_items_data.append(
-                {
-                    "data": item,
-                    "qty": qty,
-                    "base": unit_price,
-                    "total": line_total,
-                    "cost": line_cost,
-                    "addon_total": addon_total,
-                }
-            )
 
     shipping = Decimal(str(order_in.shipping_cost or 0))
     manual_addon = Decimal(str(order_in.add_on_cost or 0))
@@ -625,24 +709,8 @@ def update_order(
     db.add(existing)
     db.flush()
 
-    # Recreate order items
-    for d in order_items_data:
-        src = d["data"]
-        ni = OrderItemModel(
-            order_id=existing.id,
-            product_name=src.product_name,
-            fabric_type=src.fabric_type,
-            neck_type=src.neck_type,
-            sleeve_type=src.sleeve_type,
-            quantity_matrix=json.dumps(src.quantity_matrix),
-            total_qty=d["qty"],
-            price_per_unit=d["base"],
-            total_price=d["total"],
-            total_cost=d["cost"],
-            selected_add_ons=json.dumps(src.selected_add_ons),
-            item_addon_total=d["addon_total"],
-        )
-        db.add(ni)
+    # Items have been updated/created above in-place; order_items_data contains
+    # the canonical per-item totals used to compute order-level totals.
 
     db.commit()
     db.refresh(existing)

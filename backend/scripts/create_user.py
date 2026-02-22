@@ -30,7 +30,9 @@ def main():
             return
 
         hashed = security.pwd_context.hash(password)
-        user = User(username=username, password_hash=hashed, full_name=username, role="admin")
+        user = User(
+            username=username, password_hash=hashed, full_name=username, role="admin"
+        )
         db.add(user)
         db.commit()
         print(f"Created user '{username}'")
