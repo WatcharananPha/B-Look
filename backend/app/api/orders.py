@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional, Literal
 from pydantic import BaseModel
@@ -6,6 +6,8 @@ from decimal import Decimal
 import uuid
 import json
 import logging
+import os
+from uuid import uuid4
 
 from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
@@ -830,6 +832,65 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
                 except Exception:
                     pass
     return o_dict
+
+
+@router.put("/{order_id}/mockups")
+async def upload_order_mockups(
+    order_id: int,
+    mockup_front: UploadFile | None = File(None),
+    mockup_back: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Upload mockup images (front/back) for an order. Accepts PNG/JPEG only.
+
+    Files are saved under <project-root>/static/mockups and served at /static/mockups/...
+    """
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    storage_dir = os.path.join(os.getcwd(), "static", "mockups")
+    os.makedirs(storage_dir, exist_ok=True)
+
+    result = {}
+
+    async def _save_file(upload: UploadFile, kind: str):
+        if upload.content_type not in ("image/png", "image/jpeg"):
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+        ext = "png" if upload.content_type == "image/png" else "jpg"
+        fname = f"order_{order_id}_{kind}_{uuid4().hex}.{ext}"
+        dest = os.path.join(storage_dir, fname)
+        data = await upload.read()
+        with open(dest, "wb") as f:
+            f.write(data)
+        return f"/static/mockups/{fname}"
+
+    try:
+        updated = False
+        if mockup_front:
+            url = await _save_file(mockup_front, "front")
+            order.mockup_front_url = url
+            result["mockup_front_url"] = url
+            updated = True
+
+        if mockup_back:
+            url = await _save_file(mockup_back, "back")
+            order.mockup_back_url = url
+            result["mockup_back_url"] = url
+            updated = True
+
+        if updated:
+            db.add(order)
+            db.commit()
+            db.refresh(order)
+
+        return {"ok": True, "urls": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed uploading mockups")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- Patch: Dedicated endpoint to update only order status (avoids touching items) ---

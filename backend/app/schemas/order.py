@@ -77,6 +77,9 @@ class OrderBase(BaseModel):
     deposit_2: Decimal = 0
 
     note: Optional[str] = None
+    # Mockup image URLs (relative to /static)
+    mockup_front_url: Optional[str] = None
+    mockup_back_url: Optional[str] = None
 
     # ✅ FIX 2: Validator รวมร่าง (ไม่ว่าจะส่งชื่อไหนมา ให้รวมไปที่ contact_channel)
     @model_validator(mode="before")

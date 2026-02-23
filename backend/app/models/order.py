@@ -68,6 +68,10 @@ class Order(Base):
     slip_deposit_url = Column(String, nullable=True)
     slip_balance_url = Column(String, nullable=True)
 
+    # Mockup image URLs (front/back) for order preview/uploads
+    mockup_front_url = Column(String, nullable=True)
+    mockup_back_url = Column(String, nullable=True)
+
     # Cost & Profit
     total_cost = Column(DECIMAL(10, 2), default=0)
     estimated_profit = Column(DECIMAL(10, 2), default=0)

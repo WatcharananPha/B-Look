@@ -13,6 +13,18 @@ import OrderAdminExtras from './components/OrderAdminExtras';
 
 /* eslint-disable react-hooks/rules-of-hooks */
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+
+// Convert backend-served static paths (e.g. "/static/mockups/...") to absolute URLs
+const absoluteStaticUrl = (path) => {
+    if (!path) return '';
+    try {
+        if (path.startsWith('http')) return path;
+        const origin = new URL(API_URL).origin;
+        return path.startsWith('/') ? `${origin}${path}` : `${origin}/${path}`;
+    } catch {
+        return path;
+    }
+};
 const LOGO_URL = "/logo.jpg"; 
 
 // 🆕 Application version for cache busting
@@ -343,7 +355,7 @@ const saveStatusOptions = (options) => {
 };
 
 // --- HELPER: API Fetch Wrapper ---
-const fetchWithAuth = async (endpoint, options = {}) => {
+async function fetchWithAuth(endpoint, options = {}) {
   const token = localStorage.getItem('access_token');
   const headers = {
     'Content-Type': 'application/json',
@@ -386,11 +398,11 @@ const fetchWithAuth = async (endpoint, options = {}) => {
         throw new Error(errorData.detail || `API Error: ${response.statusText}`);
     }
     return response.status === 204 ? null : response.json();
-  } catch (error) {
-    console.error("Fetch Error:", error);
-    throw error;
-  }
-};
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        throw error;
+    }
+}
 
 // --- COMPONENTS ---
 // 0. Pagination Component with page numbers
@@ -521,23 +533,85 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 
 // 2. Invoice Modal
 const InvoiceModal = ({ data, onClose, paymentLink }) => {
-  const [image3DFront, setImage3DFront] = useState("");
-  const [image3DBack, setImage3DBack] = useState("");
-  const [showImageInput, setShowImageInput] = useState(false);
+    const [image3DFront, setImage3DFront] = useState(data?.mockup_front_url ? absoluteStaticUrl(data.mockup_front_url) : "");
+    const [image3DBack, setImage3DBack] = useState(data?.mockup_back_url ? absoluteStaticUrl(data.mockup_back_url) : "");
+    const [showImageInput, setShowImageInput] = useState(false);
+    const [frontImageFile, setFrontImageFile] = useState(null);
+    const [backImageFile, setBackImageFile] = useState(null);
+    const frontInputRef = useRef(null);
+    const backInputRef = useRef(null);
     const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
   
   // 🟢 เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
-  const handleImageUpload = (e, setImg) => {
+  const handleImageSelect = (side, e) => {
       const file = e.target.files?.[0];
-      if (file) {
-          if (file.type === 'image/jpeg' || file.type === 'image/png') {
-              // สร้าง Temp URL จากไฟล์ที่เลือกเพื่อให้ React นำไปแสดงผลในแท็ก <img> ได้ทันที
-              const imageUrl = URL.createObjectURL(file);
-              setImg(imageUrl);
-          } else {
-              alert("รองรับเฉพาะไฟล์ PNG และ JPG เท่านั้นครับ");
-              e.target.value = ""; // รีเซ็ต input ถ้าไฟล์ผิดประเภท
+      if (!file) return;
+      if (!(file.type === 'image/jpeg' || file.type === 'image/png')) {
+          alert('รองรับเฉพาะไฟล์ PNG และ JPG เท่านั้น');
+          e.target.value = '';
+          return;
+      }
+      const url = URL.createObjectURL(file);
+      if (side === 'front') {
+          // revoke previous if it was a temp object URL
+          if (frontImageFile && frontImageFile._objectUrl) {
+              try { URL.revokeObjectURL(frontImageFile._objectUrl); } catch { /* ignore revoke errors */ }
           }
+          setFrontImageFile(Object.assign(file, { _objectUrl: url }));
+          setImage3DFront(url);
+      } else {
+          if (backImageFile && backImageFile._objectUrl) {
+              try { URL.revokeObjectURL(backImageFile._objectUrl); } catch { /* ignore revoke errors */ }
+          }
+          setBackImageFile(Object.assign(file, { _objectUrl: url }));
+          setImage3DBack(url);
+      }
+  };
+
+  const handleSaveMockups = async () => {
+      const orderId = data?.id;
+      if (!orderId) { alert('ไม่พบรหัสออเดอร์'); return; }
+      if (!frontImageFile && !backImageFile) { alert('ไม่มีการเปลี่ยนแปลงไฟล์'); return; }
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+          alert('ต้องล็อกอินก่อนจึงจะอัปโหลดภาพได้ กรุณาเข้าสู่ระบบ');
+          return;
+      }
+
+      const formData = new FormData();
+      formData.append('order_id', String(orderId));
+      if (frontImageFile) formData.append('mockup_front', frontImageFile);
+      if (backImageFile) formData.append('mockup_back', backImageFile);
+
+      try {
+          const res = await fetch(`${API_URL}/orders/${orderId}/mockups`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}` },
+              body: formData
+          });
+          let json = {};
+          try { json = await res.json(); } catch { /* ignore parse errors */ }
+          if (!res.ok) {
+              if (res.status === 401) {
+                  alert('ไม่ได้รับอนุญาต: กรุณาเข้าสู่ระบบหรือรีเฟรชหน้าแล้วลองอีกครั้ง');
+                  return;
+              }
+              throw new Error(json.detail || 'Upload failed');
+          }
+          if (json.urls) {
+              if (json.urls.mockup_front_url) setImage3DFront(absoluteStaticUrl(json.urls.mockup_front_url));
+              if (json.urls.mockup_back_url) setImage3DBack(absoluteStaticUrl(json.urls.mockup_back_url));
+          }
+          // cleanup temp objectURLs
+          if (frontImageFile && frontImageFile._objectUrl) { try { URL.revokeObjectURL(frontImageFile._objectUrl); } catch { /* ignore revoke errors */ } }
+          if (backImageFile && backImageFile._objectUrl) { try { URL.revokeObjectURL(backImageFile._objectUrl); } catch { /* ignore revoke errors */ } }
+          setFrontImageFile(null);
+          setBackImageFile(null);
+          setShowImageInput(false);
+          alert('บันทึกภาพเรียบร้อย');
+      } catch (err) {
+          console.error('Mockup upload failed', err);
+          alert('ไม่สามารถอัปโหลดไฟล์ได้: ' + (err.message || ''));
       }
   };
   
@@ -610,10 +684,10 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
       <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex flex-wrap gap-2 print:hidden">
           {!isFactoryView && (
               <>
-                  <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                  <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
                       <Printer size={18} className="mr-2"/> บันทึก PDF
                   </button>
-                  <button onClick={() => setShowImageInput(!showImageInput)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                  <button onClick={(e) => { e.stopPropagation(); setShowImageInput(!showImageInput); }} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
                       <Plus size={18} className="mr-1"/> ภาพ 3D
                   </button>
               </>
@@ -635,17 +709,17 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
       
       {/* Image Input Panel */}
       {showImageInput && !isFactoryView && (
-          <div id="image-input-panel" className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden">
+          <div id="image-input-panel" onClick={(e) => e.stopPropagation()} className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden">
               <h4 className="text-sm font-bold text-purple-700 mb-3">🎨 เพิ่มภาพ 3D / Design</h4>
               <div className="space-y-4">
                   {/* กล่องอัปโหลดภาพด้านหน้า */}
                   <div>
                       <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหน้า (PNG / JPG)</label>
-                      <input 
+                      <input ref={frontInputRef}
                           type="file" 
                           accept="image/png, image/jpeg"
                           className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
-                          onChange={(e) => handleImageUpload(e, setImage3DFront)} 
+                          onChange={(e) => handleImageSelect('front', e)} 
                       />
                       {image3DFront && (
                           <button onClick={() => setImage3DFront("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
@@ -657,11 +731,11 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
                   {/* กล่องอัปโหลดภาพด้านหลัง */}
                   <div>
                       <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหลัง (PNG / JPG)</label>
-                      <input 
+                      <input ref={backInputRef}
                           type="file" 
                           accept="image/png, image/jpeg"
                           className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
-                          onChange={(e) => handleImageUpload(e, setImage3DBack)} 
+                          onChange={(e) => handleImageSelect('back', e)} 
                       />
                       {image3DBack && (
                           <button onClick={() => setImage3DBack("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
@@ -670,12 +744,10 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
                       )}
                   </div>
               </div>
-              <button 
-                  onClick={() => setShowImageInput(false)} 
-                  className="w-full mt-5 py-2.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition shadow-md"
-              >
-                  เสร็จสิ้น
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleSaveMockups} className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700">บันทึกภาพ</button>
+                <button onClick={() => setShowImageInput(false)} className="flex-1 py-2.5 bg-gray-200 text-slate-800 rounded-lg text-xs font-bold hover:bg-gray-300">เสร็จสิ้น</button>
+              </div>
           </div>
       )}
       
@@ -898,7 +970,10 @@ const buildInvoiceDataFromOrder = (order) => {
     if (!order) return null;
 
     return {
+        id: order.id,
         order_no: order.order_no,
+        mockup_front_url: order.mockup_front_url ? absoluteStaticUrl(order.mockup_front_url) : (order.mockupFront ? absoluteStaticUrl(order.mockupFront) : null),
+        mockup_back_url: order.mockup_back_url ? absoluteStaticUrl(order.mockup_back_url) : (order.mockupBack ? absoluteStaticUrl(order.mockupBack) : null),
         customerCode: order.customer_code,
         customerName: order.customer_name,
         customer_name: order.customer_name,
