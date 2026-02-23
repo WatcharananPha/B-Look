@@ -520,11 +520,26 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 };
 
 // 2. Invoice Modal
-const InvoiceModal = ({ data, onClose }) => {
+const InvoiceModal = ({ data, onClose, paymentLink }) => {
   const [image3DFront, setImage3DFront] = useState("");
   const [image3DBack, setImage3DBack] = useState("");
   const [showImageInput, setShowImageInput] = useState(false);
     const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
+  
+  // 🟢 เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
+  const handleImageUpload = (e, setImg) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.type === 'image/jpeg' || file.type === 'image/png') {
+              // สร้าง Temp URL จากไฟล์ที่เลือกเพื่อให้ React นำไปแสดงผลในแท็ก <img> ได้ทันที
+              const imageUrl = URL.createObjectURL(file);
+              setImg(imageUrl);
+          } else {
+              alert("รองรับเฉพาะไฟล์ PNG และ JPG เท่านั้นครับ");
+              e.target.value = ""; // รีเซ็ต input ถ้าไฟล์ผิดประเภท
+          }
+      }
+  };
   
   if (!data) {
     return (
@@ -607,22 +622,60 @@ const InvoiceModal = ({ data, onClose }) => {
               <XCircle size={24} />
           </button>
       </div>
+            {/* Payment link (if provided) */}
+            {paymentLink && (
+                <div className="fixed top-20 right-4 z-[59] p-3 bg-white rounded-md shadow-lg border border-gray-200 print:hidden">
+                    <div className="text-xs text-gray-500">ลิงก์ชำระเงิน (ยอดคงเหลือ)</div>
+                    <div className="mt-2 flex gap-2 items-center">
+                        <a href={paymentLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-emerald-700 underline break-all">{paymentLink}</a>
+                        <button onClick={() => { navigator.clipboard.writeText(paymentLink); alert('คัดลอกลิงก์แล้ว'); }} className="px-2 py-1 bg-gray-100 rounded text-xs">คัดลอก</button>
+                    </div>
+                </div>
+            )}
       
       {/* Image Input Panel */}
       {showImageInput && !isFactoryView && (
           <div id="image-input-panel" className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden">
               <h4 className="text-sm font-bold text-purple-700 mb-3">🎨 เพิ่มภาพ 3D / Design</h4>
-              <div className="space-y-3">
+              <div className="space-y-4">
+                  {/* กล่องอัปโหลดภาพด้านหน้า */}
                   <div>
-                      <label className="text-xs text-gray-600 font-semibold">ภาพด้านหน้า</label>
-                      <input type="text" className="w-full border-2 border-gray-200 p-2 rounded-lg text-xs mt-1 focus:border-purple-400" placeholder="URL ภาพด้านหน้า" value={image3DFront} onChange={(e) => setImage3DFront(e.target.value)} />
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหน้า (PNG / JPG)</label>
+                      <input 
+                          type="file" 
+                          accept="image/png, image/jpeg"
+                          className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                          onChange={(e) => handleImageUpload(e, setImage3DFront)} 
+                      />
+                      {image3DFront && (
+                          <button onClick={() => setImage3DFront("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
+                              🗑️ ลบภาพด้านหน้า
+                          </button>
+                      )}
                   </div>
+                  
+                  {/* กล่องอัปโหลดภาพด้านหลัง */}
                   <div>
-                      <label className="text-xs text-gray-600 font-semibold">ภาพด้านหลัง</label>
-                      <input type="text" className="w-full border-2 border-gray-200 p-2 rounded-lg text-xs mt-1 focus:border-purple-400" placeholder="URL ภาพด้านหลัง" value={image3DBack} onChange={(e) => setImage3DBack(e.target.value)} />
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหลัง (PNG / JPG)</label>
+                      <input 
+                          type="file" 
+                          accept="image/png, image/jpeg"
+                          className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                          onChange={(e) => handleImageUpload(e, setImage3DBack)} 
+                      />
+                      {image3DBack && (
+                          <button onClick={() => setImage3DBack("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
+                              🗑️ ลบภาพด้านหลัง
+                          </button>
+                      )}
                   </div>
               </div>
-              <button onClick={() => setShowImageInput(false)} className="w-full mt-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700">ยืนยัน</button>
+              <button 
+                  onClick={() => setShowImageInput(false)} 
+                  className="w-full mt-5 py-2.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition shadow-md"
+              >
+                  เสร็จสิ้น
+              </button>
           </div>
       )}
       
@@ -942,7 +995,7 @@ const OrderDetailModal = ({ order, onClose }) => {
     // Render the Invoice modal and, for admin users, show the admin extras
     return (
         <>
-            <InvoiceModal data={data} onClose={onClose} />
+            <InvoiceModal data={data} onClose={onClose} paymentLink={order.payment_link || null} />
             {/* Admin extras positioned so it appears above the modal (top-right) */}
             <div style={{position:'fixed', right:24, top:96, zIndex:70}}>
                 <OrderAdminExtras order={order} onApproved={() => { /* no-op: caller may refresh list */ }} />
@@ -1645,8 +1698,7 @@ const DashboardPage = ({ onEdit }) => {
 
 // 2.2 ORDER CREATION PAGE - FIXED VERSION
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinitions, setAddOnDefinitions }) => {
-  const [brand, setBrand] = useState(BRANDS[0]);
-  const [deadline, setDeadline] = useState("");
+    const [brand, setBrand] = useState(BRANDS[0]);
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
   const [customerName, setCustomerName] = useState("");
   const [contactChannel, setContactChannel] = useState("LINE OA");
@@ -1673,8 +1725,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   const [selectedSleeve, setSelectedSleeve] = useState("");
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
-  // NEW: State for deliveryDate (renamed from usageDate) and status
-  const [deliveryDate, setDeliveryDate] = useState(""); 
+    // NEW: State for deliveryDate (single date field used for both deadline & usage_date) and status
+    const [deliveryDate, setDeliveryDate] = useState(""); 
   const [status, setStatus] = useState("draft");
   
     // NEW: Customer info fields
@@ -1821,9 +1873,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setContactChannel(editingOrder.contact_channel || "LINE OA");
         setAddress(editingOrder.address || "");
         
-        // Dates & Status
-        setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
-        setDeliveryDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
+        // 🟢 Dates & Status (โหลดใส่วันที่จัดส่งช่องเดียว)
+        const dDate = editingOrder.usage_date || editingOrder.deadline;
+        setDeliveryDate(dDate ? new Date(dDate).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
         setUrgencyStatus(editingOrder.urgency_level || "normal");
         
@@ -1913,7 +1965,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setContactChannel("LINE OA");
         setAddress("");
         setGraphicCode("");
-        setDeadline("");
         setDeliveryDate("");
         setStatus("draft");
         setUrgencyStatus("normal");
@@ -2479,7 +2530,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             is_vat_included: Boolean(isVatIncluded),
             status: status || "draft",
             urgency_level: urgencyStatus || "normal",
-            deadline: deadline && deadline.trim() !== "" ? new Date(deadline).toISOString() : null,
+            // 🟢 โคลนค่าวันที่จัดส่ง ไปเป็น deadline อัตโนมัติ เพื่อให้คำนวณ Urgency และโชว์ในตาราง
+            deadline: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             usage_date: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             note: note && note.trim() !== "" ? note.trim() : null,
             advance_hold: Number(advanceHold) || 0,
@@ -2527,18 +2579,19 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
-  useEffect(() => {
-    if (!deadline) { setUrgencyStatus("normal"); return; }
-    const diffDays = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24)); 
+    // 🟢 คำนวณความด่วน (Urgency) จากช่องวันที่จัดส่งช่องเดียว
+    useEffect(() => {
+        if (!deliveryDate) { setUrgencyStatus("normal"); return; }
+        const diffDays = Math.ceil((new Date(deliveryDate) - new Date()) / (1000 * 60 * 60 * 24));
         // Red: 3-5 days, Yellow: 7-10 days, Green: 10-14 days (default)
         if (diffDays <= 5) {
-      setUrgencyStatus("critical");
-    } else if (diffDays <= 10) {
-      setUrgencyStatus("warning");
-    } else {
-      setUrgencyStatus("normal");
-    }
-  }, [deadline]);
+            setUrgencyStatus("critical");
+        } else if (diffDays <= 10) {
+            setUrgencyStatus("warning");
+        } else {
+            setUrgencyStatus("normal");
+        }
+    }, [deliveryDate]);
 
   const theme = {
     critical: { border: "border-l-8 border-rose-500", header: "bg-rose-500 text-white", invoiceBg: "bg-rose-500" },
@@ -2567,7 +2620,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             phoneNumber,
             contactChannel,
             address,
-            deadline,
+            deadline: deliveryDate,
             deliveryDate,
             brand,
             quantities,
@@ -2693,14 +2746,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="แอดมิน" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
                         
                         <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
-                        <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+
+                        {/* 🟢 ย้ายช่องวันที่จัดส่งขึ้นมาแทนที่เดิม */}
+                        <div className="flex flex-col">
+                            <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                            <span className="text-[10px] text-gray-400 mt-1 ml-1">กำหนดส่ง</span>
+                        </div>
+
                         <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
                         <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-yellow-50 focus:bg-white transition text-sm md:text-base" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
-                    
-                        <div>
-                            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">วันที่จัดส่ง</label>
-                            <input type="date" className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-                        </div>
 
                         <div>
                             <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
@@ -3649,261 +3703,248 @@ const CustomerPage = () => {
 
 // 2.5 ORDER LIST PAGE (UPDATED: Toast & Table Layout)
 const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => {
-  const [orders, setOrders] = useState([]);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(""); 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [detailOrder, setDetailOrder] = useState(null);
-  const itemsPerPage = 10;
-   
-  const fetchOrders = useCallback(async () => {
-      setLoading(true);
-      try {
-          const data = await fetchWithAuth('/orders');
-          setOrders(data || []);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-  }, []);
+    const [orders, setOrders] = useState([]);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [detailOrder, setDetailOrder] = useState(null);
+    const itemsPerPage = 10;
+  
+    // State สำหรับ Payment Popup
+    const [showPaymentPopup, setShowPaymentPopup] = useState(false);
+    const [paymentOrder, setPaymentOrder] = useState(null);
 
-  useEffect(() => {
-      fetchOrders();
-  }, [fetchOrders]);
+    const fetchOrders = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/orders');
+            setOrders(data || []);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
 
-  const handleDelete = async (id) => {
-      try {
-          // Get the order to find the customer_id
-          const orderToDelete = orders.find(o => o.id === id);
-          
-          // Delete the order
-          await fetchWithAuth(`/orders/${id}`, { method: 'DELETE' });
-          
-          // If order has a customer_id, delete the customer as well
-          if (orderToDelete && orderToDelete.customer_id) {
-              try {
-                  await fetchWithAuth(`/customers/${orderToDelete.customer_id}`, { method: 'DELETE' });
-              } catch (err) {
-                  console.warn("Could not delete customer:", err);
-              }
-          }
-          
-          setDeleteConfirm(null);
-          fetchOrders();
-      } catch (e) { alert("Error: " + e.message); }
-  };
+    useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  const handleStatusChange = async (orderId, newStatus) => {
-      try {
-          const order = orders.find(o => o.id === orderId);
-          if (!order) return;
-          // Use dedicated PATCH endpoint to update only status and avoid touching items
-          await fetchWithAuth(`/orders/${orderId}/status`, {
-              method: 'PATCH',
-              body: JSON.stringify({ status: newStatus })
-          });
-          onNotify(`เปลี่ยนสถานะเป็น ${newStatus} สำเร็จ`, "success");
-          fetchOrders();
-      } catch (e) { 
-          onNotify("เปลี่ยนสถานะไม่สำเร็จ: " + e.message, "error");
-      }
-  };
+    const handleDelete = async (id) => {
+        try {
+            const orderToDelete = orders.find(o => o.id === id);
+            await fetchWithAuth(`/orders/${id}`, { method: 'DELETE' });
+            if (orderToDelete && orderToDelete.customer_id) {
+                try { await fetchWithAuth(`/customers/${orderToDelete.customer_id}`, { method: 'DELETE' }); } catch (err) { console.warn("Could not delete customer:", err); }
+            }
+            setDeleteConfirm(null);
+            fetchOrders();
+        } catch (e) { alert("Error: " + e.message); }
+    };
 
-  const filteredOrders = useMemo(() => {
-    if (!orders) return [];
-     
-    let data = orders;
-    switch (filterType) {
-        case 'pending':
-            data = data.filter(o => o.status !== 'delivered');
-            break;
-        case 'revenue':
-            data = data.filter(o => o.status === 'delivered');
-            break;
-        case 'urgent':
-            data = data.filter(o => {
-                if (!o.deadline) return false;
-                const diff = new Date(o.deadline) - new Date();
-                return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
+    const handleStatusChange = async (orderId, newStatus) => {
+        try {
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+            // 1. ยิง API เปลี่ยนสถานะ
+            await fetchWithAuth(`/orders/${orderId}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: newStatus })
             });
-            break;
-        default: break;
-    }
 
-    if (searchTerm.trim() !== "") {
-        const lowerTerm = searchTerm.toLowerCase();
-        data = data.filter(o => 
-            (o.order_no || "").toLowerCase().includes(lowerTerm) ||
-            (o.customer_name || "").toLowerCase().includes(lowerTerm) ||
-            (o.contact_channel || "").toLowerCase().includes(lowerTerm) ||
-            (o.phone || "").includes(lowerTerm)
-        );
-    }
-    return data;
-  }, [orders, filterType, searchTerm]);
+            onNotify(`เปลี่ยนสถานะเป็น ${newStatus} สำเร็จ`, "success");
+            fetchOrders(); // รีเฟรชตาราง
 
-  const handleExportCSV = () => {
-      if (filteredOrders.length === 0) { 
-          onNotify("ไม่มีข้อมูลสำหรับ Export", "error"); 
-          return; 
-      }
-      const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
-      const rows = filteredOrders.map(order => [
-          `"${order.order_no}"`,
-          `"${order.customer_name || ''}"`,
-          `"${order.contact_channel || ''}"`,
-          `"${order.phone || ''}"`,
-          `"${order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : ''}"`,
-          `"${order.grand_total || 0}"`,
-          `"${order.deposit || 0}"`,
-          `"${order.status || 'draft'}"`
-      ]);
-      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
+            // 2. ถ้าเป็นสถานะ "จัดส่ง" ให้เปิด Popup ลิงก์จ่ายเงินยอดคงเหลือ
+            if (newStatus === 'จัดส่ง') {
+                // ดึงข้อมูลออเดอร์ล่าสุดจาก Backend เพื่อให้ได้ยอด balance_amount ที่เป๊ะที่สุด
+                const updatedOrder = await fetchWithAuth(`/orders/${orderId}`);
+                setPaymentOrder(updatedOrder || order);
+                setShowPaymentPopup(true);
+            }
 
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+        } catch (e) { 
+            onNotify("เปลี่ยนสถานะไม่สำเร็จ: " + e.message, "error");
+        }
+    };
 
-  return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
-      {/* Invoice Modal for Order Detail */}
-      {detailOrder && (
-        <InvoiceModal 
-                    data={buildInvoiceDataFromOrder(detailOrder)}
-          onClose={() => setDetailOrder(null)}
-        />
-      )}
+    const filteredOrders = useMemo(() => {
+        if (!orders) return [];
+        let data = orders;
+        switch (filterType) {
+            case 'pending': data = data.filter(o => o.status !== 'delivered'); break;
+            case 'revenue': data = data.filter(o => o.status === 'delivered'); break;
+            case 'urgent':
+                data = data.filter(o => { if (!o.deadline) return false; const diff = new Date(o.deadline) - new Date(); return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000; });
+                break;
+            default: break;
+        }
+        if (searchTerm.trim() !== "") {
+            const lowerTerm = searchTerm.toLowerCase();
+            data = data.filter(o => (o.order_no || "").toLowerCase().includes(lowerTerm) || (o.customer_name || "").toLowerCase().includes(lowerTerm) || (o.contact_channel || "").toLowerCase().includes(lowerTerm) || (o.phone || "").includes(lowerTerm));
+        }
+        return data;
+    }, [orders, filterType, searchTerm]);
 
-      {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
-                  <div className="flex items-center mb-3 sm:mb-4">
-                      <AlertCircle className="text-rose-500 mr-2 sm:mr-3" size={20} />
-                      <h3 className="text-base sm:text-lg font-bold">ยืนยันการลบออเดอร์</h3>
-                  </div>
-                  <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
-                  <div className="flex justify-end gap-2">
-                      <button onClick={() => setDeleteConfirm(null)} className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
-                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-3 sm:px-4 py-2 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
-                  </div>
-              </div>
-          </div>
-      )}
+    const handleExportCSV = () => {
+        if (filteredOrders.length === 0) { onNotify("ไม่มีข้อมูลสำหรับ Export", "error"); return; }
+        const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
+        const rows = filteredOrders.map(order => [ `"${order.order_no}"`, `"${order.customer_name || ''}"`, `"${order.contact_channel || ''}"`, `"${order.phone || ''}"`, `"${order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : ''}"`, `"${order.grand_total || 0}"`, `"${order.deposit || 0}"`, `"${order.status || 'draft'}"` ]);
+        const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
-      <header className="mb-4 sm:mb-6 md:mb-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
-            <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
-                <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
-            </div>
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+    const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-            <div className="flex flex-row gap-2 w-full sm:w-auto">
-                {/* Search bar */}
-                <div className="relative flex-1 sm:min-w-[200px]">
-                    <Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} />
-                    <input 
-                        type="text" 
-                        placeholder="ค้นหา..." 
-                        className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
-                    <Download size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> Export
-                </button>
-                <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
-                    <Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> สร้างใหม่
-                </button>
-            </div>
-        </div>
-      </header>
-        
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
-        <div className="p-0 sm:p-1 md:p-2 overflow-x-auto flex-1">
-            {loading ? <p className="text-center text-slate-500 py-6 sm:py-10 text-sm">Loading...</p> : (
-                <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed border-collapse">
-                    <thead>
-                        <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">รหัสงาน</th>
-                            <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">สถานะ</th>
-                            <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {paginatedOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer border-b border-gray-200" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
-                                <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
-                                <td className="py-4 px-6 text-gray-700 truncate text-center border-r border-gray-200">
-                                    <div className="font-medium truncate">{order.customer_name}</div>
-                                    <div className="text-xs text-gray-400">{order.contact_channel}</div>
-                                </td>
-                                <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">
-                                    {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
-                                </td>
-                                <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
-                                <td className="py-4 px-6 text-center border-r border-gray-200">
-                                    <select 
-                                        value={order.status || 'draft'}
-                                        onClick={(e) => e.stopPropagation()}
-                                        onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }}
-                                        className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition"
+    return (
+        <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+
+            {/* 🟢 Payment Link Popup (ลิงก์จ่ายเงินยอดคงเหลือ) */}
+            {showPaymentPopup && paymentOrder && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
+                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full animate-in zoom-in-95 duration-200">
+                        <div className="w-16 sm:w-20 h-16 sm:h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5">
+                            <CheckCircle size={40} className="sm:w-12 sm:h-12 text-emerald-500"/>
+                        </div>
+                        
+                        {/* เปลี่ยน Text ตามที่ต้องการ */}
+                        <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">เปลี่ยนสถานะเป็น จัดส่ง สำเร็จ!</h3>
+                        <p className="text-slate-600 mb-4 text-sm">ระบบได้สร้างลิงก์ชำระเงินสำหรับออเดอร์ <span className="font-bold">{paymentOrder.order_no}</span></p>
+
+                        {paymentOrder.order_uuid ? (
+                            <div className="mt-2 text-sm text-slate-700 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div className="mb-3 font-bold text-slate-800 text-sm text-left flex items-center gap-2">
+                                    <span className="text-xl">🔗</span> ลิงก์ชำระเงินยอดคงเหลือ
+                                </div>
+                                
+                                {/* กล่องแสดงยอดคงเหลือ (Balance Amount) */}
+                                <div className="flex justify-between items-center mb-5 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                    <span className="text-gray-600 font-medium text-xs sm:text-sm">ยอดคงเหลือที่ต้องชำระ:</span>
+                                    <span className="font-black text-xl sm:text-2xl text-rose-600">{Number(paymentOrder.balance_amount || 0).toLocaleString()} ฿</span>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <a 
+                                        href={`${window.location.origin}/pay/${paymentOrder.order_uuid}`} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="flex-1 text-white bg-[#1a1c23] hover:bg-slate-800 px-4 py-2.5 rounded-lg font-bold transition flex items-center justify-center shadow-md"
                                     >
-                                        <option value="ร่าง">ร่าง</option>
-                                        <option value="ออกแบบ">ออกแบบ</option>
-                                        <option value="รออนุมัติ">รออนุมัติ</option>
-                                        <option value="ผลิต">ผลิต</option>
-                                        <option value="จัดส่ง">จัดส่ง</option>
-                                        <option value="ส่งแล้ว">ส่งแล้ว</option>
-                                    </select>
-                                </td>
-                                <td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex justify-center gap-3">
-                                        <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}>
-                                            <Edit size={16}/>
-                                        </button>
-                                        <button className="text-gray-400 hover:text-rose-500 transition" title="ลบ" onClick={() => setDeleteConfirm(order)}>
-                                            <Trash2 size={16}/>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredOrders.length === 0 && (
-                            <tr>
-                                <td colSpan="6" className="py-12 text-center">
-                                    <div className="flex flex-col items-center justify-center text-slate-400">
-                                        <FileText size={48} className="mb-3 opacity-50" />
-                                        <p className="text-lg font-medium">ไม่พบรายการ</p>
-                                    </div>
-                                </td>
-                            </tr>
+                                        เปิดลิงก์
+                                    </a>
+                                    <button 
+                                        onClick={() => { 
+                                            navigator.clipboard.writeText(`${window.location.origin}/pay/${paymentOrder.order_uuid}`); 
+                                            onNotify('คัดลอกลิงก์การจ่ายเงินยอดคงเหลือแล้ว', 'success'); 
+                                        }} 
+                                        className="flex-1 text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-bold transition shadow-sm"
+                                    >
+                                        คัดลอกลิงก์
+                                    </button>
+                                </div>
+                                <div className="mt-3 text-[10px] text-gray-400 break-all bg-gray-100 p-1.5 rounded text-left">{`${window.location.origin}/pay/${paymentOrder.order_uuid}`}</div>
+                            </div>
+                        ) : (
+                            <div className="mt-2 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm border border-amber-200">
+                                <AlertCircle size={16} className="inline mr-1" /> ไม่พบลิงก์ชำระเงินสำหรับออเดอร์เก่านี้
+                            </div>
                         )}
-                    </tbody>
-                </table>
+                        
+                        <button 
+                            onClick={() => { setShowPaymentPopup(false); setPaymentOrder(null); }} 
+                            className="w-full bg-gray-200 text-slate-800 font-bold py-2.5 sm:py-3 rounded-xl mt-4 hover:bg-gray-300 transition"
+                        >
+                            ปิดหน้าต่าง
+                        </button>
+                    </div>
+                </div>
             )}
+
+            {/* Invoice Modal for Order Detail */}
+            {detailOrder && (<InvoiceModal data={buildInvoiceDataFromOrder(detailOrder)} onClose={() => setDetailOrder(null)} />)}
+
+            {deleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
+                        <div className="flex items-center mb-3 sm:mb-4"><AlertCircle className="text-rose-500 mr-2 sm:mr-3" size={20} /><h3 className="text-base sm:text-lg font-bold">ยืนยันการลบออเดอร์</h3></div>
+                        <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setDeleteConfirm(null)} className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                            <button onClick={() => handleDelete(deleteConfirm.id)} className="px-3 sm:px-4 py-2 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <header className="mb-4 sm:mb-6 md:mb-8">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
+                        <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
+                    </div>
+                    <div className="flex flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:min-w-[200px]"><Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} /><input type="text" placeholder="ค้นหา..." className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                        <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap text-xs sm:text-sm"><Download size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> Export</button>
+                        <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm"><Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> สร้างใหม่</button>
+                    </div>
+                </div>
+            </header>
+
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
+                <div className="p-0 sm:p-1 md:p-2 overflow-x-auto flex-1">
+                    {loading ? <p className="text-center text-slate-500 py-6 sm:py-10 text-sm">Loading...</p> : (
+                        <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed border-collapse">
+                            <thead>
+                                <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">รหัสงาน</th>
+                                    <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">สถานะ</th>
+                                    <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {paginatedOrders.map((order) => (
+                                    <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer border-b border-gray-200" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
+                                        <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
+                                        <td className="py-4 px-6 text-gray-700 truncate text-center border-r border-gray-200"><div className="font-medium truncate">{order.customer_name}</div><div className="text-xs text-gray-400">{order.contact_channel}</div></td>
+                                        <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">{order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}</td>
+                                        <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
+                                        <td className="py-4 px-6 text-center border-r border-gray-200">
+                                            <select value={order.status || 'draft'} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }} className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition">
+                                                <option value="ร่าง">ร่าง</option>
+                                                <option value="ออกแบบ">ออกแบบ</option>
+                                                <option value="รออนุมัติ">รออนุมัติ</option>
+                                                <option value="ผลิต">ผลิต</option>
+                                                <option value="จัดส่ง">จัดส่ง</option>
+                                                <option value="ส่งแล้ว">ส่งแล้ว</option>
+                                            </select>
+                                        </td>
+                                        <td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex justify-center gap-3">
+                                                <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}><Edit size={16}/></button>
+                                                <button className="text-gray-400 hover:text-rose-500 transition" title="ลบ" onClick={() => setDeleteConfirm(order)}><Trash2 size={16}/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredOrders.length === 0 && (
+                                    <tr><td colSpan="6" className="py-12 text-center"><div className="flex flex-col items-center justify-center text-slate-400"><FileText size={48} className="mb-3 opacity-50" /><p className="text-lg font-medium">ไม่พบรายการ</p></div></td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                {/* Pagination Controls */}
+                {totalPages > 1 && (<PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />)}
+            </div>
         </div>
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-            <PaginationControls 
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-            />
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
 // 2.6 SETTINGS PAGE (UPDATED: Delete Modal & Save Notify)
@@ -4620,7 +4661,7 @@ const App = () => {
 
        <main className="flex-1 overflow-auto h-[calc(100vh-52px)] sm:h-[calc(100vh-56px)] md:h-screen w-full relative">{renderContent()}</main>
     </div>
-  );
+    );
 };
 
 export default App;

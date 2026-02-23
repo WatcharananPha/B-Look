@@ -15,6 +15,9 @@ from app.models.product import NeckType  # Import เพื่อดึงรา
 from app.models.audit_log import AuditLog
 from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
+from app.core.config import settings
+from datetime import datetime, timedelta
+from jose import jwt
 
 # ราคาฐาน (Base Price)
 STEP_PRICING = {
@@ -954,3 +957,70 @@ def approve_slip(
         logger.exception("Failed to send notification after slip approval")
 
     return {"ok": True, "order_id": order.id, "status": order.status}
+
+
+# --- Generate a canonical payment link for an order (admin) ---
+@router.post("/{order_id}/generate-payment-link")
+def generate_payment_link(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Generate a signed, time-limited payment token and return a public payment URL.
+
+    The returned URL is a frontend path (e.g. /pay/{order_uuid}?t=...) that the UI
+    can open for the customer. The token payload contains order id/uuid and amount
+    and is signed with the application's SECRET_KEY.
+    """
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+        )
+
+    amount = getattr(order, "balance_amount", None) or getattr(order, "grand_total", 0)
+    try:
+        amount_str = str(amount)
+    except Exception:
+        amount_str = "0"
+
+    expires = datetime.utcnow() + timedelta(hours=24)
+    payload = {
+        "order_id": order.id,
+        "order_uuid": order.order_uuid,
+        "amount": amount_str,
+        "exp": int(expires.timestamp()),
+    }
+    try:
+        token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate token")
+
+    pay_path = f"/pay/{order.order_uuid}?t={token}"
+
+    # record audit entry for traceability
+    try:
+        details = {
+            "action": "GENERATE_PAYMENT_LINK",
+            "order_no": order.order_no,
+            "amount": amount_str,
+            "expires_at": expires.isoformat(),
+            "requested_by": getattr(current_user, "username", None),
+        }
+        audit = AuditLog(
+            action="GENERATE_PAYMENT_LINK",
+            target_type="order",
+            target_id=str(order.id),
+            details=json.dumps(details),
+        )
+        db.add(audit)
+        db.commit()
+    except Exception:
+        logger.exception("Failed to record audit log for payment link generation")
+
+    return {
+        "url": pay_path,
+        "token": token,
+        "expires_at": expires.isoformat(),
+        "amount": amount_str,
+    }

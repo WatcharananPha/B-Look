@@ -28,6 +28,7 @@ export default function CustomerPayment({uuid}){
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
@@ -50,6 +51,14 @@ export default function CustomerPayment({uuid}){
       .catch(e=> setError(e.message || 'Failed to load order'))
       .finally(()=> setLoading(false))
   },[orderUuid])
+
+  // Keep file preview hook above any early returns to satisfy Rules of Hooks
+  useEffect(() => {
+    if (!file) { setPreview(null); return }
+    const url = URL.createObjectURL(file)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
 
   if(loading) return (<div style={{padding:20,fontFamily:'sans-serif'}}>Loading...</div>)
   if(error) return (<div style={{padding:20,fontFamily:'sans-serif',color:'red'}}>{error}</div>)
@@ -95,55 +104,95 @@ export default function CustomerPayment({uuid}){
         try{ const j = await res.json(); msg = j.detail || JSON.stringify(j) }catch{ msg = await res.text().catch(()=>msg) }
         throw new Error(msg)
       }
-      await res.json()
+      const payload = await res.json()
       setSuccessMsg('Upload successful')
-      // redirect to a success page (public static) for simplicity
-      window.location.href = '/success.html'
+      // redirect to a success page (public static) and include slip file ref
+      const r = (payload && payload.file_name) ? encodeURIComponent(payload.file_name) : ''
+      const u = encodeURIComponent(order.order_uuid || order.order_no || '')
+      window.location.href = `/success.html?u=${u}${r?('&r='+r):''}`
     }catch(err){
       setError(err.message||'Upload error')
     }finally{setUploading(false)}
   }
 
-  return (
-    <div style={{fontFamily:'sans-serif',padding:16,maxWidth:640,margin:'0 auto'}}>
-      <h2 style={{marginTop:8}}>ชำระเงินสำหรับออเดอร์ {order.order_no}</h2>
-      <p style={{color:'#666'}}>สถานะ: {order.status}</p>
-      <div style={{background:'#fff',padding:12,borderRadius:8,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',marginTop:8}}>
-        <div style={{fontSize:20,fontWeight:700}}>ยอดที่ต้องจ่าย: ฿{amount}</div>
-        <div style={{marginTop:8,color:'#444'}}>งวด: {inst}</div>
-      </div>
+  
 
-      <div style={{marginTop:12}}>
-        <div style={{fontSize:13,color:'#666'}}>สลิปที่อัปโหลดแล้ว</div>
-        <div style={{display:'flex',gap:12,marginTop:8}}>
-          {order.slips?.booking && (
-            <a href={absoluteSlipUrl(order.slips.booking)} target="_blank" rel="noreferrer">
-              <img src={absoluteSlipUrl(order.slips.booking)} alt="booking" style={{width:120,height:80,objectFit:'cover',borderRadius:6}}/>
-            </a>
-          )}
-          {order.slips?.deposit && (
-            <a href={absoluteSlipUrl(order.slips.deposit)} target="_blank" rel="noreferrer">
-              <img src={absoluteSlipUrl(order.slips.deposit)} alt="deposit" style={{width:120,height:80,objectFit:'cover',borderRadius:6}}/>
-            </a>
-          )}
-          {order.slips?.balance && (
-            <a href={absoluteSlipUrl(order.slips.balance)} target="_blank" rel="noreferrer">
-              <img src={absoluteSlipUrl(order.slips.balance)} alt="balance" style={{width:120,height:80,objectFit:'cover',borderRadius:6}}/>
-            </a>
-          )}
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-start justify-center py-12 px-4">
+      <div className="w-full max-w-2xl">
+        <div className="bg-white shadow-md rounded-lg p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">ชำระเงิน — ออเดอร์ {order.order_no}</h3>
+              <p className="text-sm text-gray-500 mt-1">สถานะ: <span className="font-medium text-gray-700">{order.status}</span></p>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-gray-500">งวด</div>
+              <div className="text-xl font-bold text-teal-600">{inst}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2 bg-gray-50 p-4 rounded">
+              <div className="text-sm text-gray-500">ยอดที่ต้องจ่าย</div>
+              <div className="text-3xl font-extrabold text-gray-900 mt-1">฿{amount}</div>
+              <p className="text-xs text-gray-500 mt-2">รวมค่าจัดส่ง/ภาษี และหักมัดจำแล้ว (ถ้ามี)</p>
+
+              <div className="mt-4">
+                <div className="text-sm text-gray-600">สลิปที่อัปโหลดแล้ว</div>
+                <div className="flex gap-3 mt-2">
+                  {order.slips?.booking && (
+                    <a href={absoluteSlipUrl(order.slips.booking)} target="_blank" rel="noreferrer" className="block w-28 h-20 overflow-hidden rounded shadow-sm">
+                      <img src={absoluteSlipUrl(order.slips.booking)} alt="booking" className="w-full h-full object-cover"/>
+                    </a>
+                  )}
+                  {order.slips?.deposit && (
+                    <a href={absoluteSlipUrl(order.slips.deposit)} target="_blank" rel="noreferrer" className="block w-28 h-20 overflow-hidden rounded shadow-sm">
+                      <img src={absoluteSlipUrl(order.slips.deposit)} alt="deposit" className="w-full h-full object-cover"/>
+                    </a>
+                  )}
+                  {order.slips?.balance && (
+                    <a href={absoluteSlipUrl(order.slips.balance)} target="_blank" rel="noreferrer" className="block w-28 h-20 overflow-hidden rounded shadow-sm">
+                      <img src={absoluteSlipUrl(order.slips.balance)} alt="balance" className="w-full h-full object-cover"/>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded border">
+              <form onSubmit={handleSubmit} aria-label="Upload slip form">
+                <label className="block text-sm font-medium text-gray-700">แนบรูปสลิป (jpg/png, &lt;=5MB)</label>
+                <div className="mt-2 flex items-center gap-3">
+                  <label className="cursor-pointer inline-flex items-center px-3 py-2 bg-white border rounded-md shadow-sm text-sm text-gray-700 hover:bg-gray-50">
+                    เลือกไฟล์
+                    <input type="file" accept="image/png,image/jpeg" onChange={e=>setFile(e.target.files[0])} className="sr-only" />
+                  </label>
+                  <div className="text-sm text-gray-600">{file ? file.name : 'ยังไม่ได้เลือกไฟล์'}</div>
+                </div>
+
+                {preview && (
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500">ตัวอย่างไฟล์</div>
+                    <div className="mt-2 w-full h-40 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+                      <img src={preview} alt="preview" className="max-h-full max-w-full object-contain" />
+                    </div>
+                  </div>
+                )}
+
+                {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
+                {successMsg && <div className="mt-3 text-sm text-green-600">{successMsg}</div>}
+
+                <button type="submit" disabled={uploading} className="mt-4 w-full inline-flex justify-center items-center gap-2 rounded-md bg-teal-600 text-white px-4 py-2 text-sm font-semibold hover:bg-teal-500 disabled:opacity-60">
+                  {uploading ? 'Uploading…' : 'Upload Slip & Send'}
+                </button>
+
+                <div className="mt-3 text-xs text-gray-500">หากมีปัญหา ติดต่อผู้ขายเพื่อขอคำแนะนำ</div>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
-
-      <form onSubmit={handleSubmit} style={{marginTop:16}}
-            aria-label="Upload slip form">
-        <label style={{display:'block',marginBottom:8}}>แนบรูปสลิป (jpg/png, &lt;=5MB)</label>
-        <input type="file" accept="image/png,image/jpeg" onChange={e=>setFile(e.target.files[0])} />
-        {error && <div style={{color:'red',marginTop:8}}>{error}</div>}
-        {successMsg && <div style={{color:'green',marginTop:8}}>{successMsg}</div>}
-        <button type="submit" disabled={uploading} style={{marginTop:12,padding:'10px 14px',background:'#0b74de',color:'#fff',border:'none',borderRadius:6}}> {uploading?'Uploading...':'Upload Slip & Send'} </button>
-      </form>
-
-      <div style={{marginTop:18,fontSize:13,color:'#777'}}>หากมีปัญหา ติดต่อผู้ขายเพื่อขอคำแนะนำ</div>
     </div>
   )
 }

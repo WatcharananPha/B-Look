@@ -12,7 +12,7 @@ export default function OrderAdminExtras({order, onApproved}){
   const publicLink = `${origin}/pay/${order.order_uuid}`
 
   const doCopy = ()=>{
-    try{ navigator.clipboard.writeText(publicLink); alert('Copied link to clipboard') }catch(e){ prompt('Copy link', publicLink) }
+    try{ navigator.clipboard.writeText(publicLink); alert('Copied link to clipboard') }catch{ prompt('Copy link', publicLink) }
   }
 
   const approve = async (nextStatus)=>{

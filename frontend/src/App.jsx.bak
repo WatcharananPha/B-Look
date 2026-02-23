@@ -1,245 +1,350 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { 
-  Calendar, Save, Calculator, AlertCircle, User, Box, FileText, 
-  Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
-  CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
-  LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag
-} from 'lucide-react';
-import LoginPage from './login';
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
-const LOGO_URL = "/logo.jpg"; 
-
-// 🆕 Application version for cache busting
-const APP_VERSION = "2026.02.06.1649";
-
-// 🆕 Check and clear localStorage if version mismatch (run once on load)
-(() => {
-    const storedVersion = localStorage.getItem('appVersion');
-    if (storedVersion !== APP_VERSION) {
-        console.log('🔄 Version update detected. Clearing potentially corrupted cache...');
-        console.log(`   Old: ${storedVersion} → New: ${APP_VERSION}`);
-        
-        // Remove potentially corrupted data
-        const itemsToRemove = ['neckTypes', 'fabricTypes', 'sleeveTypes'];
-        itemsToRemove.forEach(item => {
-            if (localStorage.getItem(item)) {
-                console.log(`   ✓ Removed: ${item}`);
-                localStorage.removeItem(item);
-            }
-        });
-        
-        // Update version
-        // Fetch master data
-        useEffect(() => {
-            const controller = new AbortController();
-            const signal = controller.signal;
-
-            const fetchMasters = async () => {
-                try {
-                    setIsLoading(true);
-                    const [fData, nData, sData, cData, addons] = await Promise.all([
-                        fetchWithAuth('/products/fabrics', { signal }).catch(() => null),
-                        fetchWithAuth('/products/necks', { signal }).catch(() => null),
-                        fetchWithAuth('/products/sleeves', { signal }).catch(() => null),
-                        fetchWithAuth('/company/config', { signal }).catch(() => null),
-                        fetchWithAuth('/company/addons', { signal }).catch(() => null)
-                    ]);
-
-                    setFabrics(fData || []);
-                    setSleeves(sData || []);
-
-                    // Map backend neck types to frontend format
-                    if (nData && nData.length > 0) {
-                        const mappedNeckTypes = nData.map((neck) => ({
-                            id: neck.id,
-                            name: neck.name,
-                            extraPrice: (neck.cost_price || neck.additional_cost || neck.price_adjustment || 0),
-                            priceGroup: neck.name.includes('ปก') ? 'collarOthers' : 'roundVNeck',
-                            supportSlope: ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'].some(n => neck.name.includes(n)),
-                            forceSlope: (neck.force_slope !== undefined ? Boolean(neck.force_slope) : isForceSlopeNeck(neck.name))
-                        }));
-
-                        const seen = new Set();
-                        const finalNeckTypes = [];
-                        for (const n of mappedNeckTypes) {
-                            const key = normalizeNeckName(n.name);
-                            if (!key) continue;
-                            if (seen.has(key)) continue;
-                            seen.add(key);
-                            finalNeckTypes.push({
-                                // 🆕 Application version for cache busting
-                                const APP_VERSION = "2026.02.06.1649";
-
-                                // 🆕 Check and clear localStorage if version mismatch (run once on load)
-                                (() => {
-                                    const storedVersion = localStorage.getItem('appVersion');
-                                    if (storedVersion !== APP_VERSION) {
-                                        console.log('🔄 Version update detected. Clearing potentially corrupted cache...');
-                                        console.log(`   Old: ${storedVersion} → New: ${APP_VERSION}`);
-        
-                                        // Remove potentially corrupted data
-                                        const itemsToRemove = ['neckTypes', 'fabricTypes', 'sleeveTypes'];
-                                        itemsToRemove.forEach(item => {
-                                            if (localStorage.getItem(item)) {
-                                                console.log(`   ✓ Removed: ${item}`);
-                                                localStorage.removeItem(item);
-                                            }
-                                        });
-        
-                                        // Update version
-                                        localStorage.setItem('appVersion', APP_VERSION);
-                                        console.log('✅ Cache cleaned. Please refresh if you see old data.');
-                                    }
-                                })();
-            // ⚠️ VALIDATION: Check if any neck has corrupted extraPrice (> 100)
-            const hasCorruptData = storedList.some(item => 
-                item?.extraPrice && item.extraPrice > 100
-            );
-            
-            if (hasCorruptData) {
-                console.error("🧹 Detected corrupt neckTypes data in localStorage. Cleaning...");
-                localStorage.removeItem('neckTypes');
-                return DEFAULT_NECK_TYPES;
-            }
-            
-            const merged = [...DEFAULT_NECK_TYPES].map(it => ({ ...it, name: normalizeNeckName(it.name) }));
-
-            storedList.forEach((item) => {
-                const storedName = normalizeNeckName(item?.name);
-                const existingIndex = merged.findIndex(
-                    (n) => normalizeNeckName(n.name) === storedName
-                );
-
-                if (existingIndex >= 0) {
-                    const normalizedName = merged[existingIndex].name || item?.name || "";
-                    const isTongueNeck = normalizedName.includes('มีลิ้น');
-                    merged[existingIndex] = {
-                        ...merged[existingIndex],
-                        ...item,
-                        name: normalizeNeckName(merged[existingIndex].name),
-                        // ⚠️ Clamp extraPrice to safe range (0-100)
-                        extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
-                    };
-                } else if (item?.name) {
-                    const isTongueNeck = item.name.includes('มีลิ้น');
-                    merged.push({
-                        ...item,
-                        name: normalizeNeckName(item.name),
-                        extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
-                    });
-                }
-            });
-
-            // Deduplicate by normalized name to avoid duplicates from backend+storage
-            const seen = new Set();
-            const deduped = [];
-            for (const m of merged) {
-                const key = normalizeNeckName(m.name);
-                if (!key) continue; // skip empty names
-                if (seen.has(key)) continue;
-                seen.add(key);
-                // Ensure name is cleaned and typed correctly
-                deduped.push({
-                    ...m,
-                    id: m.id || `custom-${key}`,
-                    name: key,
-                    extraPrice: Number(m.extraPrice) || 0,
-                    forceSlope: Boolean(m.forceSlope)
-                });
-            }
-
-            return deduped;
-        }
-    } catch (e) { 
-        console.error("Error loading neckTypes:", e);
-        localStorage.removeItem('neckTypes');
-    }
-    return DEFAULT_NECK_TYPES;
-};
-
-// Helper: Get neck extra price
-const getNeckExtraPrice = (neckName) => {
-    const neckTypes = getNeckTypes();
-    const needle = normalizeNeckName(neckName);
-    const neck = neckTypes.find((n) => {
-        const hay = normalizeNeckName(n.name);
-        return needle.includes(hay) || hay.includes(needle);
-    });
-    
-    // Tongue necks use add-on (+10) instead of extraPrice
-    const isTongueNeck = (neck?.name || "").includes('มีลิ้น');
-    const extraPrice = isTongueNeck ? 0 : (neck?.extraPrice || 0);
-
-    // ⚠️ SANITY CHECK: extraPrice should never exceed 100 THB
-    if (extraPrice > 100) {
-        console.error("🚨 CORRUPT DATA: extraPrice =", extraPrice, "for neck:", neckName);
-        console.error("This indicates localStorage corruption. Cleaning up...");
-        localStorage.removeItem('neckTypes');
-        return 0; // Return safe default
-    }
-    
-    return extraPrice;
-};
-
-
-// Necks that support คอกลม/วี pricing (now dynamic)
-const ROUND_V_NECK_TYPES = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีชน', 'คอวีไขว้'];
-
-// Necks that support ไหล่สโลป option (now dynamic based on supportSlope field)
-const SLOPE_SHOULDER_SUPPORTED_NECKS = ['คอกลม', 'คอวี', 'คอวีตัด', 'คอวีปก'];
-
-// Custom Status Options (editable)
-const DEFAULT_STATUS_OPTIONS = [
-  { value: 'แบบร่าง', label: 'แบบร่าง' },
-  { value: 'กำลังออกแบบ', label: 'กำลังออกแบบ' },
-  { value: 'รอแบบอนุมัติ', label: 'รอแบบอนุมัติ' },
-  { value: 'กำลังผลิต', label: 'กำลังผลิต' },
-  { value: 'เตรียมจัดส่ง', label: 'เตรียมจัดส่ง' },
-  { value: 'ส่งมอบแล้ว', label: 'ส่งมอบแล้ว' }
-];
-
-const getStatusOptions = () => {
-    try {
-        const stored = localStorage.getItem('statusOptions');
-        if (stored) return JSON.parse(stored);
-    } catch (e) { console.error(e); }
-    return DEFAULT_STATUS_OPTIONS;
-};
-
-const saveStatusOptions = (options) => {
-    localStorage.setItem('statusOptions', JSON.stringify(options));
-    window.dispatchEvent(new Event('statusOptionsUpdated'));
-};
-
-// --- HELPER: API Fetch Wrapper ---
-const fetchWithAuth = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('access_token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...options.headers
+// 2. Invoice Modal
+const InvoiceModal = ({ data, onClose }) => {
+  const [image3DFront, setImage3DFront] = useState("");
+  const [image3DBack, setImage3DBack] = useState("");
+  const [showImageInput, setShowImageInput] = useState(false);
+  const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
+  
+  // 🟢 เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
+  const handleImageUpload = (e, setImg) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.type === 'image/jpeg' || file.type === 'image/png') {
+              const imageUrl = URL.createObjectURL(file);
+              setImg(imageUrl);
+          } else {
+              alert("รองรับเฉพาะไฟล์ PNG และ JPG เท่านั้นครับ");
+              e.target.value = ""; 
+          }
+      }
   };
 
-  try {
-    const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
-    // Handle authentication errors (401 and 403 with credential issues)
-    // When authentication fails, clear credentials and emit a logout event.
-    if (response.status === 401) {
-        const hadToken = Boolean(token);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user_role');
-        if (hadToken) {
-            // Notify app to perform a graceful logout (no full-page reload)
-            window.dispatchEvent(new Event('blook:logout'));
+  if (!data) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
+        <div className="bg-white p-8 rounded-xl text-center">
+          <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
+        </div>
+      </div>
+    );
+  }
+  
+  const handleDownloadPDF = async () => {
+    const invoiceElement = document.getElementById('invoice-content');
+    if (!invoiceElement) return;
+    
+    try {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => {
+        const html2pdfLib = window.html2pdf;
+        if (!html2pdfLib) {
+            alert('ไม่สามารถดาวน์โหลด PDF ได้');
+            return;
         }
-        return null;
+        const element = invoiceElement.cloneNode(true);
+        element.style.margin = '0';
+        element.style.padding = '0';
+        
+        const opt = {
+          margin: 0,
+          filename: `order-${data.order_no || 'draft'}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { format: 'a4', orientation: 'portrait', compress: true }
+        };
+        
+        html2pdfLib().set(opt).from(element).save();
+      };
+      document.head.appendChild(script);
+    } catch (error) {
+      console.error('PDF download failed:', error);
+      alert('ไม่สามารถดาวน์โหลด PDF ได้');
     }
-    if (response.status === 403) {
-        const errorData = await response.json().catch(() => ({}));
-        // If it's a credential validation error, treat it like 401
-        if (errorData.detail && errorData.detail.includes('Could not validate credentials')) {
+  };
+
+  const isFactoryView = data.isFactoryView || false;
+  const urgencyStatus = data.urgencyStatus || data.urgency_level || 'normal';
+  const invoiceTheme = {
+      critical: { header: "bg-rose-600 text-white" },
+      warning: { header: "bg-amber-500 text-white" },
+      normal: { header: "bg-emerald-600 text-white" }
+  };
+  
+  const activeSizes = SIZES.filter(size => (data.quantities?.[size] || 0) > 0);
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #invoice-content, #invoice-content * { visibility: visible; }
+        }
+      `}</style>
+      
+      {/* Action Buttons */}
+      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex flex-wrap gap-2 print:hidden">
+          {!isFactoryView && (
+              <>
+                  <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                      <Printer size={18} className="mr-2"/> บันทึก PDF
+                  </button>
+                  <button onClick={() => setShowImageInput(!showImageInput)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                      <Plus size={18} className="mr-1"/> ภาพ 3D
+                  </button>
+              </>
+          )}
+          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition">
+              <XCircle size={24} />
+          </button>
+      </div>
+      
+      {/* 🟢 Image Input Panel (ปรับเป็น Upload รูปแทน Link) */}
+      {showImageInput && !isFactoryView && (
+          <div id="image-input-panel" className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden" onClick={(e) => e.stopPropagation()}>
+              <h4 className="text-sm font-bold text-purple-700 mb-3">🎨 เพิ่มภาพ 3D / Design</h4>
+              <div className="space-y-4">
+                  <div>
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหน้า (PNG / JPG)</label>
+                      <input 
+                          type="file" 
+                          accept="image/png, image/jpeg"
+                          className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                          onChange={(e) => handleImageUpload(e, setImage3DFront)} 
+                      />
+                      {image3DFront && (
+                          <button onClick={() => setImage3DFront("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
+                              🗑️ ลบภาพด้านหน้า
+                          </button>
+                      )}
+                  </div>
+                  <div>
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหลัง (PNG / JPG)</label>
+                      <input 
+                          type="file" 
+                          accept="image/png, image/jpeg"
+                          className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                          onChange={(e) => handleImageUpload(e, setImage3DBack)} 
+                      />
+                      {image3DBack && (
+                          <button onClick={() => setImage3DBack("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
+                              🗑️ ลบภาพด้านหลัง
+                          </button>
+                      )}
+                  </div>
+              </div>
+              <button onClick={() => setShowImageInput(false)} className="w-full mt-5 py-2.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 shadow-md">
+                  เสร็จสิ้น
+              </button>
+          </div>
+      )}
+      
+      {/* Main Invoice Content - A4 Paper Size */}
+      <div id="invoice-content" className="bg-white w-[210mm] h-[297mm] shadow-2xl relative text-slate-800 font-sans overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+        
+        <div className={`${invoiceTheme[urgencyStatus]?.header || invoiceTheme.normal.header} px-6 py-3 flex-shrink-0`}>
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-3xl font-black leading-none">ORDER</h1>
+                    <p className="text-xs font-semibold mt-0.5">{data.brand || "Jersey Express"}</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-xs text-red-100">รหัสงาน</p>
+                    <p className="text-lg font-bold">{data.order_no || "SP-DRAFT"}</p>
+                    {isFactoryView && <span className="inline-block px-2 py-0.5 bg-white/20 rounded text-xs font-bold mt-1">FACTORY</span>}
+                </div>
+            </div>
+        </div>
+        
+        <div className="grid grid-cols-2 border-b border-gray-300">
+            <div className="p-3 border-r border-gray-300">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                        <span className="text-gray-500 text-xs">รหัสงาน:</span>
+                        <p className="font-bold text-base">{data.order_no || "SP-DRAFT"}</p>
+                    </div>
+                    <div>
+                        <span className="text-gray-500 text-xs">ลูกค้า:</span>
+                        <p className="font-bold">{data.customerName || data.customer_name || "-"}</p>
+                    </div>
+                    {data.graphicCode && (
+                        <div>
+                            <span className="text-gray-500 text-xs">Admin:</span>
+                            <p className="font-bold">{data.graphicCode}</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="p-3">
+                <div className="grid grid-cols-1 gap-1 text-sm">
+                    <div>
+                        <span className="text-gray-500 text-xs">รายละเอียด:</span>
+                        <p className="font-medium">คอ{data.neck || "-"} แขน{data.sleeve || "-"}</p>
+                        <p className="font-medium">ผ้า{data.fabric || "-"}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div className="grid grid-cols-2 border-b border-gray-300 text-sm">
+            <div className="p-2 border-r border-gray-300">
+                <span className="text-gray-500 text-xs">โทรศัพท์:</span>
+                <span className="font-medium ml-2">{data.phoneNumber || data.phone || "-"}</span>
+            </div>
+            <div className="p-2">
+                <span className="text-gray-500 text-xs">วันจัดส่ง:</span>
+                <span className="font-medium ml-2">{data.deliveryDate ? new Date(data.deliveryDate).toLocaleDateString('th-TH') : "-"}</span>
+            </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 border-b border-gray-300">
+            <div className="p-4 border-r border-gray-300">
+                <h3 className="text-xs font-bold text-gray-600 mb-3 uppercase">ตัวอย่างแบบเสื้อ</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="aspect-square bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                        {image3DFront ? (
+                            <img src={image3DFront} alt="Front" className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                        ) : null}
+                        <div className={`${image3DFront ? 'hidden' : 'flex'} flex-col items-center justify-center text-gray-400 text-xs text-center p-2`}>
+                            <Box size={32} className="mb-2 opacity-50" />
+                            <span>ด้านหน้า</span>
+                        </div>
+                    </div>
+                    <div className="aspect-square bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                        {image3DBack ? (
+                            <img src={image3DBack} alt="Back" className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                        ) : null}
+                        <div className={`${image3DBack ? 'hidden' : 'flex'} flex-col items-center justify-center text-gray-400 text-xs text-center p-2`}>
+                            <Box size={32} className="mb-2 opacity-50" />
+                            <span>ด้านหลัง</span>
+                        </div>
+                    </div>
+                </div>
+                {/* graphic code removed from UI */}
+            </div>
+            
+            <div className="p-4">
+                <h3 className="text-xs font-bold text-gray-600 mb-3 uppercase">รายละเอียดไซส์</h3>
+                
+                {/* Size Table */}
+                <div className="border border-gray-300 rounded overflow-hidden mb-4">
+                    <div className="bg-gray-100 p-2 text-center border-b border-gray-300">
+                        <span className="text-sm font-bold">จำนวนรวม: <span className="text-lg text-blue-600">{data.totalQty || 0} ตัว</span></span>
+                    </div>
+                    <div className="divide-y divide-gray-200">
+                        {activeSizes.map(size => (
+                            <div key={size} className="flex justify-between items-center px-4 py-2 text-sm hover:bg-gray-50">
+                                <span className="font-medium text-gray-700">{size}</span>
+                                <span className="font-bold text-gray-900">= {data.quantities?.[size] || 0}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                
+                {data.selectedAddOns && data.selectedAddOns.length > 0 && (
+                    <div className="mb-4 p-2 bg-purple-50 rounded border border-purple-200">
+                        <span className="text-xs font-bold text-purple-700">ตัวเลือกเพิ่มเติม:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {data.selectedAddOns.map(opt => (
+                                <span key={opt.id} className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded">{opt.name}</span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {data.isOversize && (
+                    <div className="mb-4 p-2 bg-blue-50 rounded border border-blue-200">
+                        <span className="text-xs font-bold text-blue-700">⬆️ ทรง OVERSIZE</span>
+                    </div>
+                )}
+            </div>
+        </div>
+        
+        {/* Pricing Section - Hidden in Factory View */}
+        {!isFactoryView && (
+            <div className="p-4 border-b border-gray-300">
+                <div className="max-w-md ml-auto">
+                    <table className="w-full text-sm">
+                        <tbody>
+                            <tr><td className="py-1 text-gray-600">ยอดสินค้า ({data.totalQty} x {data.basePrice})</td><td className="py-1 text-right font-medium">{(data.productSubtotal || data.totalQty * data.basePrice || 0).toLocaleString()}</td></tr>
+                            {data.sizingSurcharge > 0 && <tr className="text-orange-600"><td className="py-1">ค่าไซส์พิเศษ</td><td className="py-1 text-right">+{data.sizingSurcharge.toLocaleString()}</td></tr>}
+                            {data.addOnOptionsTotal > 0 && <tr className="text-purple-600"><td className="py-1">ค่า Add-on</td><td className="py-1 text-right">+{data.addOnOptionsTotal.toLocaleString()}</td></tr>}
+                            <tr><td className="py-1 text-gray-600">ค่าบล็อก/อื่นๆ</td><td className="py-1 text-right font-medium">{(data.addOnCost || 0).toLocaleString()}</td></tr>
+                            <tr><td className="py-1 text-gray-600">ค่าขนส่ง</td><td className="py-1 text-right font-medium">{(data.shippingCost || 0).toLocaleString()}</td></tr>
+                            {(data.discount || 0) > 0 && <tr className="text-rose-600"><td className="py-1">ส่วนลด</td><td className="py-1 text-right">-{data.discount.toLocaleString()}</td></tr>}
+                            <tr><td className="py-1 text-gray-600">VAT (7%)</td><td className="py-1 text-right font-medium">{(data.vatAmount || 0).toLocaleString()}</td></tr>
+                            <tr className="border-t-2 border-gray-300"><td className="py-2 font-bold text-base">ยอดสุทธิ</td><td className="py-2 text-right font-black text-lg">{(data.grandTotal || 0).toLocaleString()} บาท</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div className="mt-2 text-[10px] text-gray-500">
+                        หากต้องการใบกำกับภาษี กรุณาแจ้งแอดมินก่อนสรุปยอด
+                    </div>
+
+                    {canViewCost && (data.totalCost != null || data.estimatedProfit != null) && (
+                        <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded">
+                            <div className="flex justify-between text-xs text-slate-600">
+                                <span>ต้นทุนรวม</span>
+                                <span className="font-semibold">{(data.totalCost || 0).toLocaleString()} บาท</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-slate-600 mt-1">
+                                <span>กำไรประมาณการ</span>
+                                <span className="font-semibold">{(data.estimatedProfit || 0).toLocaleString()} บาท</span>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Payment Box */}
+                    <div className="mt-4 p-3 bg-emerald-50 border-2 border-emerald-300 rounded-lg">
+                        <h4 className="text-xs font-bold text-emerald-800 mb-2">การชำระเงิน</h4>
+                        <div className="space-y-1 text-sm">
+                            <div className="flex justify-between"><span>มัดจำ 1</span><span className="font-bold">{(data.deposit1 || 0).toLocaleString()} บาท</span></div>
+                            {(data.designFee || 0) > 0 && (
+                              <>
+                                <div className="flex justify-between text-gray-600 text-xs bg-white/50 px-2 py-1 rounded">
+                                  <span>ยอดสุทธิ - มัดจำ 1</span>
+                                  <span>{((data.grandTotal || 0) - (data.deposit1 || 0)).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-amber-600 text-xs bg-white/50 px-2 py-1 rounded">
+                                  <span>ลบ: ค่าขึ้นแบบ</span>
+                                  <span>-{(data.designFee || 0).toLocaleString()}</span>
+                                </div>
+                              </>
+                            )}
+                            <div className="flex justify-between"><span>มัดจำ 2</span><span className="font-bold">{(data.deposit2 || 0).toLocaleString()} บาท</span></div>
+                            <div className="flex justify-between pt-2 border-t border-emerald-300 text-emerald-800 font-bold"><span>ค้างชำระ</span><span className="text-base">{Math.abs(data.balance || 0).toLocaleString()} บาท</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* Note Section */}
+        <div className="p-4">
+            <div className="border-2 border-gray-300 rounded p-3">
+                <span className="text-xs font-bold text-gray-600">*หมายเหตุพิเศษ:</span>
+                <p className="mt-1 text-sm text-gray-700 min-h-[40px]">{data.note || "-"}</p>
+            </div>
+        </div>
+        
+        {/* Factory View Notice */}
+        {isFactoryView && (
+            <div className="mx-4 mb-4 p-3 bg-gray-100 rounded-lg text-center text-gray-500 border-2 border-dashed border-gray-300">
+                <p className="font-bold text-sm">📦 ใบส่งโรงงาน - Factory Copy</p>
+                <p className="text-xs">เอกสารนี้ไม่แสดงราคา</p>
+            </div>
+        )}
+        
+        {/* Footer */}
+        <div className="bg-gray-50 p-3 text-center text-xs text-gray-400 border-t border-gray-200">
+            พิมพ์เมื่อ: {new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </div>
+      </div>
+    </div>
+  );
+};
+        if (www || (errorData.detail && errorData.detail.includes('Could not validate credentials'))) {
             const hadToken = Boolean(token);
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_role');
@@ -389,11 +494,26 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 };
 
 // 2. Invoice Modal
-const InvoiceModal = ({ data, onClose }) => {
+const InvoiceModal = ({ data, onClose, paymentLink }) => {
   const [image3DFront, setImage3DFront] = useState("");
   const [image3DBack, setImage3DBack] = useState("");
   const [showImageInput, setShowImageInput] = useState(false);
     const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
+  
+  // 🟢 เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
+  const handleImageUpload = (e, setImg) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.type === 'image/jpeg' || file.type === 'image/png') {
+              // สร้าง Temp URL จากไฟล์ที่เลือกเพื่อให้ React นำไปแสดงผลในแท็ก <img> ได้ทันที
+              const imageUrl = URL.createObjectURL(file);
+              setImg(imageUrl);
+          } else {
+              alert("รองรับเฉพาะไฟล์ PNG และ JPG เท่านั้นครับ");
+              e.target.value = ""; // รีเซ็ต input ถ้าไฟล์ผิดประเภท
+          }
+      }
+  };
   
   if (!data) {
     return (
@@ -476,22 +596,60 @@ const InvoiceModal = ({ data, onClose }) => {
               <XCircle size={24} />
           </button>
       </div>
+            {/* Payment link (if provided) */}
+            {paymentLink && (
+                <div className="fixed top-20 right-4 z-[59] p-3 bg-white rounded-md shadow-lg border border-gray-200 print:hidden">
+                    <div className="text-xs text-gray-500">ลิงก์ชำระเงิน (ยอดคงเหลือ)</div>
+                    <div className="mt-2 flex gap-2 items-center">
+                        <a href={paymentLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-emerald-700 underline break-all">{paymentLink}</a>
+                        <button onClick={() => { navigator.clipboard.writeText(paymentLink); alert('คัดลอกลิงก์แล้ว'); }} className="px-2 py-1 bg-gray-100 rounded text-xs">คัดลอก</button>
+                    </div>
+                </div>
+            )}
       
       {/* Image Input Panel */}
       {showImageInput && !isFactoryView && (
           <div id="image-input-panel" className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden">
               <h4 className="text-sm font-bold text-purple-700 mb-3">🎨 เพิ่มภาพ 3D / Design</h4>
-              <div className="space-y-3">
+              <div className="space-y-4">
+                  {/* กล่องอัปโหลดภาพด้านหน้า */}
                   <div>
-                      <label className="text-xs text-gray-600 font-semibold">ภาพด้านหน้า</label>
-                      <input type="text" className="w-full border-2 border-gray-200 p-2 rounded-lg text-xs mt-1 focus:border-purple-400" placeholder="URL ภาพด้านหน้า" value={image3DFront} onChange={(e) => setImage3DFront(e.target.value)} />
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหน้า (PNG / JPG)</label>
+                      <input 
+                          type="file" 
+                          accept="image/png, image/jpeg"
+                          className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                          onChange={(e) => handleImageUpload(e, setImage3DFront)} 
+                      />
+                      {image3DFront && (
+                          <button onClick={() => setImage3DFront("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
+                              🗑️ ลบภาพด้านหน้า
+                          </button>
+                      )}
                   </div>
+                  
+                  {/* กล่องอัปโหลดภาพด้านหลัง */}
                   <div>
-                      <label className="text-xs text-gray-600 font-semibold">ภาพด้านหลัง</label>
-                      <input type="text" className="w-full border-2 border-gray-200 p-2 rounded-lg text-xs mt-1 focus:border-purple-400" placeholder="URL ภาพด้านหลัง" value={image3DBack} onChange={(e) => setImage3DBack(e.target.value)} />
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">ภาพด้านหลัง (PNG / JPG)</label>
+                      <input 
+                          type="file" 
+                          accept="image/png, image/jpeg"
+                          className="w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" 
+                          onChange={(e) => handleImageUpload(e, setImage3DBack)} 
+                      />
+                      {image3DBack && (
+                          <button onClick={() => setImage3DBack("")} className="text-[10px] text-rose-500 mt-1.5 hover:underline block">
+                              🗑️ ลบภาพด้านหลัง
+                          </button>
+                      )}
                   </div>
               </div>
-              <button onClick={() => setShowImageInput(false)} className="w-full mt-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700">ยืนยัน</button>
+              <button 
+                  onClick={() => setShowImageInput(false)} 
+                  className="w-full mt-5 py-2.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition shadow-md"
+              >
+                  เสร็จสิ้น
+              </button>
           </div>
       )}
       
@@ -795,20 +953,29 @@ const buildInvoiceDataFromOrder = (order) => {
 
 // 2.1 ORDER DETAIL MODAL (Reuses invoice structure)
 const OrderDetailModal = ({ order, onClose }) => {
-  if (!order) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
-        <div className="bg-white p-8 rounded-xl text-center">
-          <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
-          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
-        </div>
-      </div>
-    );
-  }
+    if (!order) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
+                <div className="bg-white p-8 rounded-xl text-center">
+                    <p className="text-red-600 font-bold">ไม่มีข้อมูลสำหรับแสดง</p>
+                    <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 text-white rounded">ปิด</button>
+                </div>
+            </div>
+        );
+    }
 
     const data = buildInvoiceDataFromOrder(order);
 
-    return <InvoiceModal data={data} onClose={onClose} />;
+    // Render the Invoice modal and, for admin users, show the admin extras
+    return (
+        <>
+            <InvoiceModal data={data} onClose={onClose} paymentLink={order.payment_link || null} />
+            {/* Admin extras positioned so it appears above the modal (top-right) */}
+            <div style={{position:'fixed', right:24, top:96, zIndex:70}}>
+                <OrderAdminExtras order={order} onApproved={() => { /* no-op: caller may refresh list */ }} />
+            </div>
+        </>
+    );
 };
 
 // 2.7 USER MANAGEMENT PAGE
@@ -1067,7 +1234,7 @@ const DashboardPage = ({ onEdit }) => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const orders = await fetchWithAuth('/orders/');
+                const orders = await fetchWithAuth('/orders');
                 const data = orders || [];
                 
                 // --- 1. Apply Brand Filter First ---
@@ -1505,8 +1672,7 @@ const DashboardPage = ({ onEdit }) => {
 
 // 2.2 ORDER CREATION PAGE - FIXED VERSION
 const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinitions, setAddOnDefinitions }) => {
-  const [brand, setBrand] = useState(BRANDS[0]);
-  const [deadline, setDeadline] = useState("");
+    const [brand, setBrand] = useState(BRANDS[0]);
   const [urgencyStatus, setUrgencyStatus] = useState("normal");
   const [customerName, setCustomerName] = useState("");
   const [contactChannel, setContactChannel] = useState("LINE OA");
@@ -1515,8 +1681,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState(SIZES.reduce((acc, size) => ({...acc, [size]: 0}), {}));
   const [basePrice, setBasePrice] = useState(150);
-    const [productType, setProductType] = useState("shirt");
-  const [addOnCost, setAddOnCost] = useState(0);
+        const [productType, setProductType] = useState("shirt");
+    // computedAddOnCost: sum of selected add-on options provided by pricing API
+    const [computedAddOnCost, setComputedAddOnCost] = useState(0);
+    // manualAddOnCost: user-entered block/other fees (ค่าบล็อก/อื่นๆ)
+    const [manualAddOnCost, setManualAddOnCost] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
   const [discount, setDiscount] = useState(0);
   const [isVatIncluded, setIsVatIncluded] = useState(true);
@@ -1530,8 +1699,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   const [selectedSleeve, setSelectedSleeve] = useState("");
   const [config, setConfig] = useState({ vat_rate: 0.07, default_shipping_cost: 0 });
 
-  // NEW: State for deliveryDate (renamed from usageDate) and status
-  const [deliveryDate, setDeliveryDate] = useState(""); 
+    // NEW: State for deliveryDate (single date field used for both deadline & usage_date) and status
+    const [deliveryDate, setDeliveryDate] = useState(""); 
   const [status, setStatus] = useState("draft");
   
     // NEW: Customer info fields
@@ -1553,12 +1722,14 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   
     // NEW: Available neck types from localStorage (kept in state so fetch updates reflect in UI)
         const [availableNeckTypes, setAvailableNeckTypes] = useState(getNeckTypes());
-    // Refs to hold latest values so effects can read them without requiring them in deps
+    // Refs to hold latest values so master-fetch effect can compare without
+    // including these states in the effect dependency array (avoids self-triggering loops)
     const addOnDefinitionsRef = useRef(addOnDefinitions);
     useEffect(() => { addOnDefinitionsRef.current = addOnDefinitions; }, [addOnDefinitions]);
-
     const availableNeckTypesRef = useRef(availableNeckTypes);
     useEffect(() => { availableNeckTypesRef.current = availableNeckTypes; }, [availableNeckTypes]);
+    // Ref to prevent automatic recalculation while initializing form from existing order
+    const skipAutoCalc = useRef(false);
   
   // NEW: Design Fee (ค่าขึ้นแบบ) - deducted from deposit2
   
@@ -1611,6 +1782,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+    const [paymentUrl, setPaymentUrl] = useState(null);
     // NEW: Hold multiple items for this order
     const [orderItems, setOrderItems] = useState([]);
 
@@ -1641,7 +1813,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             total_cost: 0
         };
         // include per-item add-ons and oversize flag so backend can persist and re-calc
-        const sel = ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
+        const addonsSourceForSel = (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0) ? addOnDefinitionsRef.current : ADDON_OPTIONS;
+        const sel = addonsSourceForSel.filter(opt => addOnOptions[opt.id]).map(o => o.id).filter(id => {
             if (id === 'slopeShoulder' && isSlopeForcedByNeck) return false;
             return true;
         });
@@ -1661,9 +1834,11 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setOrderItems(prev => prev.filter((_, i) => i !== index));
     };
 
-  // Initialize form when editing an order
-  useEffect(() => {
-    if (editingOrder) {
+    // Initialize form when editing an order
+    useEffect(() => {
+        if (editingOrder) {
+                // Prevent the pricing effect from recalculating while we populate historical values
+                skipAutoCalc.current = true;
         // Basic Info
         setBrand(editingOrder.brand || BRANDS[0]);
         setCustomerName(editingOrder.customer_name || "");
@@ -1672,9 +1847,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setContactChannel(editingOrder.contact_channel || "LINE OA");
         setAddress(editingOrder.address || "");
         
-        // Dates & Status
-        setDeadline(editingOrder.deadline ? new Date(editingOrder.deadline).toISOString().split('T')[0] : "");
-        setDeliveryDate(editingOrder.usage_date ? new Date(editingOrder.usage_date).toISOString().split('T')[0] : "");
+        // 🟢 Dates & Status (โหลดใส่วันที่จัดส่งช่องเดียว)
+        const dDate = editingOrder.usage_date || editingOrder.deadline;
+        setDeliveryDate(dDate ? new Date(dDate).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
         setUrgencyStatus(editingOrder.urgency_level || "normal");
         
@@ -1682,7 +1857,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setDeposit1(editingOrder.deposit_1 || 0);
         setDeposit2(editingOrder.deposit_2 || 0);
         setShippingCost(editingOrder.shipping_cost || 0);
-        setAddOnCost(editingOrder.add_on_cost || 0);
+        setManualAddOnCost(editingOrder.add_on_cost || 0);
         setDiscount(editingOrder.discount_amount || 0);
         setIsVatIncluded(editingOrder.is_vat_included || false);
         
@@ -1697,19 +1872,38 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             setSelectedFabric(firstItem.fabric_type || "");
             setSelectedNeck(firstItem.neck_type || "");
             setSelectedSleeve(firstItem.sleeve_type || "");
-            // ✅ FIX: Don't load price from DB - let useEffect recalculate based on STEP_PRICING
-            // This prevents perpetuating wrong prices from old orders
-            // setBasePrice(firstItem.price_per_unit || 0);
+            // ✅ FIX: Load historical base price and add-ons from the saved order
+            // Lock automatic recalculation so the UI preserves historical pricing
+            setBasePrice(firstItem.price_per_unit || 0);
+
+            // Restore selected add-ons from stored order data so they are reflected in UI
+            if (firstItem.selected_add_ons) {
+                try {
+                    const selAddons = typeof firstItem.selected_add_ons === 'string'
+                        ? JSON.parse(firstItem.selected_add_ons)
+                        : firstItem.selected_add_ons;
+                    if (Array.isArray(selAddons)) {
+                        setAddOnOptions(prev => {
+                            const next = { ...prev };
+                            Object.keys(next).forEach(k => next[k] = false);
+                            selAddons.forEach(id => next[id] = true);
+                            return next;
+                        });
+                    }
+                } catch {
+                    // ignore parse issues
+                }
+            }
             
             // Parse and set quantities
             if (firstItem.quantity_matrix) {
                 try {
-                    const matrix = typeof firstItem.quantity_matrix === 'string' 
-                        ? JSON.parse(firstItem.quantity_matrix) 
+                    const matrix = typeof firstItem.quantity_matrix === 'string'
+                        ? JSON.parse(firstItem.quantity_matrix)
                         : firstItem.quantity_matrix;
                     setQuantities(matrix);
-                } catch (e) {
-                    console.error('Error parsing quantity_matrix:', e);
+                } catch (err) {
+                    console.error('Error parsing quantity_matrix:', err);
                 }
             }
             // If order has additional items, populate orderItems list
@@ -1734,6 +1928,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setIsOversize(editingOrder.is_oversize || false);
         setDesignFee(editingOrder.design_fee || 0);
         setProductType(editingOrder.product_type || "shirt");
+        // Unlock auto-calculation after a short delay to allow state propagation
+        setTimeout(() => { skipAutoCalc.current = false; }, 800);
     } else {
         // Reset form for new order
         setBrand(BRANDS[0]);
@@ -1743,7 +1939,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setContactChannel("LINE OA");
         setAddress("");
         setGraphicCode("");
-        setDeadline("");
         setDeliveryDate("");
         setStatus("draft");
         setUrgencyStatus("normal");
@@ -1751,7 +1946,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setDeposit2(0);
         setProductType("shirt");
         setShippingCost(0);
-        setAddOnCost(0);
+        setManualAddOnCost(0);
         setDiscount(0);
         setIsVatIncluded(true);
         setNote("");
@@ -1765,36 +1960,29 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setIsOversize(false);
         setDesignFee(0);
                 setAddOnOptions(buildAddOnOptionsState(addOnDefinitions));
-    }
+        }
     }, [editingOrder, addOnDefinitions]);
 
   // Fetch master data
-  // NOTE: We intentionally keep the dependency array minimal (only `editingOrder` and `onNotify`) because
-  // this effect is responsible for syncing authoritative master data on mount and when editing an order.
-    // Including `addOnDefinitions` or `availableNeckTypes` here would cause the effect to re-run when
-    // the effect itself updates those pieces of state, creating a fetch loop. We therefore keep the
-    // dependency array minimal while using refs to read the current values for safe comparisons.
-    useEffect(() => {
-      const controller = new AbortController();
-      const signal = controller.signal;
+  useEffect(() => {
       const fetchMasters = async () => {
           try {
               setIsLoading(true);
               const [fData, nData, sData, cData] = await Promise.all([
-                  fetchWithAuth('/products/fabrics', { signal }).catch(() => null),
-                  fetchWithAuth('/products/necks', { signal }).catch(() => null),
-                  fetchWithAuth('/products/sleeves', { signal }).catch(() => null),
-                  fetchWithAuth('/company/config', { signal }).catch(() => null)
-                      try {
-                          const current = JSON.stringify(addOnDefinitionsRef.current || []);
-                          const incoming = JSON.stringify(addons || []);
+                  fetchWithAuth('/products/fabrics').catch(() => null),
+                  fetchWithAuth('/products/necks').catch(() => null),
+                  fetchWithAuth('/products/sleeves').catch(() => null),
+                  fetchWithAuth('/company/config').catch(() => null)
+              ]);
+              
+              setFabrics(fData || []);
               setSleeves(sData || []);
               
               // Map backend neck types to frontend format
               // Backend has: cost_price, additional_cost, price_adjustment
               // Frontend needs: extraPrice
               if (nData && nData.length > 0) {
-                          setAddOnDefinitions(addons);
+                  // Treat backend as authoritative: map backend necks directly
                   const mappedNeckTypes = nData.map((neck) => ({
                       id: neck.id,
                       name: neck.name,
@@ -1846,12 +2034,12 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
               }
 
               // Fetch add-on definitions from backend (authoritative)
-                  try {
+              try {
                   const addons = await fetchWithAuth('/company/addons').catch(() => null);
                   if (addons && Array.isArray(addons)) {
                       try {
                           // Avoid updating App-level state if data is identical (prevents unnecessary re-renders)
-                          const current = JSON.stringify(addOnDefinitions || []);
+                          const current = JSON.stringify(addOnDefinitionsRef.current || []);
                           const incoming = JSON.stringify(addons || []);
                           if (current !== incoming) {
                               setAddOnDefinitions(addons);
@@ -1888,10 +2076,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
           }
             };
             fetchMasters();
-      return () => controller.abort();
-    }, [editingOrder, onNotify]);
+        }, [editingOrder, onNotify, setAddOnDefinitions, setAddOnOptions, setAvailableNeckTypes]);
 
-  const totalQty = Object.values(quantities).reduce((a, b) => a + b, 0);
+    const totalQty = Object.values(quantities).reduce((a, b) => Number(a) + Number(b), 0);
 
     const isOversizeAllowed = useMemo(
         () => SLOPE_SHOULDER_SUPPORTED_NECKS.some(n => selectedNeck.includes(n)),
@@ -1967,13 +2154,30 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
     // NEW: Calculate pricing server-side — call backend pricing API
     useEffect(() => {
+        if (skipAutoCalc.current) return; // Prevent recalculation while initializing historical order
         let mounted = true;
         const calc = async () => {
             try {
+                // If quantity is zero, show a sensible default base price
+                // (price for the first tier / minimum quantity) so the UI
+                // doesn't display 0. Final calculations for actual orders
+                // still use the backend when qty > 0.
                 if (totalQty <= 0) {
                     if (!mounted) return;
-                    setBasePrice(0);
-                    setAddOnCost(0);
+                    // determine local base unit using STEP_PRICING
+                    let baseUnit = 0;
+                    if (productType === 'sportsPants') baseUnit = STEP_PRICING.sportsPants;
+                    else if (productType === 'fashionPants') baseUnit = STEP_PRICING.fashionPants;
+                    else {
+                        const neckName = selectedNeck || '';
+                        const hasCollar = neckName.includes('ปก');
+                        const isRoundV = !hasCollar && ['คอกลม','คอวี','คอวีตัด','คอวีชน','คอวีไขว้'].some(k => neckName.includes(k));
+                        const table = isRoundV ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers;
+                        // use first tier price as default
+                        baseUnit = (table && table.length > 0) ? table[0].price : 0;
+                    }
+                    setBasePrice(Number(baseUnit) || 0);
+                    setComputedAddOnCost(0);
                     setShippingCost(0);
                     return;
                 }
@@ -1982,15 +2186,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                 const selectedAddOns = (addOnDefinitions || []).filter(opt => addOnOptions[opt.id]).map(o => o.id);
 
                 const payload = {
-                    total_qty: totalQty,
-                    product_type: productType,
-                    quantity_matrix: quantities,
-                    product_is_oversize: isOversize,
-                    fabric_name: selectedFabric || null,
-                    neck_name: selectedNeck || null,
-                    sleeve_name: selectedSleeve || null,
-                    addon_ids: selectedAddOns,
-                    is_vat_included: isVatIncluded
+                    items: [
+                        {
+                            product_type: productType,
+                            neck_type: selectedNeck || "",
+                            quantity_matrix: quantities,
+                            selected_add_ons: selectedAddOns,
+                            is_oversize: isOversize,
+                        }
+                    ]
                 };
 
                 const res = await fetchWithAuth('/pricing/calc', {
@@ -1998,12 +2202,67 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                     body: JSON.stringify(payload)
                 }).catch(() => null);
 
-                if (!res) return;
                 if (!mounted) return;
 
-                setBasePrice(res.price_per_unit || 0);
-                setAddOnCost(res.item_addon_total || 0);
-                setShippingCost(res.shipping_cost || 0);
+                if (res) {
+                    setBasePrice(res.price_per_unit || 0);
+                    setComputedAddOnCost(res.item_addon_total || 0);
+                    setShippingCost(res.shipping_cost || 0);
+                } else {
+                    // Server didn't respond — fallback to local calculation so UI remains usable
+                    console.warn('Pricing API unavailable, using local fallback');
+                    // Local base unit calculation (mirror backend STEP_PRICING)
+                    let base_unit = 0;
+                    if (productType === 'sportsPants') base_unit = STEP_PRICING.sportsPants;
+                    else if (productType === 'fashionPants') base_unit = STEP_PRICING.fashionPants;
+                    else {
+                        const neckName = selectedNeck || '';
+                        const hasCollarWord = neckName.includes('ปก');
+                        const isRoundVLocal = !hasCollarWord && ['คอกลม','คอวี','คอวีตัด','คอวีชน','คอวีไขว้'].some(k => neckName.includes(k));
+                        const pricingTableLocal = (isRoundVLocal ? STEP_PRICING.roundVNeck : STEP_PRICING.collarOthers);
+                        if (totalQty >= 10) {
+                            const matchedLocal = pricingTableLocal.find(t => totalQty >= t.minQty && totalQty <= t.maxQty);
+                            base_unit = matchedLocal ? matchedLocal.price : pricingTableLocal[0].price;
+                        } else {
+                            base_unit = pricingTableLocal[0].price;
+                        }
+                    }
+
+                    // local addon total
+                    const selectedAddOns = (addOnDefinitionsRef.current || []).filter(opt => addOnOptions[opt.id]).map(o => o.id);
+                    const addonsListLocal = (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0) ? addOnDefinitionsRef.current : ADDON_OPTIONS;
+                    let item_addon_total_local = 0;
+                    // detect force_slope from available necks (if present)
+                    let force_slope_local = false;
+                    if (selectedNeck) {
+                        const foundNeck = (availableNeckTypesRef.current || []).find(n => (n.name || '').includes(selectedNeck) || selectedNeck.includes(n.name));
+                        if (foundNeck) force_slope_local = Boolean(foundNeck.forceSlope || foundNeck.force_slope);
+                    }
+                    const special_necks_local = ['คอปกคางหมู','คอหยดน้ำ','คอห้าเหลี่ยมคางหมู'];
+                    const is_special_340_local = special_necks_local.some(s => (selectedNeck || '').includes(s));
+                    for (const aid of selectedAddOns) {
+                        const aobj = addonsListLocal.find(a => a.id === aid || a.name === aid);
+                        const price = aobj ? Number(aobj.price || 0) : 0;
+                        if (force_slope_local && (aid === 'slopeShoulder' || aid === 'collarTongue') && !is_special_340_local) continue;
+                        item_addon_total_local += price * totalQty;
+                    }
+
+                    // local shipping heuristic
+                    let shipping_cost_local = 0;
+                    if (totalQty < 10) shipping_cost_local = 0;
+                    else if (totalQty <= 15) shipping_cost_local = 60;
+                    else if (totalQty <= 20) shipping_cost_local = 80;
+                    else if (totalQty <= 30) shipping_cost_local = 100;
+                    else if (totalQty <= 40) shipping_cost_local = 120;
+                    else if (totalQty <= 50) shipping_cost_local = 180;
+                    else if (totalQty <= 70) shipping_cost_local = 200;
+                    else if (totalQty <= 100) shipping_cost_local = 230;
+                    else shipping_cost_local = 230 + ((totalQty - 100) * 50);
+
+                    setBasePrice(Number(base_unit) || 0);
+                    setComputedAddOnCost(Number(item_addon_total_local) || 0);
+                    setShippingCost(Number(shipping_cost_local) || 0);
+                }
                 // Note: sizing surcharge and VAT handled/displayed from derived values
             } catch (err) {
                 console.error('Pricing API failed:', err);
@@ -2024,6 +2283,19 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         addOnDefinitions
     ]);
 
+    // Ensure manual block/other fee isn't accidentally equal to computed add-on totals
+    // (prevents double-counting when computedAddOnCost changes)
+    useEffect(() => {
+        try {
+            // If manual add-on equals computed add-on, clear manual to avoid double-counting
+            if (Number(manualAddOnCost) && Number(computedAddOnCost) && Number(manualAddOnCost) === Number(computedAddOnCost)) {
+                setManualAddOnCost(0);
+            }
+        } catch {
+            // noop
+        }
+    }, [computedAddOnCost, selectedNeck, editingOrder, manualAddOnCost]);
+
     // Shipping cost is calculated on the backend now; frontend reads it from pricing API.
 
   // neckExtraPrice ตอนนี้รวมเข้า basePrice แล้ว ไม่ต้อง setNeckExtraPrice แยก
@@ -2032,8 +2304,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     // NEW: Calculate Add-on Options total
     const addOnOptionsTotal = useMemo(() => {
                 if (productType !== 'shirt') return 0;
-        // If backend provided `addOnCost`, prefer that authoritative value
-        if (addOnCost && Number(addOnCost) > 0) return Number(addOnCost);
+        // If backend provided computed add-on total, prefer that authoritative value
+    if (computedAddOnCost && Number(computedAddOnCost) > 0) return Number(computedAddOnCost);
         return (addOnDefinitions || []).reduce((total, opt) => {
                 // If slope is forced by neck and its cost is already included in basePrice, skip counting it here
                 // but for our special UI necks we want to show 300 + slope add-on, so count it there.
@@ -2045,24 +2317,24 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             }
             return total;
         }, 0);
-        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck, addOnDefinitions, selectedNeck, addOnCost]);
+        }, [addOnOptions, totalQty, productType, isSlopeForcedByNeck, addOnDefinitions, selectedNeck, computedAddOnCost]);
 
   // NEW: Calculate sizing surcharge
     const sizingSurcharge = productType === 'shirt' ? oversizeSurchargeQty * 100 : 0;
 
-  const productSubtotal = totalQty * basePrice;
+    const productSubtotal = Number(totalQty) * Number(basePrice || 0);
   // neckExtraPrice รวมเข้า basePrice แล้ว ไม่ต้องบวกแยก
-  const totalBeforeCalc = productSubtotal + sizingSurcharge + addOnOptionsTotal + addOnCost + shippingCost - discount;
-    
+    const totalBeforeCalc = Number(productSubtotal || 0) + Number(sizingSurcharge || 0) + Number(addOnOptionsTotal || 0) + Number(manualAddOnCost || 0) + Number(shippingCost || 0) - Number(discount || 0);
+
     let vatAmount = 0, grandTotal = 0;
     if (isVatIncluded) {
         // VAT already included in prices
-        vatAmount = totalBeforeCalc * (config.vat_rate / (1 + config.vat_rate));
-        grandTotal = totalBeforeCalc;
+        vatAmount = Number(totalBeforeCalc) * (Number(config.vat_rate) / (1 + Number(config.vat_rate)));
+        grandTotal = Number(totalBeforeCalc);
     } else {
         // VAT not included yet
-        vatAmount = totalBeforeCalc * config.vat_rate;
-        grandTotal = totalBeforeCalc + vatAmount;
+        vatAmount = Number(totalBeforeCalc) * Number(config.vat_rate);
+        grandTotal = Number(totalBeforeCalc) + Number(vatAmount);
     }
   
   // NEW: 50/50 deposit calculation
@@ -2128,7 +2400,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         console.log("===========================");
         
         // Build final items list: combine previously added items and current form item (if any)
-        const finalItems = [...orderItems];
+        let finalItems = [...orderItems];
         if (totalQty > 0) {
             const productName = productType === 'sportsPants'
                 ? 'กางเกงกีฬา'
@@ -2169,6 +2441,46 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             return;
         }
 
+        // If we're editing an existing order, prefer preserving stored per-item
+        // pricing for items that haven't changed in identity/quantities/add-ons.
+        // This prevents accidental recalculation when the user only edits metadata/status.
+        if (editingOrder && editingOrder.items && editingOrder.items.length > 0) {
+            try {
+                const savedItems = editingOrder.items.map(it => {
+                    let qm = it.quantity_matrix;
+                    try {
+                        if (typeof qm === 'string') qm = JSON.parse(qm);
+                    } catch {
+                        qm = {};
+                    }
+                    return { ...it, quantity_matrix: qm };
+                });
+
+                finalItems = finalItems.map(fi => {
+                    const match = savedItems.find(si =>
+                        (si.product_name || '') === (fi.product_name || '') &&
+                        (si.fabric_type || '') === (fi.fabric_type || '') &&
+                        (si.neck_type || '') === (fi.neck_type || '') &&
+                        (si.sleeve_type || '') === (fi.sleeve_type || '') &&
+                        JSON.stringify(si.quantity_matrix || {}) === JSON.stringify(fi.quantity_matrix || {}) &&
+                        JSON.stringify(si.selected_add_ons || []) === JSON.stringify(fi.selected_add_ons || []) &&
+                        Boolean(si.is_oversize) === Boolean(fi.is_oversize)
+                    );
+                    if (match) {
+                        // Copy persisted pricing fields when available
+                        fi.price_per_unit = (match.price_per_unit !== undefined) ? match.price_per_unit : fi.price_per_unit;
+                        fi.total_price = (match.total_price !== undefined) ? match.total_price : fi.total_price;
+                        fi.total_cost = (match.total_cost !== undefined) ? match.total_cost : fi.total_cost;
+                        fi.item_addon_total = (match.item_addon_total !== undefined) ? match.item_addon_total : fi.item_addon_total;
+                        fi.slope_included_in_base = (match.slope_included_in_base !== undefined) ? match.slope_included_in_base : fi.slope_included_in_base;
+                    }
+                    return fi;
+                });
+            } catch (err) {
+                console.error('Error while preserving saved item prices:', err);
+            }
+        }
+
         const orderData = {
             order_no: customerId.trim(),
             customer_name: customerName && customerName.trim() !== "" ? customerName.trim() : null,
@@ -2180,7 +2492,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             design_fee: Number(designFee) || 0,
             product_type: productType,
             shipping_cost: Number(shippingCost) || 0,
-            add_on_cost: Number(addOnCost) || 0,
+                add_on_cost: Number(manualAddOnCost) || 0,
             sizing_surcharge: Number(sizingSurcharge) || 0,
             add_on_options_total: Number(addOnOptionsTotal) || 0,
             discount_type: "THB",
@@ -2192,7 +2504,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             is_vat_included: Boolean(isVatIncluded),
             status: status || "draft",
             urgency_level: urgencyStatus || "normal",
-            deadline: deadline && deadline.trim() !== "" ? new Date(deadline).toISOString() : null,
+            // 🟢 โคลนค่าวันที่จัดส่ง ไปเป็น deadline อัตโนมัติ เพื่อให้คำนวณ Urgency และโชว์ในตาราง
+            deadline: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             usage_date: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             note: note && note.trim() !== "" ? note.trim() : null,
             advance_hold: Number(advanceHold) || 0,
@@ -2201,7 +2514,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
         console.log("Sending order data:", JSON.stringify(orderData, null, 2));
 
-        const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders/';
+        const url = editingOrder ? `/orders/${editingOrder.id}` : '/orders';
         const method = editingOrder ? 'PUT' : 'POST';
         
         const response = await fetchWithAuth(url, {
@@ -2210,13 +2523,24 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         });
         
         console.log("Order saved successfully:", response);
+        // If backend returned a public UUID, build a payment link for customer
+        if (response && response.order_uuid) {
+            const payPath = `/pay/${response.order_uuid}`;
+            const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+            setPaymentUrl(`${origin}${payPath}`);
+        } else {
+            setPaymentUrl(null);
+        }
+
         onNotify(editingOrder ? "แก้ไขออเดอร์สำเร็จ" : "สร้างออเดอร์สำเร็จ", "success");
         setShowSuccess(true);
-        
-        // Navigate back to order list after 1.5 seconds
-        setTimeout(() => {
-            onNavigate('order_list');
-        }, 1500);
+
+        // If there's no immediate payment link, auto-navigate back after 1.5s
+        if (!response || !response.order_uuid) {
+            setTimeout(() => {
+                onNavigate('order_list');
+            }, 1500);
+        }
     } catch (e) {
         console.error("Order save error:", e);
         onNotify("บันทึกไม่สำเร็จ: " + e.message, "error");
@@ -2229,18 +2553,19 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
-  useEffect(() => {
-    if (!deadline) { setUrgencyStatus("normal"); return; }
-    const diffDays = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24)); 
+    // 🟢 คำนวณความด่วน (Urgency) จากช่องวันที่จัดส่งช่องเดียว
+    useEffect(() => {
+        if (!deliveryDate) { setUrgencyStatus("normal"); return; }
+        const diffDays = Math.ceil((new Date(deliveryDate) - new Date()) / (1000 * 60 * 60 * 24));
         // Red: 3-5 days, Yellow: 7-10 days, Green: 10-14 days (default)
         if (diffDays <= 5) {
-      setUrgencyStatus("critical");
-    } else if (diffDays <= 10) {
-      setUrgencyStatus("warning");
-    } else {
-      setUrgencyStatus("normal");
-    }
-  }, [deadline]);
+            setUrgencyStatus("critical");
+        } else if (diffDays <= 10) {
+            setUrgencyStatus("warning");
+        } else {
+            setUrgencyStatus("normal");
+        }
+    }, [deliveryDate]);
 
   const theme = {
     critical: { border: "border-l-8 border-rose-500", header: "bg-rose-500 text-white", invoiceBg: "bg-rose-500" },
@@ -2269,7 +2594,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             phoneNumber,
             contactChannel,
             address,
-            deadline,
+            deadline: deliveryDate,
             deliveryDate,
             brand,
             quantities,
@@ -2279,8 +2604,9 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             sizingSurcharge,
             oversizeSurchargeQty,
             addOnOptionsTotal,
-            selectedAddOns: ADDON_OPTIONS.filter(opt => addOnOptions[opt.id]),
-            addOnCost, 
+            // Use authoritative add-on definitions (backend or user-edited) for preview display
+            selectedAddOns: (addOnDefinitionsRef.current && addOnDefinitionsRef.current.length > 0 ? addOnDefinitionsRef.current : ADDON_OPTIONS).filter(opt => addOnOptions[opt.id]),
+            manualAddOnCost, 
             shippingCost, 
             discount, 
             isVatIncluded, 
@@ -2303,7 +2629,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                 <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full">
                     <div className="w-16 sm:w-20 h-16 sm:h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5"><CheckCircle size={40} className="sm:w-12 sm:h-12 text-emerald-500"/></div>
                     <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">บันทึกสำเร็จ!</h3>
-                    <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                    {/* If a payment URL exists, show it under the success text */}
+                    {paymentUrl ? (
+                        <div className="mt-2 text-sm text-slate-700">
+                            <div className="mb-3">บันทึกเสร็จสิ้น — ส่งลิงก์จ่ายเงินให้ลูกค้าได้ทันที</div>
+                            <a href={paymentUrl} target="_blank" rel="noreferrer" className="inline-block text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-bold mr-2">จ่ายตอนนี้</a>
+                            <button onClick={() => { navigator.clipboard.writeText(paymentUrl); onNotify('คัดลอกลิงก์การจ่ายเงินแล้ว', 'success'); }} className="inline-block text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg font-medium">คัดลอกลิงก์</button>
+                            <div className="mt-3 text-xs text-gray-500 break-all">{paymentUrl}</div>
+                            <button onClick={() => { setShowSuccess(false); setPaymentUrl(null); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                        </div>
+                    ) : (
+                        <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                    )}
                 </div>
             </div>
         )}
@@ -2383,14 +2720,15 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                         <input type="text" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="แอดมิน" value={graphicCode} onChange={e => setGraphicCode(e.target.value)} />
                         
                         <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
-                        <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+
+                        {/* 🟢 ย้ายช่องวันที่จัดส่งขึ้นมาแทนที่เดิม */}
+                        <div className="flex flex-col">
+                            <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+                            <span className="text-[10px] text-gray-400 mt-1 ml-1">กำหนดส่ง</span>
+                        </div>
+
                         <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" placeholder="ที่อยู่" value={address} onChange={e => setAddress(e.target.value)}></textarea>
                         <textarea className="col-span-1 md:col-span-2 border-gray-200 border p-2.5 md:p-3 rounded-xl bg-yellow-50 focus:bg-white transition text-sm md:text-base" placeholder="หมายเหตุ (Note)" value={note} onChange={e => setNote(e.target.value)}></textarea>
-                    
-                        <div>
-                            <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">วันที่จัดส่ง</label>
-                            <input type="date" className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
-                        </div>
 
                         <div>
                             <label className="block text-xs md:text-sm font-bold text-gray-700 mb-1">สถานะงาน</label>
@@ -2429,18 +2767,26 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                             <label className="block text-xs md:text-sm mb-1 text-gray-500">คอเสื้อ</label>
                             <select className="w-full border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={selectedNeck} onChange={e => setSelectedNeck(e.target.value)} disabled={productType !== 'shirt'}>
                                 <option value="">-- เลือกคอ --</option>
-                                {availableNeckTypes.map(n => (
-                                    <option key={n.id} value={n.name}>
-                                        {n.name}
-                                        {n.extraPrice > 0 && n.forceSlope ? (
-                                            <span> (+{n.extraPrice} รวมใน basePrice, บังคับไหล่สโลป)</span>
-                                        ) : n.extraPrice > 0 ? (
-                                            <span> (+{n.extraPrice} รวมใน basePrice)</span>
-                                        ) : n.forceSlope ? (
-                                            <span> (บังคับไหล่สโลป+40 บาท/ตัว)</span>
-                                        ) : null}
-                                    </option>
-                                ))}
+                                {availableNeckTypes.map(n => {
+                                    const cleanedName = collapseDuplicateAnnotation(n.name || '');
+                                    const hasForceText = (cleanedName || '').includes('บังคับ');
+                                    // Determine slope price: prefer neck.extraPrice, fallback to backend addon definition, default 40
+                                    const slopeAddonDef = (addOnDefinitions || []).find(a => a.id === 'slopeShoulder');
+                                    const slopePrice = Number(n.extraPrice || 0) > 0 ? Number(n.extraPrice) : (slopeAddonDef ? Number(slopeAddonDef.price) : 40);
+                                    return (
+                                        <option key={n.id} value={cleanedName}>
+                                            {cleanedName}
+                                            {(() => {
+                                                if (Number(n.extraPrice || 0) > 0 && n.forceSlope) {
+                                                    return hasForceText ? null : <span> (+{slopePrice} รวมใน basePrice, บังคับไหล่สโลป)</span>;
+                                                }
+                                                if (Number(n.extraPrice || 0) > 0) return <span> (+{n.extraPrice} รวมใน basePrice)</span>;
+                                                if (n.forceSlope) return hasForceText ? null : <span> (บังคับไหล่สโลป+{slopePrice} บาท/ตัว)</span>;
+                                                return null;
+                                            })()}
+                                        </option>
+                                    );
+                                })}
                             </select>
                             {neckExtraPrice > 0 && (
                                 <div className="mt-1 text-xs text-orange-600 font-medium">
@@ -2654,7 +3000,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                                     </div>
                                 )}
                                 
-                                <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={addOnCost} onChange={e => setAddOnCost(Number(e.target.value))}/></div>
+                                <div className="flex justify-between items-center"><span>ค่าบล็อก/อื่นๆ</span><input type="number" className="w-16 md:w-20 text-right border-gray-200 border rounded p-1 bg-gray-50 text-xs md:text-base" value={manualAddOnCost} onChange={e => setManualAddOnCost(Number(e.target.value))}/></div>
                                 <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
                                   <span className="font-semibold">ค่าขนส่ง (อัตโนมัติ)</span>
                                   <span className="font-bold">{shippingCost.toLocaleString()} ฿</span>
@@ -2781,7 +3127,7 @@ const ProductPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add"); 
   const [editingItem, setEditingItem] = useState(null);
-  const [newItem, setNewItem] = useState({ name: "", quantity: 0, cost_price: 0 });
+    const [newItem, setNewItem] = useState({ name: "", quantity: 0, cost_price: 0, additional_cost: 0 });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -2800,7 +3146,7 @@ const ProductPage = () => {
 
   const openAddModal = () => {
       setModalMode("add");
-      setNewItem({ name: "", quantity: 0, cost_price: 0 });
+      setNewItem({ name: "", quantity: 0, cost_price: 0, additional_cost: 0 });
       setIsModalOpen(true);
   };
 
@@ -2810,7 +3156,8 @@ const ProductPage = () => {
       setNewItem({ 
           name: item.name, 
           quantity: item.quantity || 0,
-          cost_price: item.cost_price || 0 
+          cost_price: item.cost_price || 0,
+          additional_cost: item.additional_cost || item.cost_price || 0
       });
       setIsModalOpen(true);
   };
@@ -2818,9 +3165,10 @@ const ProductPage = () => {
   const handleAdd = async () => {
       try {
           const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
+          const payload = { ...newItem, additional_cost: newItem.additional_cost !== undefined ? newItem.additional_cost : newItem.cost_price };
           await fetchWithAuth(endpoint, {
               method: 'POST',
-              body: JSON.stringify(newItem)
+              body: JSON.stringify(payload)
           });
           setIsModalOpen(false);
           setNewItem({ name: "", quantity: 0, cost_price: 0 });
@@ -2831,13 +3179,14 @@ const ProductPage = () => {
   const handleEdit = async () => {
       try {
           const endpoint = activeTab === 'ชนิดผ้า' ? '/products/fabrics' : activeTab === 'รูปแบบคอ' ? '/products/necks' : '/products/sleeves';
+          const payload = { ...newItem, additional_cost: newItem.additional_cost !== undefined ? newItem.additional_cost : newItem.cost_price };
           await fetchWithAuth(`${endpoint}/${editingItem.id}`, {
               method: 'PUT',
-              body: JSON.stringify(newItem)
+              body: JSON.stringify(payload)
           });
           setIsModalOpen(false);
           setEditingItem(null);
-          setNewItem({ name: "", quantity: 0, cost_price: 0 });
+          setNewItem({ name: "", quantity: 0, cost_price: 0, additional_cost: 0 });
           fetchItems();
       } catch (e) { alert("Failed to update: " + e.message); }
   };
@@ -2990,9 +3339,16 @@ const ProductPage = () => {
                     <tbody className="divide-y divide-gray-200">
                         {paginatedItems.map((item) => (
                             <tr key={item.id} className="hover:bg-gray-50 transition group border-b border-gray-200">
-                                <td className="py-4 px-6 font-bold text-gray-700 text-center border-r border-gray-200">{item.name}</td>
+                                <td className="py-4 px-6 font-bold text-gray-700 text-center border-r border-gray-200">{collapseDuplicateAnnotation(item.name)}</td>
                                 <td className="py-4 px-6 text-center text-gray-600 font-medium border-r border-gray-200">
-                                    {item.cost_price ? `฿${parseFloat(item.cost_price).toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-'}
+                                    {(() => {
+                                        // Prefer cost_price, fall back to additional_cost or price_adjustment
+                                        const cp = Number(item.cost_price || 0);
+                                        const add = Number(item.additional_cost || 0);
+                                        const adj = Number(item.price_adjustment || 0);
+                                        const display = cp || add || adj || 0;
+                                        return display > 0 ? `฿${display.toLocaleString('th-TH', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
+                                    })()}
                                 </td>
                                 <td className="py-4 px-6 text-center">
                                     <div className="flex justify-center gap-3">
@@ -3321,269 +3677,248 @@ const CustomerPage = () => {
 
 // 2.5 ORDER LIST PAGE (UPDATED: Toast & Table Layout)
 const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => {
-  const [orders, setOrders] = useState([]);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(""); 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [detailOrder, setDetailOrder] = useState(null);
-  const itemsPerPage = 10;
-   
-  const fetchOrders = useCallback(async () => {
-      setLoading(true);
-      try {
-          const data = await fetchWithAuth('/orders/');
-          setOrders(data || []);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-  }, []);
+    const [orders, setOrders] = useState([]);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [currentPage, setCurrentPage] = useState(1);
+    const [detailOrder, setDetailOrder] = useState(null);
+    const itemsPerPage = 10;
+  
+    // State สำหรับ Payment Popup
+    const [showPaymentPopup, setShowPaymentPopup] = useState(false);
+    const [paymentOrder, setPaymentOrder] = useState(null);
 
-  useEffect(() => {
-      fetchOrders();
-  }, [fetchOrders]);
+    const fetchOrders = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/orders');
+            setOrders(data || []);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
 
-  const handleDelete = async (id) => {
-      try {
-          // Get the order to find the customer_id
-          const orderToDelete = orders.find(o => o.id === id);
-          
-          // Delete the order
-          await fetchWithAuth(`/orders/${id}`, { method: 'DELETE' });
-          
-          // If order has a customer_id, delete the customer as well
-          if (orderToDelete && orderToDelete.customer_id) {
-              try {
-                  await fetchWithAuth(`/customers/${orderToDelete.customer_id}`, { method: 'DELETE' });
-              } catch (err) {
-                  console.warn("Could not delete customer:", err);
-              }
-          }
-          
-          setDeleteConfirm(null);
-          fetchOrders();
-      } catch (e) { alert("Error: " + e.message); }
-  };
+    useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  const handleStatusChange = async (orderId, newStatus) => {
-      try {
-          const order = orders.find(o => o.id === orderId);
-          if (!order) return;
-          
-          await fetchWithAuth(`/orders/${orderId}`, {
-              method: 'PUT',
-              body: JSON.stringify({
-                  ...order,
-                  status: newStatus,
-                  customer_name: order.customer_name,
-                  phone: order.phone,
-                  contact_channel: order.contact_channel,
-                  address: order.address,
-                  items: []
-              })
-          });
-          onNotify(`เปลี่ยนสถานะเป็น ${newStatus} สำเร็จ`, "success");
-          fetchOrders();
-      } catch (e) { 
-          onNotify("เปลี่ยนสถานะไม่สำเร็จ: " + e.message, "error");
-      }
-  };
+    const handleDelete = async (id) => {
+        try {
+            const orderToDelete = orders.find(o => o.id === id);
+            await fetchWithAuth(`/orders/${id}`, { method: 'DELETE' });
+            if (orderToDelete && orderToDelete.customer_id) {
+                try { await fetchWithAuth(`/customers/${orderToDelete.customer_id}`, { method: 'DELETE' }); } catch (err) { console.warn("Could not delete customer:", err); }
+            }
+            setDeleteConfirm(null);
+            fetchOrders();
+        } catch (e) { alert("Error: " + e.message); }
+    };
 
-  const filteredOrders = useMemo(() => {
-    if (!orders) return [];
-     
-    let data = orders;
-    switch (filterType) {
-        case 'pending':
-            data = data.filter(o => o.status !== 'delivered');
-            break;
-        case 'revenue':
-            data = data.filter(o => o.status === 'delivered');
-            break;
-        case 'urgent':
-            data = data.filter(o => {
-                if (!o.deadline) return false;
-                const diff = new Date(o.deadline) - new Date();
-                return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000;
+    const handleStatusChange = async (orderId, newStatus) => {
+        try {
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+            // 1. ยิง API เปลี่ยนสถานะ
+            await fetchWithAuth(`/orders/${orderId}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: newStatus })
             });
-            break;
-        default: break;
-    }
 
-    if (searchTerm.trim() !== "") {
-        const lowerTerm = searchTerm.toLowerCase();
-        data = data.filter(o => 
-            (o.order_no || "").toLowerCase().includes(lowerTerm) ||
-            (o.customer_name || "").toLowerCase().includes(lowerTerm) ||
-            (o.contact_channel || "").toLowerCase().includes(lowerTerm) ||
-            (o.phone || "").includes(lowerTerm)
-        );
-    }
-    return data;
-  }, [orders, filterType, searchTerm]);
+            onNotify(`เปลี่ยนสถานะเป็น ${newStatus} สำเร็จ`, "success");
+            fetchOrders(); // รีเฟรชตาราง
 
-  const handleExportCSV = () => {
-      if (filteredOrders.length === 0) { 
-          onNotify("ไม่มีข้อมูลสำหรับ Export", "error"); 
-          return; 
-      }
-      const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
-      const rows = filteredOrders.map(order => [
-          `"${order.order_no}"`,
-          `"${order.customer_name || ''}"`,
-          `"${order.contact_channel || ''}"`,
-          `"${order.phone || ''}"`,
-          `"${order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : ''}"`,
-          `"${order.grand_total || 0}"`,
-          `"${order.deposit || 0}"`,
-          `"${order.status || 'draft'}"`
-      ]);
-      const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
+            // 2. ถ้าเป็นสถานะ "จัดส่ง" ให้เปิด Popup ลิงก์จ่ายเงินยอดคงเหลือ
+            if (newStatus === 'จัดส่ง') {
+                // ดึงข้อมูลออเดอร์ล่าสุดจาก Backend เพื่อให้ได้ยอด balance_amount ที่เป๊ะที่สุด
+                const updatedOrder = await fetchWithAuth(`/orders/${orderId}`);
+                setPaymentOrder(updatedOrder || order);
+                setShowPaymentPopup(true);
+            }
 
-  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-  const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+        } catch (e) { 
+            onNotify("เปลี่ยนสถานะไม่สำเร็จ: " + e.message, "error");
+        }
+    };
 
-  return (
-    <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
-      {/* Invoice Modal for Order Detail */}
-      {detailOrder && (
-        <InvoiceModal 
-                    data={buildInvoiceDataFromOrder(detailOrder)}
-          onClose={() => setDetailOrder(null)}
-        />
-      )}
+    const filteredOrders = useMemo(() => {
+        if (!orders) return [];
+        let data = orders;
+        switch (filterType) {
+            case 'pending': data = data.filter(o => o.status !== 'delivered'); break;
+            case 'revenue': data = data.filter(o => o.status === 'delivered'); break;
+            case 'urgent':
+                data = data.filter(o => { if (!o.deadline) return false; const diff = new Date(o.deadline) - new Date(); return diff > 0 && diff < 5 * 24 * 60 * 60 * 1000; });
+                break;
+            default: break;
+        }
+        if (searchTerm.trim() !== "") {
+            const lowerTerm = searchTerm.toLowerCase();
+            data = data.filter(o => (o.order_no || "").toLowerCase().includes(lowerTerm) || (o.customer_name || "").toLowerCase().includes(lowerTerm) || (o.contact_channel || "").toLowerCase().includes(lowerTerm) || (o.phone || "").includes(lowerTerm));
+        }
+        return data;
+    }, [orders, filterType, searchTerm]);
 
-      {deleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
-                  <div className="flex items-center mb-3 sm:mb-4">
-                      <AlertCircle className="text-rose-500 mr-2 sm:mr-3" size={20} />
-                      <h3 className="text-base sm:text-lg font-bold">ยืนยันการลบออเดอร์</h3>
-                  </div>
-                  <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
-                  <div className="flex justify-end gap-2">
-                      <button onClick={() => setDeleteConfirm(null)} className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
-                      <button onClick={() => handleDelete(deleteConfirm.id)} className="px-3 sm:px-4 py-2 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
-                  </div>
-              </div>
-          </div>
-      )}
+    const handleExportCSV = () => {
+        if (filteredOrders.length === 0) { onNotify("ไม่มีข้อมูลสำหรับ Export", "error"); return; }
+        const headers = ["Order No", "Customer", "Contact", "Phone", "Deadline", "Total Amount", "Deposit", "Status"];
+        const rows = filteredOrders.map(order => [ `"${order.order_no}"`, `"${order.customer_name || ''}"`, `"${order.contact_channel || ''}"`, `"${order.phone || ''}"`, `"${order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : ''}"`, `"${order.grand_total || 0}"`, `"${order.deposit || 0}"`, `"${order.status || 'draft'}"` ]);
+        const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `orders_export_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
-      <header className="mb-4 sm:mb-6 md:mb-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
-            <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
-                <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
-            </div>
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+    const paginatedOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-            <div className="flex flex-row gap-2 w-full sm:w-auto">
-                {/* Search bar */}
-                <div className="relative flex-1 sm:min-w-[200px]">
-                    <Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} />
-                    <input 
-                        type="text" 
-                        placeholder="ค้นหา..." 
-                        className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
-                    <Download size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> Export
-                </button>
-                <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm">
-                    <Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> สร้างใหม่
-                </button>
-            </div>
-        </div>
-      </header>
-        
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
-        <div className="p-0 sm:p-1 md:p-2 overflow-x-auto flex-1">
-            {loading ? <p className="text-center text-slate-500 py-6 sm:py-10 text-sm">Loading...</p> : (
-                <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed border-collapse">
-                    <thead>
-                        <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">รหัสงาน</th>
-                            <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
-                            <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">สถานะ</th>
-                            <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {paginatedOrders.map((order) => (
-                            <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer border-b border-gray-200" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
-                                <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
-                                <td className="py-4 px-6 text-gray-700 truncate text-center border-r border-gray-200">
-                                    <div className="font-medium truncate">{order.customer_name}</div>
-                                    <div className="text-xs text-gray-400">{order.contact_channel}</div>
-                                </td>
-                                <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">
-                                    {order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}
-                                </td>
-                                <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
-                                <td className="py-4 px-6 text-center border-r border-gray-200">
-                                    <select 
-                                        value={order.status || 'draft'}
-                                        onClick={(e) => e.stopPropagation()}
-                                        onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }}
-                                        className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition"
+    return (
+        <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
+
+            {/* 🟢 Payment Link Popup (ลิงก์จ่ายเงินยอดคงเหลือ) */}
+            {showPaymentPopup && paymentOrder && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
+                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full animate-in zoom-in-95 duration-200">
+                        <div className="w-16 sm:w-20 h-16 sm:h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5">
+                            <CheckCircle size={40} className="sm:w-12 sm:h-12 text-emerald-500"/>
+                        </div>
+                        
+                        {/* เปลี่ยน Text ตามที่ต้องการ */}
+                        <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">เปลี่ยนสถานะเป็น จัดส่ง สำเร็จ!</h3>
+                        <p className="text-slate-600 mb-4 text-sm">ระบบได้สร้างลิงก์ชำระเงินสำหรับออเดอร์ <span className="font-bold">{paymentOrder.order_no}</span></p>
+
+                        {paymentOrder.order_uuid ? (
+                            <div className="mt-2 text-sm text-slate-700 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div className="mb-3 font-bold text-slate-800 text-sm text-left flex items-center gap-2">
+                                    <span className="text-xl">🔗</span> ลิงก์ชำระเงินยอดคงเหลือ
+                                </div>
+                                
+                                {/* กล่องแสดงยอดคงเหลือ (Balance Amount) */}
+                                <div className="flex justify-between items-center mb-5 bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                    <span className="text-gray-600 font-medium text-xs sm:text-sm">ยอดคงเหลือที่ต้องชำระ:</span>
+                                    <span className="font-black text-xl sm:text-2xl text-rose-600">{Number(paymentOrder.balance_amount || 0).toLocaleString()} ฿</span>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <a 
+                                        href={`${window.location.origin}/pay/${paymentOrder.order_uuid}`} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="flex-1 text-white bg-[#1a1c23] hover:bg-slate-800 px-4 py-2.5 rounded-lg font-bold transition flex items-center justify-center shadow-md"
                                     >
-                                        <option value="ร่าง">ร่าง</option>
-                                        <option value="ออกแบบ">ออกแบบ</option>
-                                        <option value="รออนุมัติ">รออนุมัติ</option>
-                                        <option value="ผลิต">ผลิต</option>
-                                        <option value="จัดส่ง">จัดส่ง</option>
-                                        <option value="ส่งแล้ว">ส่งแล้ว</option>
-                                    </select>
-                                </td>
-                                <td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex justify-center gap-3">
-                                        <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}>
-                                            <Edit size={16}/>
-                                        </button>
-                                        <button className="text-gray-400 hover:text-rose-500 transition" title="ลบ" onClick={() => setDeleteConfirm(order)}>
-                                            <Trash2 size={16}/>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredOrders.length === 0 && (
-                            <tr>
-                                <td colSpan="6" className="py-12 text-center">
-                                    <div className="flex flex-col items-center justify-center text-slate-400">
-                                        <FileText size={48} className="mb-3 opacity-50" />
-                                        <p className="text-lg font-medium">ไม่พบรายการ</p>
-                                    </div>
-                                </td>
-                            </tr>
+                                        เปิดลิงก์
+                                    </a>
+                                    <button 
+                                        onClick={() => { 
+                                            navigator.clipboard.writeText(`${window.location.origin}/pay/${paymentOrder.order_uuid}`); 
+                                            onNotify('คัดลอกลิงก์การจ่ายเงินยอดคงเหลือแล้ว', 'success'); 
+                                        }} 
+                                        className="flex-1 text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-lg font-bold transition shadow-sm"
+                                    >
+                                        คัดลอกลิงก์
+                                    </button>
+                                </div>
+                                <div className="mt-3 text-[10px] text-gray-400 break-all bg-gray-100 p-1.5 rounded text-left">{`${window.location.origin}/pay/${paymentOrder.order_uuid}`}</div>
+                            </div>
+                        ) : (
+                            <div className="mt-2 p-3 bg-amber-50 text-amber-700 rounded-lg text-sm border border-amber-200">
+                                <AlertCircle size={16} className="inline mr-1" /> ไม่พบลิงก์ชำระเงินสำหรับออเดอร์เก่านี้
+                            </div>
                         )}
-                    </tbody>
-                </table>
+                        
+                        <button 
+                            onClick={() => { setShowPaymentPopup(false); setPaymentOrder(null); }} 
+                            className="w-full bg-gray-200 text-slate-800 font-bold py-2.5 sm:py-3 rounded-xl mt-4 hover:bg-gray-300 transition"
+                        >
+                            ปิดหน้าต่าง
+                        </button>
+                    </div>
+                </div>
             )}
+
+            {/* Invoice Modal for Order Detail */}
+            {detailOrder && (<InvoiceModal data={buildInvoiceDataFromOrder(detailOrder)} onClose={() => setDetailOrder(null)} />)}
+
+            {deleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="bg-white p-4 sm:p-6 rounded-xl w-full max-w-sm sm:max-w-md shadow-xl">
+                        <div className="flex items-center mb-3 sm:mb-4"><AlertCircle className="text-rose-500 mr-2 sm:mr-3" size={20} /><h3 className="text-base sm:text-lg font-bold">ยืนยันการลบออเดอร์</h3></div>
+                        <p className="text-sm sm:text-base text-slate-600 mb-4 sm:mb-6">คุณต้องการลบออเดอร์ <span className="font-bold">"{deleteConfirm.order_no}"</span> ใช่หรือไม่?</p>
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setDeleteConfirm(null)} className="px-3 sm:px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition">ยกเลิก</button>
+                            <button onClick={() => handleDelete(deleteConfirm.id)} className="px-3 sm:px-4 py-2 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition">ลบ</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <header className="mb-4 sm:mb-6 md:mb-8">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-4">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1c23]">รายการออเดอร์</h1>
+                        <p className="text-xs sm:text-sm md:text-base text-gray-500 font-medium">จัดการและติดตามสถานะการผลิต</p>
+                    </div>
+                    <div className="flex flex-row gap-2 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:min-w-[200px]"><Search className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} /><input type="text" placeholder="ค้นหา..." className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-sm bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1a1c23]" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                        <button onClick={handleExportCSV} className="bg-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl flex items-center hover:bg-emerald-700 transition shadow-lg whitespace-nowrap text-xs sm:text-sm"><Download size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> Export</button>
+                        <button onClick={() => onNavigate('create_order')} className="bg-[#1a1c23] text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold flex items-center hover:bg-slate-800 transition shadow-lg whitespace-nowrap text-xs sm:text-sm"><Plus size={14} className="sm:w-[18px] sm:h-[18px] mr-1 sm:mr-2"/> สร้างใหม่</button>
+                    </div>
+                </div>
+            </header>
+
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[350px] sm:min-h-[400px] md:min-h-[500px]">
+                <div className="p-0 sm:p-1 md:p-2 overflow-x-auto flex-1">
+                    {loading ? <p className="text-center text-slate-500 py-6 sm:py-10 text-sm">Loading...</p> : (
+                        <table className="w-full text-left min-w-[600px] sm:min-w-[700px] md:min-w-[800px] table-fixed border-collapse">
+                            <thead>
+                                <tr className="border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">รหัสงาน</th>
+                                    <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
+                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">สถานะ</th>
+                                    <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {paginatedOrders.map((order) => (
+                                    <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer border-b border-gray-200" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
+                                        <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
+                                        <td className="py-4 px-6 text-gray-700 truncate text-center border-r border-gray-200"><div className="font-medium truncate">{order.customer_name}</div><div className="text-xs text-gray-400">{order.contact_channel}</div></td>
+                                        <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">{order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}</td>
+                                        <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
+                                        <td className="py-4 px-6 text-center border-r border-gray-200">
+                                            <select value={order.status || 'draft'} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }} className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition">
+                                                <option value="ร่าง">ร่าง</option>
+                                                <option value="ออกแบบ">ออกแบบ</option>
+                                                <option value="รออนุมัติ">รออนุมัติ</option>
+                                                <option value="ผลิต">ผลิต</option>
+                                                <option value="จัดส่ง">จัดส่ง</option>
+                                                <option value="ส่งแล้ว">ส่งแล้ว</option>
+                                            </select>
+                                        </td>
+                                        <td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex justify-center gap-3">
+                                                <button className="text-gray-400 hover:text-[#1a1c23] transition" title="แก้ไข" onClick={() => onEdit(order)}><Edit size={16}/></button>
+                                                <button className="text-gray-400 hover:text-rose-500 transition" title="ลบ" onClick={() => setDeleteConfirm(order)}><Trash2 size={16}/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredOrders.length === 0 && (
+                                    <tr><td colSpan="6" className="py-12 text-center"><div className="flex flex-col items-center justify-center text-slate-400"><FileText size={48} className="mb-3 opacity-50" /><p className="text-lg font-medium">ไม่พบรายการ</p></div></td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+                {/* Pagination Controls */}
+                {totalPages > 1 && (<PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />)}
+            </div>
         </div>
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-            <PaginationControls 
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-            />
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
 // 2.6 SETTINGS PAGE (UPDATED: Delete Modal & Save Notify)
@@ -4143,6 +4478,17 @@ const NavItem = ({ icon, label, active, onClick }) => (
 
 // --- 3. MAIN APP (Revised Sidebar & Routing) ---
 const App = () => {
+    // Public payment pages (mounted before admin UI)
+    try{
+        const _pathname = window.location.pathname || '';
+        if(_pathname.startsWith('/pay/')){
+            const uuid = _pathname.split('/pay/')[1] || '';
+            return <CustomerPayment uuid={uuid} />;
+        }
+        if(_pathname === '/payment-success'){
+            return <PaymentSuccess />;
+        }
+    } catch { /* ignore when SSR or not available */ }
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
   const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'user'); // Add State for Role
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -4289,7 +4635,7 @@ const App = () => {
 
        <main className="flex-1 overflow-auto h-[calc(100vh-52px)] sm:h-[calc(100vh-56px)] md:h-screen w-full relative">{renderContent()}</main>
     </div>
-  );
+    );
 };
 
 export default App;
