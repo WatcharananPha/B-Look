@@ -821,7 +821,7 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
                     {/* Front Image */}
                     <div className="aspect-square bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
                         {image3DFront ? (
-                            <img src={image3DFront} alt="Front" className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                            <img src={image3DFront} alt="Front" className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
                         ) : null}
                         <div className={`${image3DFront ? 'hidden' : 'flex'} flex-col items-center justify-center text-gray-400 text-xs text-center p-2`}>
                             <Box size={32} className="mb-2 opacity-50" />
@@ -831,7 +831,7 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
                     {/* Back Image */}
                     <div className="aspect-square bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
                         {image3DBack ? (
-                            <img src={image3DBack} alt="Back" className="w-full h-full object-contain" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                            <img src={image3DBack} alt="Back" className="w-full h-full object-cover" onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
                         ) : null}
                         <div className={`${image3DBack ? 'hidden' : 'flex'} flex-col items-center justify-center text-gray-400 text-xs text-center p-2`}>
                             <Box size={32} className="mb-2 opacity-50" />

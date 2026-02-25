@@ -166,6 +166,8 @@ def startup_repair():
 
 # Ensure static directory exists for uploaded slips
 os.makedirs(os.path.join(os.getcwd(), "static", "slips"), exist_ok=True)
+# Ensure static/mockups exists for uploaded mockup images
+os.makedirs(os.path.join(os.getcwd(), "static", "mockups"), exist_ok=True)
 
 
 # --- ROUTERS ---
