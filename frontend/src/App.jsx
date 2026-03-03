@@ -1053,7 +1053,7 @@ const buildInvoiceDataFromOrder = (order) => {
 };
 
 // 2.1 ORDER DETAIL MODAL (Reuses invoice structure)
-const OrderDetailModal = ({ order, onClose }) => {
+const OrderDetailModal = ({ order, onClose, onRefresh }) => {
     if (!order) {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -1073,7 +1073,7 @@ const OrderDetailModal = ({ order, onClose }) => {
             <InvoiceModal data={data} onClose={onClose} paymentLink={order.payment_link || null} />
             {/* Admin extras positioned so it appears above the modal (top-right) */}
             <div style={{position:'fixed', right:24, top:96, zIndex:70}}>
-                <OrderAdminExtras order={order} onApproved={() => { /* no-op: caller may refresh list */ }} />
+                <OrderAdminExtras order={order} onApproved={() => { if(onRefresh) onRefresh(); }} />
             </div>
         </>
     );
@@ -3939,8 +3939,17 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                 </div>
             )}
 
-            {/* Invoice Modal for Order Detail */}
-            {detailOrder && (<InvoiceModal data={buildInvoiceDataFromOrder(detailOrder)} onClose={() => setDetailOrder(null)} />)}
+            {/* Order Detail Modal with Admin Extras */}
+            {detailOrder && (
+                <OrderDetailModal 
+                    order={detailOrder} 
+                    onClose={() => setDetailOrder(null)} 
+                    onRefresh={() => {
+                        fetchOrders();
+                        setDetailOrder(null);
+                    }} 
+                />
+            )}
 
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
