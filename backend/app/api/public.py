@@ -32,8 +32,10 @@ def public_get_order(order_uuid: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Order not found")
 
     return {
+        "order_uuid": o.order_uuid,
         "order_no": o.order_no,
         "status": o.status,
+        "grand_total": float(o.grand_total or 0),
         "amount_due": _amount_due_for_order(o),
         "deposit_1": float(o.deposit_1 or 0),
         "deposit_2": float(o.deposit_2 or 0),

@@ -1282,7 +1282,7 @@ const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
 // -----------------------------------------------------------------------------
 // 2.1 DASHBOARD (FULL UPDATED CODE)
 // -----------------------------------------------------------------------------
-const DashboardPage = ({ onEdit }) => {
+const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     
     // Global Filter States
@@ -1419,6 +1419,24 @@ const DashboardPage = ({ onEdit }) => {
                     }
                 });
                 setNotifications(alerts);
+                if (onAlertsUpdate) {
+                    onAlertsUpdate(alerts.length);
+                    // Also add to notification center for critical alerts
+                    alerts.forEach(alert => {
+                        if (alert.type === 'critical') {
+                            // Note: This requires access to addNotification from parent
+                            // For now, we'll trigger via custom event
+                            window.dispatchEvent(new CustomEvent('addNotification', {
+                                detail: {
+                                    type: 'warning',
+                                    title: 'งานด่วน!',
+                                    message: alert.msg,
+                                    link: 'order_list'
+                                }
+                            }));
+                        }
+                    });
+                }
 
                 // --- 4. Today's Activity List (Fix list generation) ---
                 const todayItems = [];
@@ -1448,7 +1466,7 @@ const DashboardPage = ({ onEdit }) => {
             }
         };
         fetchData();
-    }, [currentDate, timeRange, brandFilter]); // Re-run when filters change
+    }, [currentDate, timeRange, brandFilter, onAlertsUpdate]); // Re-run when filters change
 
     const eventsByDay = events.reduce((acc, evt) => {
         acc[evt.day] = [...(acc[evt.day] || []), evt];
@@ -1694,6 +1712,16 @@ const DashboardPage = ({ onEdit }) => {
                                 })}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Calendar Legend */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 px-1 pb-1 border-t border-gray-100 pt-3">
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-rose-500 shrink-0"></span>วันใช้งาน (ลูกค้า)</div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-purple-100 border border-purple-200 shrink-0"></span>ออกแบบ</div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-yellow-100 border border-yellow-200 shrink-0"></span>รออนุมัติ</div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-200 shrink-0"></span>กำลังผลิต</div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-orange-100 border border-orange-200 shrink-0"></span>จัดส่ง</div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-100 border border-emerald-200 shrink-0"></span>ส่งแล้ว</div>
                     </div>
                 </div>
 
@@ -3996,7 +4024,17 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                 {paginatedOrders.map((order) => (
                                     <tr key={order.id} className="hover:bg-gray-50 transition group cursor-pointer border-b border-gray-200" onClick={(e) => { if (!e.target.closest('select') && !e.target.closest('button')) setDetailOrder(order); }}>
                                         <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
-                                        <td className="py-4 px-6 text-gray-700 truncate text-center border-r border-gray-200"><div className="font-medium truncate">{order.customer_name}</div><div className="text-xs text-gray-400">{order.contact_channel}</div></td>
+                                        <td className="py-4 px-6 text-gray-700 text-center border-r border-gray-200">
+                                            <div className="font-medium truncate">{order.customer_name}</div>
+                                            <div className="text-xs text-gray-400">{order.contact_channel}</div>
+                                            {(order.slip_booking_url || order.slip_deposit_url || order.slip_balance_url) && (
+                                                <div className="flex items-center justify-center gap-1 mt-1">
+                                                    {order.slip_booking_url && <span title="สลิปมัดจำจอง" className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200">B</span>}
+                                                    {order.slip_deposit_url && <span title="สลิปมัดจำ 50%" className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200">D</span>}
+                                                    {order.slip_balance_url && <span title="สลิปยอดคงเหลือ" className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">F</span>}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">{order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}</td>
                                         <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
                                         <td className="py-4 px-6 text-center border-r border-gray-200">
@@ -4575,14 +4613,19 @@ const SettingsPage = ({ onNotify, addOnDefinitions, setAddOnDefinitions }) => {
   );
 };
 
-const NavItem = ({ icon, label, active, onClick }) => (
+const NavItem = ({ icon, label, active, onClick, badge }) => (
         <button 
             onClick={onClick}
             className={`w-full flex items-center space-x-3 sm:space-x-4 p-2.5 sm:p-3 rounded-lg sm:rounded-xl transition duration-200 group relative ${active ? 'text-white' : 'text-gray-500 hover:text-white'}`}
         >
                 {active && <div className="absolute left-0 w-1 h-6 sm:h-8 bg-[#d4e157] rounded-r-full shadow-[0_0_10px_rgba(212,225,87,0.5)]"></div>}
                 {React.createElement(icon, { size: 18, className: `sm:w-5 sm:h-5 transition ${active ? 'text-[#d4e157]' : 'text-gray-500 group-hover:text-white'}` })}
-                <span className="font-medium text-xs sm:text-sm tracking-wide">{label}</span>
+                <span className="font-medium text-xs sm:text-sm tracking-wide flex-1 text-left">{label}</span>
+                {badge > 0 && (
+                    <span className="bg-rose-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1 shrink-0">
+                        {badge > 99 ? '99+' : badge}
+                    </span>
+                )}
         </button>
 );
 
@@ -4604,9 +4647,15 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [alertCount, setAlertCount] = useState(0);
    
   // Notification State
   const [notification, setNotification] = useState(null);
+  
+  // Notification Center State
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
     // Authoritative add-on definitions (shared across app)
     const [addOnDefinitions, setAddOnDefinitions] = useState(ADDON_OPTIONS);
   
@@ -4663,6 +4712,73 @@ const App = () => {
       if (type === 'success') setCustomerRefreshTrigger(prev => !prev);
   }, [handleNotify, setCustomerRefreshTrigger]);
 
+  // Load notifications from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('notifications');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setNotifications(parsed);
+        setUnreadCount(parsed.filter(n => !n.read).length);
+      }
+    } catch (e) { console.error('Failed to load notifications', e); }
+  }, []);
+
+  // Save notifications to localStorage
+  const saveNotifications = useCallback((notifs) => {
+    try {
+      localStorage.setItem('notifications', JSON.stringify(notifs));
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter(n => !n.read).length);
+    } catch (e) { console.error('Failed to save notifications', e); }
+  }, []);
+
+  // Add new notification
+  const addNotification = useCallback((type, title, message, link) => {
+    const newNotif = {
+      id: Date.now(),
+      type, // 'info', 'success', 'warning', 'error'
+      title,
+      message,
+      link,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    const updated = [newNotif, ...notifications].slice(0, 50); // Keep last 50
+    saveNotifications(updated);
+  }, [notifications, saveNotifications]);
+
+  // Listen for notification events from Dashboard (using addNotification)
+  useEffect(() => {
+    const handleAddNotification = (e) => {
+      addNotification(
+        e.detail.type || 'info',
+        e.detail.title,
+        e.detail.message,
+        e.detail.link
+      );
+    };
+    window.addEventListener('addNotification', handleAddNotification);
+    return () => window.removeEventListener('addNotification', handleAddNotification);
+  }, [addNotification]);
+
+  // Mark notification as read
+  const markAsRead = useCallback((id) => {
+    const updated = notifications.map(n => n.id === id ? {...n, read: true} : n);
+    saveNotifications(updated);
+  }, [notifications, saveNotifications]);
+
+  // Mark all as read
+  const markAllAsRead = useCallback(() => {
+    const updated = notifications.map(n => ({...n, read: true}));
+    saveNotifications(updated);
+  }, [notifications, saveNotifications]);
+
+  // Clear all notifications
+  const clearAllNotifications = useCallback(() => {
+    saveNotifications([]);
+  }, [saveNotifications]);
+
   if (!isLoggedIn) return <LoginPage onLogin={(role) => {
       setIsLoggedIn(true);
       setUserRole(role);
@@ -4670,7 +4786,7 @@ const App = () => {
 
   const renderContent = () => {
     switch(currentPage) {
-        case 'dashboard': return <DashboardPage onEdit={handleEditOrder} />;
+        case 'dashboard': return <DashboardPage onEdit={handleEditOrder} onAlertsUpdate={setAlertCount} />;
         case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
         case 'settings': return <SettingsPage onNotify={handleNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} />;
         case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleOrderNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} />;
@@ -4692,14 +4808,133 @@ const App = () => {
        )}
 
        {/* Mobile Header */}
-    <div className="md:hidden bg-[#1a1c23] text-white p-3 sm:p-4 flex justify-center items-center sticky top-0 z-30 shadow-lg">
-           <button onClick={() => setIsSidebarOpen(true)} className="absolute left-3 sm:left-4"><Menu size={22} className="sm:w-6 sm:h-6" /></button>
+    <div className="md:hidden bg-[#1a1c23] text-white p-3 sm:p-4 flex justify-between items-center sticky top-0 z-30 shadow-lg">
+           <button onClick={() => setIsSidebarOpen(true)} className="p-1"><Menu size={22} className="sm:w-6 sm:h-6" /></button>
            <div className="flex items-center gap-2">
                 <img src={LOGO_URL} alt="Logo" className="w-7 h-7 sm:w-8 sm:h-8 rounded-full"/>
                 <span className="font-bold text-base sm:text-lg tracking-tight">B-LOOK</span>
            </div>
+           <button onClick={() => setShowNotificationCenter(!showNotificationCenter)} className="p-1 relative">
+             <Bell size={22} className="sm:w-6 sm:h-6" />
+             {unreadCount > 0 && (
+               <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1">
+                 {unreadCount > 99 ? '99+' : unreadCount}
+               </span>
+             )}
+           </button>
        </div>
        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
+
+       {/* Notification Center Dropdown */}
+       {showNotificationCenter && (
+         <div className="fixed inset-0 z-[60] flex items-start justify-center pt-16 md:pt-0 md:items-start md:justify-end" onClick={() => setShowNotificationCenter(false)}>
+           <div className="md:absolute md:top-4 md:right-4 w-full max-w-md mx-4 md:mx-0" onClick={(e) => e.stopPropagation()}>
+             <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-5 duration-200">
+               {/* Header */}
+               <div className="bg-gradient-to-r from-[#1a1c23] to-slate-700 text-white p-4 flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                   <Bell size={20} className="text-[#d4e157]" />
+                   <h3 className="font-bold text-lg">การแจ้งเตือน</h3>
+                   {unreadCount > 0 && (
+                     <span className="bg-rose-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                       {unreadCount}
+                     </span>
+                   )}
+                 </div>
+                 <button onClick={() => setShowNotificationCenter(false)} className="text-gray-300 hover:text-white transition">
+                   <X size={20} />
+                 </button>
+               </div>
+
+               {/* Actions */}
+               {notifications.length > 0 && (
+                 <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+                   <button onClick={markAllAsRead} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                     ✓ อ่านทั้งหมด
+                   </button>
+                   <button onClick={clearAllNotifications} className="text-xs text-gray-500 hover:text-gray-700 font-medium">
+                     🗑️ ล้างทั้งหมด
+                   </button>
+                 </div>
+               )}
+
+               {/* Notification List */}
+               <div className="max-h-[60vh] overflow-y-auto">
+                 {notifications.length === 0 ? (
+                   <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                     <Bell size={48} className="mb-3 opacity-30" />
+                     <p className="text-sm font-medium">ไม่มีการแจ้งเตือน</p>
+                   </div>
+                 ) : (
+                   <div className="divide-y divide-gray-100">
+                     {notifications.map((notif) => {
+                       const getBgColor = () => {
+                         if (notif.read) return 'bg-white';
+                         switch (notif.type) {
+                           case 'error': return 'bg-rose-50';
+                           case 'warning': return 'bg-amber-50';
+                           case 'success': return 'bg-emerald-50';
+                           default: return 'bg-blue-50';
+                         }
+                       };
+                       const getIcon = () => {
+                         switch (notif.type) {
+                           case 'error': return '⚠️';
+                           case 'warning': return '⏰';
+                           case 'success': return '✅';
+                           default: return '📢';
+                         }
+                       };
+
+                       return (
+                         <div
+                           key={notif.id}
+                           onClick={() => {
+                             markAsRead(notif.id);
+                             if (notif.link) {
+                               setShowNotificationCenter(false);
+                               handleNavigate(notif.link);
+                             }
+                           }}
+                           className={`p-4 cursor-pointer transition hover:bg-gray-50 ${getBgColor()} ${!notif.read ? 'border-l-4 border-blue-500' : ''}`}
+                         >
+                           <div className="flex items-start gap-3">
+                             <span className="text-2xl shrink-0">{getIcon()}</span>
+                             <div className="flex-1 min-w-0">
+                               <div className="flex items-start justify-between gap-2 mb-1">
+                                 <h4 className={`text-sm font-bold text-gray-800 ${!notif.read ? 'font-extrabold' : ''}`}>
+                                   {notif.title}
+                                 </h4>
+                                 {!notif.read && (
+                                   <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1"></span>
+                                 )}
+                               </div>
+                               <p className="text-xs text-gray-600 mb-2 line-clamp-2">{notif.message}</p>
+                               <div className="flex items-center justify-between">
+                                 <span className="text-[10px] text-gray-400">
+                                   {new Date(notif.timestamp).toLocaleString('th-TH', {
+                                     month: 'short',
+                                     day: 'numeric',
+                                     hour: '2-digit',
+                                     minute: '2-digit'
+                                   })}
+                                 </span>
+                                 {notif.link && (
+                                   <span className="text-[10px] text-blue-600 font-medium">ดูรายละเอียด →</span>
+                                 )}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 )}
+               </div>
+             </div>
+           </div>
+         </div>
+       )}
 
        {/* Sidebar (Dark Theme) */}
        <aside className={`fixed md:sticky top-0 left-0 h-screen w-56 sm:w-60 md:w-64 bg-[#1a1c23] text-white z-50 transform transition-transform duration-300 ease-in-out flex flex-col shadow-2xl border-r border-gray-800 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
@@ -4708,11 +4943,22 @@ const App = () => {
                     <img src={LOGO_URL} alt="Logo" className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full border-2 border-white/20"/>
                     <span className="font-black text-lg sm:text-xl tracking-tight text-white">B-LOOK</span>
                 </div>
-                <button className="md:hidden text-gray-500 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={22}/></button>
+                <div className="flex items-center gap-2">
+                    {/* Desktop Bell Icon */}
+                    <button onClick={() => setShowNotificationCenter(!showNotificationCenter)} className="hidden md:block p-2 hover:bg-white/10 rounded-lg transition relative">
+                      <Bell size={20} className="text-gray-300 hover:text-white" />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </button>
+                    <button className="md:hidden text-gray-500 hover:text-white" onClick={() => setIsSidebarOpen(false)}><X size={22}/></button>
+                </div>
             </div>
             
             <nav className="flex-1 px-2 sm:px-3 md:px-4 space-y-1 sm:space-y-2 mt-2 sm:mt-4">
-                <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} onClick={() => handleNavigate('dashboard')} />
+                <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} onClick={() => handleNavigate('dashboard')} badge={alertCount} />
                 <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} onClick={() => handleNavigate('create_order')} />
                 <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} onClick={() => handleNavigate('order_list')} />
                 <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} onClick={() => handleNavigate('product')} />
