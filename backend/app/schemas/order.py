@@ -147,6 +147,12 @@ class Order(OrderBase):
     total_cost: Decimal = 0
     estimated_profit: Decimal = 0
 
+    # Payment link & slip URLs — exposed to admin endpoints
+    order_uuid: Optional[str] = None
+    slip_booking_url: Optional[str] = None
+    slip_deposit_url: Optional[str] = None
+    slip_balance_url: Optional[str] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     items: List[OrderItem] = []

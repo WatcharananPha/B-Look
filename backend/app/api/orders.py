@@ -946,11 +946,6 @@ class ApproveSlipRequest(BaseModel):
     note: Optional[str] = None
 
 
-def _send_notification(target: str, subject: str, message: str) -> None:
-    """Placeholder notification sender — extend to send LINE/email/team messages."""
-    logger.info("Notify %s: %s - %s", target, subject, message)
-
-
 @router.patch("/{order_id}/approve-slip")
 def approve_slip(
     order_id: int,
@@ -1007,15 +1002,6 @@ def approve_slip(
     db.add(audit)
 
     db.commit()
-
-    # Send notification (placeholder)
-    try:
-        target = order.customer_name or "customer"
-        subject = f"Slip {'approved' if payload.approved else 'rejected'} for order {order.order_no}"
-        message = f"Installment: {payload.installment}. Note: {payload.note or '-'}"
-        _send_notification(target, subject, message)
-    except Exception:
-        logger.exception("Failed to send notification after slip approval")
 
     return {"ok": True, "order_id": order.id, "status": order.status}
 

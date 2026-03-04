@@ -13,6 +13,25 @@ export default function OrderAdminExtras({order, onApproved}){
   const origin = window.location.origin || ''
   const publicLink = `${origin}/pay/${order.order_uuid || order.id || ''}`
 
+  // Resolve a relative static path (e.g. /static/slips/…) to a fully-qualified URL.
+  // Necessary when the frontend runs on a different origin from the backend.
+  const resolveUrl = (path) => {
+    if (!path) return null
+    if (path.startsWith('http')) return path
+    try {
+      const apiOrigin = new URL(API_URL).origin
+      return path.startsWith('/') ? `${apiOrigin}${path}` : `${apiOrigin}/${path}`
+    } catch { return path }
+  }
+
+  // Admin API returns flat slip_*_url fields; public API nests them under `slips`.
+  // Support both shapes so the component works regardless of data source.
+  const resolvedSlips = {
+    booking: resolveUrl(order.slips?.booking || order.slip_booking_url || null),
+    deposit: resolveUrl(order.slips?.deposit || order.slip_deposit_url || null),
+    balance: resolveUrl(order.slips?.balance || order.slip_balance_url || null),
+  }
+
   const doCopy = ()=>{
     try{ 
       navigator.clipboard.writeText(publicLink); 
@@ -83,32 +102,54 @@ export default function OrderAdminExtras({order, onApproved}){
           <div className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">ตรวจสอบสลิปการโอน</div>
           <div className="grid grid-cols-1 gap-3">
             {['booking', 'deposit', 'balance'].map((type) => {
-              if(!order.slips?.[type]) return null;
-              
-              const labels = { booking: 'มัดจำจอง', deposit: 'มัดจำ 50%', balance: 'ยอดคงเหลือ' };
-              
+              const slipUrl = resolvedSlips[type]
+              if (!slipUrl) return null
+
+              const labels = { booking: 'มัดจำจอง', deposit: 'มัดจำ 50%', balance: 'ยอดคงเหลือ' }
+
               return (
                 <div key={type} className="bg-slate-50 rounded-lg border border-slate-200 p-2 flex gap-3">
-                  <a href={order.slips[type]} target="_blank" rel="noreferrer" className="shrink-0 relative group block w-20 h-20 bg-white rounded border border-slate-200 overflow-hidden">
-                    <img src={order.slips[type]} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={type}/>
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                  <a
+                    href={slipUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 relative group block w-20 h-20 bg-white rounded border border-slate-200 overflow-hidden"
+                    title="คลิกเพื่อดูรูปเต็ม"
+                  >
+                    <img
+                      src={slipUrl}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                      alt={`slip-${type}`}
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <ExternalLink size={16} className="text-white opacity-0 group-hover:opacity-100 drop-shadow" />
+                    </div>
                   </a>
                   <div className="flex flex-col justify-between py-0.5 flex-1">
                     <div className="text-xs font-bold text-slate-800">{labels[type]}</div>
                     <div className="flex gap-1.5 mt-2">
-                       <button disabled={loading} onClick={()=>approveSlip(type, true)} className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded text-xs font-semibold transition-colors disabled:opacity-50">
-                         <CheckCircle size={14}/> อนุมัติ
-                       </button>
-                       <button disabled={loading} onClick={()=>approveSlip(type, false)} className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded text-xs font-semibold transition-colors disabled:opacity-50">
-                         <XCircle size={14}/> ปฏิเสธ
-                       </button>
+                      <button
+                        disabled={loading}
+                        onClick={() => approveSlip(type, true)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded text-xs font-semibold transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle size={14} /> อนุมัติ
+                      </button>
+                      <button
+                        disabled={loading}
+                        onClick={() => approveSlip(type, false)}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded text-xs font-semibold transition-colors disabled:opacity-50"
+                      >
+                        <XCircle size={14} /> ปฏิเสธ
+                      </button>
                     </div>
                   </div>
                 </div>
               )
             })}
-            
-            {!order.slips?.booking && !order.slips?.deposit && !order.slips?.balance && (
+
+            {!resolvedSlips.booking && !resolvedSlips.deposit && !resolvedSlips.balance && (
               <div className="text-sm text-slate-400 italic text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
                 ยังไม่มีการแนบสลิป
               </div>

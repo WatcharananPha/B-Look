@@ -49,8 +49,9 @@ else:
 
 app = FastAPI(title="B-Look OMS API (Production)")
 
-# --- CORS CONFIG (เปิดกว้างเพื่อให้แน่ใจว่า Frontend เข้าถึงได้) ---
-origins = ["*"]
+# --- CORS CONFIG ---
+# Restrict origins in production by setting CORS_ORIGINS env var.
+origins = settings.CORS_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,7 +76,9 @@ def startup_repair():
         hashed_pw = pwd_context.hash("password123")
 
         if not result:
-            logger.warning("⚠️ Admin not found. Creating new admin...")
+            logger.warning(
+                "⚠️ Admin not found. Creating initial admin user (password: password123)."
+            )
             sql = text(
                 """
                 INSERT INTO users (username, password_hash, full_name, role, is_active)
@@ -83,16 +86,12 @@ def startup_repair():
             """
             )
             db.execute(sql, {"h": hashed_pw})
-        else:
-            logger.info("♻️ Admin exists. Resetting password to 'password123'...")
-            # บังคับแก้รหัสผ่านให้เป็นค่าที่เรารู้แน่นอน
-            sql = text(
-                "UPDATE users SET password_hash = :h, is_active = true WHERE username = 'admin'"
+            db.commit()
+            logger.info(
+                "✅ Initial admin created. Change the password immediately after first login."
             )
-            db.execute(sql, {"h": hashed_pw})
-
-        db.commit()
-        logger.info("✅ SYSTEM READY: Login with 'admin' / 'password123'")
+        else:
+            logger.info("✅ Admin user already exists — skipping creation.")
         # --- DEDUPE: Clean duplicate neck_types entries that may contain UI annotations
         try:
             from app.models.product import NeckType
