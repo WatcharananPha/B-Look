@@ -10,7 +10,6 @@ from app.api import (
     admin,
     pricing,
     public,
-    emergency,
 )
 
 api_router = APIRouter()

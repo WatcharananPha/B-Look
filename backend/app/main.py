@@ -2,8 +2,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy import text
-from passlib.context import CryptContext
 import logging
 import os
 from app.db.session import engine, SessionLocal
@@ -21,7 +19,6 @@ from app.api import (
     pricing,
     admin,
     public,
-    emergency,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -55,98 +52,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# SYSTEM AUTO-REPAIR: Reset Admin on Startup
-@app.on_event("startup")
-def startup_repair():
-    try:
-        db = SessionLocal()
-        # Delete any existing admin user to avoid bcrypt corruption issues
-        db.execute(text("DELETE FROM users WHERE username = 'admin'"))
-        db.commit()
-
-        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        hashed_pw = pwd_context.hash("password123")
-
-        logger.warning(
-            "⚠️ Creating/resetting admin user (password: password123). Delete this user and create a real one immediately!"
-        )
-        sql = text(
-            """
-            INSERT INTO users (username, password_hash, full_name, role, is_active)
-            VALUES ('admin', :h, 'System Admin', 'owner', true)
-        """
-        )
-        db.execute(sql, {"h": hashed_pw})
-        db.commit()
-        logger.info(
-            "✅ Admin user created/reset. Please change the password immediately after login."
-        )
-        try:
-            from app.models.product import NeckType
-
-            rows = db.query(NeckType).all()
-
-            import re
-
-            groups = {}
-            for r in rows:
-                raw_name = r.name or ""
-                n = raw_name.replace("นํ้า", "น้ำ")
-                n = re.sub(r"\(.*?\)", "", n).strip()
-                if not n:
-                    continue
-                if n not in groups:
-                    groups[n] = []
-                groups[n].append(r)
-
-            for name_norm, group in groups.items():
-                if len(group) <= 1:
-                    g0 = group[0]
-                    if g0.name != name_norm:
-                        g0.name = name_norm
-                        db.add(g0)
-                    continue
-
-                keeper = sorted(
-                    group,
-                    key=lambda x: (
-                        not bool(x.force_slope),
-                        -(float(x.cost_price or 0)),
-                    ),
-                )[0]
-                keeper.name = name_norm
-                db.add(keeper)
-                for rdel in group:
-                    if rdel.id == keeper.id:
-                        continue
-                    try:
-                        db.delete(rdel)
-                    except Exception:
-                        logger.exception("Failed deleting duplicate neck row")
-        except Exception:
-            logger.exception("Neck dedupe step failed")
-
-        try:
-            from app.models.product import NeckType
-
-            slope_rows = db.query(NeckType).filter(NeckType.force_slope == True).all()
-            for r in slope_rows:
-                try:
-                    if r.additional_cost is None or float(r.additional_cost) == 0:
-                        r.additional_cost = 40
-                        db.add(r)
-                except Exception:
-                    r.additional_cost = 40
-                    db.add(r)
-        except Exception:
-            logger.exception("Failed ensuring additional_cost for forced-slope necks")
-
-        db.commit()
-        db.close()
-    except Exception as e:
-        logger.error(f"❌ Startup Repair Failed: {e}")
 
 
 os.makedirs(os.path.join(settings.STATIC_DIR, "slips"), exist_ok=True)
