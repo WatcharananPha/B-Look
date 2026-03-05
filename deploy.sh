@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================
-#  B-Look Full Redeploy Script
+#  B-Look Full Redeploy Script  (SQLite / Zero-PostgreSQL mode)
 #  Usage: bash deploy.sh
 # =============================================================
 set -euo pipefail
@@ -8,20 +8,13 @@ set -euo pipefail
 # ─── Configuration ────────────────────────────────────────────
 RG_NAME="blook-prod-rg"
 ACR_NAME="blookregistry10314"
-APP_NAME="blook-api-10314"                          # Azure App Service (backend)
-STORAGE_ACCOUNT="blookweb10314"                     # Azure Storage Account (frontend SPA)
+APP_NAME="blook-api-10314"
+STORAGE_ACCOUNT="blookweb10314"
 
-# ── Secrets / connection strings (set or export before running) ──
-# DATABASE_URL  — PostgreSQL connection string from Azure Database for PostgreSQL
-# SECRET_KEY    — JWT signing secret (long random string, keep it secret)
-# CORS_ORIGINS  — comma-separated list of allowed origins (e.g. the Static Website URL)
-: "${DATABASE_URL:?❌  DATABASE_URL must be exported before running this script}"
-: "${SECRET_KEY:?❌   SECRET_KEY must be exported before running this script}"
-: "${CORS_ORIGINS:?❌  CORS_ORIGINS must be exported before running this script}"
-# Example (run these in your terminal before executing this script):
-#   export DATABASE_URL="postgresql+psycopg2://blookadmin:StrongP%40ssw0rd123%21@blook-db-10314.postgres.database.azure.com:5432/blook_db?sslmode=require"
-#   export SECRET_KEY="<generate with: python3 -c 'import secrets; print(secrets.token_hex(32))'>"
-#   export CORS_ORIGINS="https://blookweb10314.z23.web.core.windows.net"
+# Optional: override SECRET_KEY; defaults to a stable hash if unset.
+# Strongly recommended to set your own:
+#   export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+SECRET_KEY="${SECRET_KEY:-}"
 
 echo ""
 echo "======================================================"
@@ -33,11 +26,6 @@ echo ""
 echo "▶ [1/5] Building frontend..."
 cd ~/Documents/GitHub/B-Look/frontend
 rm -rf dist
-
-# .env.production is already committed with correct values.
-# Override only if you need a different API URL at build time.
-# Vite embeds VITE_* vars at build time from .env.production.
-
 npm install
 npm run build
 echo "✅ Frontend built."
@@ -46,19 +34,17 @@ echo "✅ Frontend built."
 echo ""
 echo "▶ [2/5] Uploading frontend to Azure Static Website..."
 
-# Delete all blobs in $web container first
 az storage blob delete-batch \
   --source '$web' \
   --account-name "$STORAGE_ACCOUNT"
 
-# Upload built dist folder
 az storage blob upload-batch \
   -s ./dist \
   -d '$web' \
   --account-name "$STORAGE_ACCOUNT" \
   --overwrite
 
-# FIX #5: Configure 404 → index.html so /pay/<uuid> deep links work in the SPA
+# SPA deep-link routing: /pay/<uuid> must serve index.html, not 404
 az storage blob service-properties update \
   --account-name "$STORAGE_ACCOUNT" \
   --static-website \
@@ -72,15 +58,68 @@ echo ""
 echo "▶ [3/5] Building backend Docker image..."
 cd ~/Documents/GitHub/B-Look/backend
 
-# FIX #1: Use the existing Dockerfile (CMD already has app.main:app — correct)
-# Do NOT create a new Dockerfile.stable — main_stable.py has been deleted.
+# Use the committed Dockerfile (app.main:app, no Dockerfile.stable)
+TAG="prod-$(date '+%Y%m%d%H%M')"
 az acr build \
   --registry "$ACR_NAME" \
-  --image "blook-backend:prod-$(date '+%Y%m%d%H%M')" \
+  --image "blook-backend:${TAG}" \
   --image "blook-backend:latest" \
   -f Dockerfile \
   .
-echo "✅ Image built and pushed to ACR."
+
+echo "✅ Image built and pushed to ACR (tag: ${TAG})."
+
+# ─── 4. CONFIGURE APP SERVICE ENVIRONMENT VARIABLES ──────────
+echo ""
+echo "▶ [4/5] Configuring App Service settings..."
+
+# Build the SECRET_KEY setting line
+if [[ -z "$SECRET_KEY" ]]; then
+  echo "⚠️  SECRET_KEY not set — using a default. Set export SECRET_KEY=<value> for production."
+  SK_SETTING='SECRET_KEY=change-me-set-a-real-secret-key-in-production'
+else
+  SK_SETTING="SECRET_KEY=${SECRET_KEY}"
+fi
+
+az webapp config appsettings set \
+  --resource-group "$RG_NAME" \
+  --name "$APP_NAME" \
+  --settings \
+    "DATABASE_URL=sqlite:////home/blook_prod.db" \
+    "STATIC_DIR=/home/static" \
+    "CORS_ORIGINS=https://${STORAGE_ACCOUNT}.z23.web.core.windows.net" \
+    "WEBSITES_PORT=8000" \
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE=true" \
+    "TZ=Asia/Bangkok" \
+    "$SK_SETTING"
+
+echo "✅ App Service settings updated."
+
+# ─── 5. DEPLOY IMAGE & RESTART ───────────────────────────────
+echo ""
+echo "▶ [5/5] Deploying new image..."
+
+az webapp config container set \
+  --name "$APP_NAME" \
+  --resource-group "$RG_NAME" \
+  --container-image-name "${ACR_NAME}.azurecr.io/blook-backend:latest"
+
+az webapp restart \
+  --resource-group "$RG_NAME" \
+  --name "$APP_NAME"
+
+echo ""
+echo "======================================================"
+echo "✅ Deployment complete!"
+echo ""
+echo "  Frontend:  https://${STORAGE_ACCOUNT}.z23.web.core.windows.net"
+echo "  Backend:   https://${APP_NAME}.azurewebsites.net"
+echo "  API Docs:  https://${APP_NAME}.azurewebsites.net/docs"
+echo ""
+echo "💾 SQLite DB lives at /home/blook_prod.db (persistent — survives restarts)"
+echo "🖼️  Uploaded files live at /home/static/{slips,mockups} (persistent)"
+echo "======================================================"
+
 
 # ─── 4. CONFIGURE APP SERVICE ENVIRONMENT VARIABLES ──────────
 echo ""

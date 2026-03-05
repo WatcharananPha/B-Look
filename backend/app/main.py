@@ -150,8 +150,9 @@ def startup_repair():
     except Exception as e:
         logger.error(f"❌ Startup Repair Failed: {e}")
 
-os.makedirs(os.path.join(os.getcwd(), "static", "slips"), exist_ok=True)
-os.makedirs(os.path.join(os.getcwd(), "static", "mockups"), exist_ok=True)
+
+os.makedirs(os.path.join(settings.STATIC_DIR, "slips"), exist_ok=True)
+os.makedirs(os.path.join(settings.STATIC_DIR, "mockups"), exist_ok=True)
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
@@ -166,9 +167,8 @@ app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 
-app.mount(
-    "/static", StaticFiles(directory=os.path.join(os.getcwd(), "static")), name="static"
-)
+app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
+
 
 @app.get("/")
 def read_root():
