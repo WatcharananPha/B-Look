@@ -73,9 +73,6 @@ app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
 
 
-app.include_router(emergency.router, prefix="/api/v1/emergency", tags=["Emergency"])
-
-
 @app.get("/")
 def read_root():
     return {
