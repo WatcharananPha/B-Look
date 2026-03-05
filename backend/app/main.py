@@ -21,6 +21,7 @@ from app.api import (
     pricing,
     admin,
     public,
+    emergency,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -85,6 +86,8 @@ def startup_repair():
             )
         else:
             logger.info("✅ Admin user already exists — skipping creation.")
+            # Note: Don't try to verify during startup; corrupted passwords will fail here.
+            # Use /api/v1/emergency/reset endpoint to manually fix if needed.
         try:
             from app.models.product import NeckType
 
