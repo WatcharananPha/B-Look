@@ -173,6 +173,9 @@ app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
 
 
+app.include_router(emergency.router, prefix="/api/v1/emergency", tags=["Emergency"])
+
+
 @app.get("/")
 def read_root():
     return {
@@ -180,7 +183,3 @@ def read_root():
         "message": "B-Look API is running correctly.",
         "version": "2026.02.08.Fix",
     }
-
-# --- EMERGENCY RESET ROUTE ---
-from app.api import emergency
-app.include_router(emergency.router, prefix="/api/v1/emergency", tags=["Emergency"])
