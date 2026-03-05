@@ -177,3 +177,7 @@ def read_root():
         "message": "B-Look API is running correctly.",
         "version": "2026.02.08.Fix",
     }
+
+# --- EMERGENCY RESET ROUTE ---
+from app.api import emergency
+app.include_router(emergency.router, prefix="/api/v1/emergency", tags=["Emergency"])
