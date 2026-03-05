@@ -8,6 +8,7 @@ import uuid
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.audit_log import AuditLog
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -62,7 +63,7 @@ def public_upload_slip(
         raise HTTPException(status_code=400, detail="Invalid installment type")
 
     # Ensure storage directory exists
-    static_dir = os.path.join(os.getcwd(), "static", "slips")
+    static_dir = os.path.join(settings.STATIC_DIR, "slips")
     os.makedirs(static_dir, exist_ok=True)
 
     # Basic validations

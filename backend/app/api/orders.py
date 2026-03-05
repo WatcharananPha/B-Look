@@ -836,7 +836,7 @@ async def upload_order_mockups(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    storage_dir = os.path.join(os.getcwd(), "static", "mockups")
+    storage_dir = os.path.join(settings.STATIC_DIR, "mockups")
     os.makedirs(storage_dir, exist_ok=True)
 
     result = {}
