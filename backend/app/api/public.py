@@ -12,6 +12,7 @@ from app.core.config import settings
 
 router = APIRouter()
 
+
 def _amount_due_for_order(o: Order) -> float:
     st = (o.status or "").upper()
     # Prefer dedicated deposit fields when available
@@ -23,6 +24,7 @@ def _amount_due_for_order(o: Order) -> float:
         return float(o.balance_amount or 0)
     # fallback: if nothing matched, return full remaining balance
     return float(o.balance_amount or o.grand_total or 0)
+
 
 @router.get("/orders/{order_uuid}")
 def public_get_order(order_uuid: str, db: Session = Depends(get_db)):
@@ -45,6 +47,7 @@ def public_get_order(order_uuid: str, db: Session = Depends(get_db)):
             "balance": o.slip_balance_url,
         },
     }
+
 
 @router.post("/orders/{order_uuid}/slip")
 def public_upload_slip(
