@@ -1,1 +1,26 @@
-blook
+blook/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# SQLite dev databases
+*.db
+*.sqlite3
+
+# Pytest cache
+.pytest_cache/
+
+# Environment files (ignore local/secret env, but not .env.production)
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
