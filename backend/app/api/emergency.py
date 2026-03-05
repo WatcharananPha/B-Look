@@ -9,11 +9,17 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 @router.get("/reset")
 def reset_admin(db: Session = Depends(get_db)):
+    # สร้าง Hash แบบปลอดภัยสำหรับ password123
     hashed = pwd_context.hash("password123")
-    res = db.execute(text("SELECT id FROM users WHERE username='admin'")).first()
-    if not res:
-        db.execute(text("INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES ('admin', :h, 'System Admin', 'owner', true)"), {"h": hashed})
-    else:
-        db.execute(text("UPDATE users SET password_hash = :h WHERE username = 'admin'"), {"h": hashed})
+    
+    # ลบ admin ตัวเดิมทิ้งให้หมด เพื่อป้องกัน Hash ผิดเพี้ยน
+    db.execute(text("DELETE FROM users WHERE username='admin'"))
     db.commit()
-    return {"status": "success", "message": "Admin password is now password123"}
+    
+    # สร้างใหม่แบบคลีนๆ
+    db.execute(
+        text("INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES ('admin', :h, 'System Admin', 'owner', true)"), 
+        {"h": hashed}
+    )
+    db.commit()
+    return {"status": "success", "message": "Admin wiped and recreated. Password is now password123"}
