@@ -5,6 +5,7 @@ Revises: c3e5f1a9b2d3
 Create Date: 2026-03-06 03:58:39.164200
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f1d407d87638'
-down_revision: Union[str, Sequence[str], None] = 'c3e5f1a9b2d3'
+revision: str = "f1d407d87638"
+down_revision: Union[str, Sequence[str], None] = "c3e5f1a9b2d3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -22,9 +23,10 @@ def upgrade() -> None:
     """Restore neck types data."""
     # Clear existing data
     op.execute("DELETE FROM neck_types")
-    
+
     # Insert neck types data
-    op.execute("""
+    op.execute(
+        """
     INSERT INTO neck_types 
     (name, price_adjustment, quantity, cost_price, additional_cost, force_slope, is_active)
     VALUES 
@@ -43,7 +45,8 @@ def upgrade() -> None:
     ('คอโปโล', 0, 0, 0, 0, 0, 1),
     ('คอวาย', 0, 0, 0, 0, 0, 1),
     ('คอเชิ้ตฐานตั้ง', 0, 0, 0, 0, 0, 1)
-    """)
+    """
+    )
 
 
 def downgrade() -> None:
