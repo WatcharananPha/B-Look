@@ -34,28 +34,19 @@ echo "✅ Frontend built."
 echo ""
 echo "▶ [2/5] Uploading frontend to Azure Static Website..."
 
-# Fetch storage account key once via ARM (avoids data-plane auth failures)
-STORAGE_KEY=$(az storage account keys list \
-  --resource-group "$RG_NAME" \
-  --account-name "$STORAGE_ACCOUNT" \
-  --query "[0].value" -o tsv)
-
 az storage blob delete-batch \
   --source '$web' \
-  --account-name "$STORAGE_ACCOUNT" \
-  --account-key "$STORAGE_KEY"
+  --account-name "$STORAGE_ACCOUNT"
 
 az storage blob upload-batch \
   -s ./dist \
   -d '$web' \
   --account-name "$STORAGE_ACCOUNT" \
-  --account-key "$STORAGE_KEY" \
   --overwrite
 
 # SPA deep-link routing: /pay/<uuid> must serve index.html, not 404
 az storage blob service-properties update \
   --account-name "$STORAGE_ACCOUNT" \
-  --account-key "$STORAGE_KEY" \
   --static-website \
   --index-document "index.html" \
   --404-document "index.html"
