@@ -10,4 +10,4 @@ pydantic-settings
 python-dotenv
 google-auth
 requests
-bcrypt==5.0.0
+bcrypt==4.0.1
