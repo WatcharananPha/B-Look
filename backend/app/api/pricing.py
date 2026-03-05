@@ -3,12 +3,10 @@ from pydantic import BaseModel
 from typing import List, Dict, Union
 from decimal import Decimal
 from sqlalchemy.orm import Session
-
 from app.db.session import get_db
 from app.models.product import NeckType
 
 router = APIRouter()
-
 
 class PricingRequestItem(BaseModel):
     product_type: str = "shirt"
@@ -17,10 +15,8 @@ class PricingRequestItem(BaseModel):
     selected_add_ons: List[str] = []
     is_oversize: bool = False
 
-
 class PricingRequest(BaseModel):
     items: List[PricingRequestItem]
-
 
 def calculate_shipping(total_qty: int) -> int:
     if total_qty < 10:
@@ -53,7 +49,6 @@ def _normalize_name(s: str) -> str:
     ns = re.sub(r"\(.*?\)", "", ns)
     ns = re.sub(r"\s+", " ", ns).strip()
     return ns
-
 
 @router.post("/calc")
 def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
@@ -127,13 +122,13 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
                 continue
             norm_candidates.append((cand, cand_norm))
 
-        # 1) exact normalized match
+        # exact normalized match
         for cand, cand_norm in norm_candidates:
             if cand_norm == norm_need:
                 db_neck = cand
                 break
 
-        # 2) prefer longest candidate name that is contained in the requested name
+        # prefer longest candidate name that is contained in the requested name
         if not db_neck:
             # candidates whose normalized form is contained in norm_need
             matches = [
@@ -145,7 +140,7 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
                 # pick candidate with longest normalized string (most specific)
                 db_neck = max(matches, key=lambda x: len(x[1]))[0]
 
-        # 3) fallback: candidates where norm_need is contained in candidate name
+        # fallback: candidates where norm_need is contained in candidate name
         if not db_neck:
             matches = [
                 (cand, cand_norm)

@@ -12,7 +12,6 @@ if (!googleClientId) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {/* 3. ครอบ App ด้วย Provider */}
     <GoogleOAuthProvider clientId={googleClientId}>
       <App />
     </GoogleOAuthProvider>

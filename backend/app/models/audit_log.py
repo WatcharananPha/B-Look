@@ -8,10 +8,10 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     
-    action = Column(String, nullable=False)  # เช่น CREATE, UPDATE, DELETE
-    target_type = Column(String, index=True) # เช่น "order", "product"
-    target_id = Column(String, index=True)   # เก็บ ID เป็น String เพื่อรองรับทุกตาราง
-    details = Column(Text, nullable=True)    # รายละเอียดการแก้ไข (เช่น "Created order PO-123...")
+    action = Column(String, nullable=False)
+    target_type = Column(String, index=True)
+    target_id = Column(String, index=True)
+    details = Column(Text, nullable=True)
     
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     user = relationship("User")

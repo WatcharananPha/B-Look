@@ -18,13 +18,8 @@ logger = logging.getLogger(__name__)
 def get_current_user(
     db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
 ) -> User:
-    # NOTE: Removed development convenience token acceptance to avoid
-    # accidentally trusting hard-coded tokens in non-dev environments.
-    # If a developer needs a local shortcut, re-enable with a guarded
-    # environment flag or use a proper test fixture.
 
     try:
-        # เปลี่ยนจาก security.ALGORITHM เป็น settings.ALGORITHM
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
@@ -51,12 +46,10 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # ป้องกันปัญหากรณี Token เก็บเป็น ID แต่ Code ไปหา Username
     try:
         user_id = int(token_data)
         user = db.query(User).filter(User.id == user_id).first()
     except (ValueError, TypeError):
-        # เผื่อกรณี token_data ไม่ใช่ตัวเลข
         user = None
 
     if not user:

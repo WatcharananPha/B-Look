@@ -29,7 +29,6 @@ class TokenResponse(BaseModel):
     role: str
     username: Optional[str] = None
 
-# 1. Login ปกติ
 @router.post("/login/access-token", response_model=TokenResponse)
 def login_access_token(
     db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()
@@ -42,10 +41,8 @@ def login_access_token(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
-    # --- เพิ่ม: เช็คสถานะ Pending ---
     if user.role == "pending":
         raise HTTPException(status_code=403, detail="Account is pending approval. Please contact admin.")
-    # -----------------------------
         
     return {
         "access_token": security.create_access_token({"sub": str(user.id)}),
@@ -54,7 +51,6 @@ def login_access_token(
         "username": user.full_name or user.username
     }
 
-# 2. Login ผ่าน Google
 @router.post("/login/google", response_model=TokenResponse)
 def google_login(
     payload: GoogleLoginSchema,
@@ -80,7 +76,6 @@ def google_login(
         user = db.query(User).filter(User.username == email).first()
         
         if not user:
-            # --- สร้าง User ใหม่ให้เป็น 'pending' ---
             logger.info(f"Creating new pending user: {email}")
             random_password = secrets.token_urlsafe(16)
             hashed_pw = security.get_password_hash(random_password)
@@ -89,8 +84,8 @@ def google_login(
                 username=email,
                 full_name=name,
                 password_hash=hashed_pw,
-                is_active=True,   # ให้ Active ไว้ แต่ติดที่ Role Pending
-                role="pending"    # <--- บังคับเป็น Pending
+                is_active=True,
+                role="pending"
             )
             db.add(user)
             db.commit()
@@ -99,7 +94,6 @@ def google_login(
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Inactive user")
 
-        # --- เพิ่ม: ถ้าเป็น Pending ห้าม Login ---
         if user.role == "pending":
              raise HTTPException(status_code=403, detail="Account is pending approval. Please contact admin.")
 

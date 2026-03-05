@@ -1,19 +1,17 @@
 from datetime import datetime, timedelta
 from typing import Any, Union
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# กำหนด URL สำหรับขอ Token (Login) เพื่อให้ Swagger UI ใช้งานได้
+# Define the URL for requesting a token (login) so that Swagger UI can function.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/token")
 
 def verify_password(plain_password, hashed_password):
@@ -28,7 +26,6 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
-# --- ฟังก์ชันที่ขาดหายไป ---
 def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> User:
@@ -48,7 +45,6 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
     
-    # ตรวจสอบว่ามี User ในฐานข้อมูลจริงไหม
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception

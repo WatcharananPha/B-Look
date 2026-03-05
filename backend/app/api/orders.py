@@ -8,12 +8,11 @@ import json
 import logging
 import os
 from uuid import uuid4
-
 from app.db.session import get_db
 from app.models.order import Order as OrderModel, OrderItem as OrderItemModel
 from app.models.customer import Customer
 from app.models.user import User
-from app.models.product import NeckType  # Import เพื่อดึงราคาล่าสุด
+from app.models.product import NeckType
 from app.models.audit_log import AuditLog
 from app.api import deps
 from app.schemas.order import OrderCreate, Order as OrderSchema
@@ -21,7 +20,7 @@ from app.core.config import settings
 from datetime import datetime, timedelta
 from jose import jwt
 
-# ราคาฐาน (Base Price)
+# Base Price
 STEP_PRICING = {
     "roundVNeck": [
         {"minQty": 10, "maxQty": 30, "price": Decimal(240)},
@@ -31,7 +30,7 @@ STEP_PRICING = {
         {"minQty": 301, "maxQty": 99999, "price": Decimal(170)},
     ],
     "collarOthers": [
-        {"minQty": 10, "maxQty": 30, "price": Decimal(300)},  # ราคาฐาน 300
+        {"minQty": 10, "maxQty": 30, "price": Decimal(300)},
         {"minQty": 31, "maxQty": 50, "price": Decimal(260)},
         {"minQty": 51, "maxQty": 100, "price": Decimal(240)},
         {"minQty": 101, "maxQty": 300, "price": Decimal(220)},
@@ -41,7 +40,7 @@ STEP_PRICING = {
     "fashionPants": Decimal(280),
 }
 
-# ราคา Add-on พื้นฐาน
+# Basic Add-on Pricing
 DEFAULT_ADDON_PRICES = {
     "longSleeve": Decimal(40),
     "pocket": Decimal(20),
@@ -55,11 +54,9 @@ DEFAULT_ADDON_PRICES = {
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-
 @router.get("", response_model=List[OrderSchema])
 @router.get("/", response_model=List[OrderSchema])
 def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # ✅ FIX: selectinload แก้ปัญหา Order ซ้ำ
     orders = (
         db.query(OrderModel)
         .options(selectinload(OrderModel.customer), selectinload(OrderModel.items))
@@ -150,7 +147,6 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
         results.append(o_dict)
     return results
 
-
 def calculate_item_price(item, order_prod_type, db: Session):
     qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
     p_type = getattr(item, "product_type", None) or order_prod_type or "shirt"
@@ -180,7 +176,7 @@ def calculate_item_price(item, order_prod_type, db: Session):
     neck_str = (item.neck_type or "").strip()
     selected = getattr(item, "selected_add_ons", []) or []
 
-    # ดึงราคาจาก DB
+    # Retrieving prices from the database.
     db_neck = db.query(NeckType).filter(NeckType.name == neck_str).first()
     slope_price_db = (
         Decimal(db_neck.additional_cost)
@@ -188,7 +184,6 @@ def calculate_item_price(item, order_prod_type, db: Session):
         else Decimal(40)
     )
 
-    # Force Options
     # If this neck is one of the special shapes we want to include slope cost in base unit
     SPECIAL_NECKS_FORCE_340_UI = ["คอปกคางหมู", "คอหยดน้ำ", "คอห้าเหลี่ยมคางหมู"]
     is_special_340 = any(k in neck_str for k in SPECIAL_NECKS_FORCE_340_UI)
@@ -226,7 +221,6 @@ def calculate_item_price(item, order_prod_type, db: Session):
         "selected": selected,
         "addon_total": total_addon_line,
     }
-
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -376,7 +370,6 @@ def create_order(
     db.refresh(new_order)
     # Return serialized representation to match update_order/read_order output
     return read_order(new_order.id, db)
-
 
 @router.put("/{order_id}", response_model=OrderSchema)
 def update_order(
@@ -730,7 +723,6 @@ def update_order(
     # Return serialized dict similar to read_order to satisfy response_model types
     return read_order(order_id, db)
 
-
 @router.delete("/{order_id}", status_code=204)
 def delete_order(order_id: int, db: Session = Depends(get_db)):
     o = db.query(OrderModel).filter(OrderModel.id == order_id).first()
@@ -739,11 +731,9 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
         db.commit()
     return
 
-
 @router.get("/{order_id}/logs")
 def get_logs(order_id: int):
     return []
-
 
 @router.get("/{order_id}")
 def read_order(order_id: int, db: Session = Depends(get_db)):
@@ -833,7 +823,6 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
                     pass
     return o_dict
 
-
 @router.put("/{order_id}/mockups")
 async def upload_order_mockups(
     order_id: int,
@@ -842,10 +831,7 @@ async def upload_order_mockups(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Upload mockup images (front/back) for an order. Accepts PNG/JPEG only.
 
-    Files are saved under <project-root>/static/mockups and served at /static/mockups/...
-    """
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -892,8 +878,7 @@ async def upload_order_mockups(
         logger.exception("Failed uploading mockups")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# --- Patch: Dedicated endpoint to update only order status (avoids touching items) ---
+# Patch: Dedicated endpoint to update only order status (avoids touching items) ---
 class UpdateOrderStatus(BaseModel):
     status: str
 
@@ -937,14 +922,12 @@ def update_order_status(
     return read_order(order_id, db)
 
 
-# --- Admin: Approve / Reject Slip Endpoint ---
-
+# Admin: Approve / Reject Slip Endpoint ---
 
 class ApproveSlipRequest(BaseModel):
     installment: Literal["booking", "deposit", "balance"]
     approved: bool
     note: Optional[str] = None
-
 
 @router.patch("/{order_id}/approve-slip")
 def approve_slip(
@@ -1005,20 +988,14 @@ def approve_slip(
 
     return {"ok": True, "order_id": order.id, "status": order.status}
 
-
-# --- Generate a canonical payment link for an order (admin) ---
+# Generate a canonical payment link for an order (admin) ---
 @router.post("/{order_id}/generate-payment-link")
 def generate_payment_link(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    """Generate a signed, time-limited payment token and return a public payment URL.
 
-    The returned URL is a frontend path (e.g. /pay/{order_uuid}?t=...) that the UI
-    can open for the customer. The token payload contains order id/uuid and amount
-    and is signed with the application's SECRET_KEY.
-    """
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
         raise HTTPException(

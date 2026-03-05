@@ -2,7 +2,6 @@ from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-
 from app.db.session import get_db
 from app.models.pricing_rule import PricingRule
 from app.api.deps import get_current_user
@@ -24,7 +23,7 @@ class PricingRuleOut(PricingRuleBase):
     class Config:
         from_attributes = True 
 
-# --- GET: Public Access (No Login Required) ---
+# GET: Public Access (No Login Required) ---
 @router.get("/", response_model=List[PricingRuleOut])
 def read_pricing_rules(
     db: Session = Depends(get_db),
@@ -33,7 +32,7 @@ def read_pricing_rules(
     rules = db.query(PricingRule).order_by(PricingRule.fabric_type, PricingRule.min_qty).all()
     return rules
 
-# --- POST: Restricted (Login Required) ---
+# POST: Restricted (Login Required) ---
 @router.post("/", response_model=PricingRuleOut)
 def create_pricing_rule(
     rule_in: PricingRuleCreate,
@@ -46,7 +45,7 @@ def create_pricing_rule(
     db.refresh(rule)
     return rule
 
-# --- DELETE: Restricted (Login Required) ---
+# DELETE: Restricted (Login Required) ---
 @router.delete("/{id}")
 def delete_pricing_rule(
     id: int,

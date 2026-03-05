@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from decimal import Decimal
 
-# --- Company Info ---
+# Company Info
 class CompanyInfoBase(BaseModel):
     name_th: str
     name_en: Optional[str] = None
@@ -21,7 +21,7 @@ class CompanyInfoResponse(CompanyInfoBase):
     class Config:
         from_attributes = True
 
-# --- Shipping Rate ---
+# Shipping Rate
 class ShippingRateBase(BaseModel):
     provider_name: str
     min_weight_kg: Decimal

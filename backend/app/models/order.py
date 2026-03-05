@@ -12,7 +12,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
 
-
 class Order(Base):
     __tablename__ = "orders"
 
@@ -26,12 +25,9 @@ class Order(Base):
     graphic_code = Column(String, nullable=True)
     product_type = Column(String, nullable=True)
 
-    # ✅ เพิ่มคอลัมน์ใหม่ตรงนี้
     contact_channel = Column(String, nullable=True)
     address = Column(Text, nullable=True)
     phone = Column(String, nullable=True)
-
-    # ... (Code ส่วนที่เหลือเหมือนเดิม)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
     customer = relationship("Customer", back_populates="orders")
 
@@ -87,7 +83,6 @@ class Order(Base):
     items = relationship(
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
     )
-
 
 class OrderItem(Base):
     __tablename__ = "order_items"

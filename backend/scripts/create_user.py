@@ -1,18 +1,7 @@
-#!/usr/bin/env python3
-"""Create a simple admin user in the app database for local testing.
-
-Usage:
-  ./create_user.py USERNAME PASSWORD
-
-Run from repo root with the project's virtualenv/python, e.g.
-  ./blook/bin/python backend/scripts/create_user.py admin admin
-"""
 import sys
-
 from app.db.session import SessionLocal
 from app.models.user import User
 from app.core import security
-
 
 def main():
     if len(sys.argv) < 3:
@@ -38,7 +27,6 @@ def main():
         print(f"Created user '{username}'")
     finally:
         db.close()
-
 
 if __name__ == "__main__":
     main()

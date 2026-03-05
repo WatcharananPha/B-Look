@@ -27,10 +27,10 @@ const absoluteStaticUrl = (path) => {
 };
 const LOGO_URL = "/logo.jpg"; 
 
-// 🆕 Application version for cache busting
+// Application version for cache busting
 const APP_VERSION = "2026.02.06.1649";
 
-// 🆕 Check and clear localStorage if version mismatch (run once on load)
+// Check and clear localStorage if version mismatch (run once on load)
 (() => {
     const storedVersion = localStorage.getItem('appVersion');
     if (storedVersion !== APP_VERSION) {
@@ -52,7 +52,7 @@ const APP_VERSION = "2026.02.06.1649";
     }
 })();
 
-// --- CONSTANTS ---
+// CONSTANTS
 const BRANDS = ["BG (B.Look Garment)", "Jersey Express"];
 const SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
@@ -96,9 +96,6 @@ const ADDON_OPTIONS = [
     { id: 'shortSleeveAlt', name: 'แขนจิ้ม', price: 20 },
     { id: 'oversizeSlopeShoulder', name: 'ทรงโอเวอร์ไซส์ไหล่สโลป', price: 60 }
 ];
-
-// State: addon definitions loaded from backend (authoritative)
-// NOTE: moved into `App` component to satisfy React Hooks rules.
 
 const buildAddOnOptionsState = (defs) => (defs || []).reduce((acc, opt) => ({ ...acc, [opt.id]: false }), {});
 
@@ -174,9 +171,6 @@ const DEFAULT_NECK_TYPES = [
     { id: 15, name: 'คอเชิ้ตฐานตั้ง', extraPrice: 0, priceGroup: 'collarOthers', supportSlope: false, forceSlope: false },
 ];
 
-// Helper: Normalize neck name for matching
-// - normalize common misspelling, remove parenthetical annotations (e.g. "(มีลิ้น)")
-// - collapse whitespace
 const normalizeNeckName = (name) => {
     if (!name) return "";
     let n = String(name || "");
@@ -227,13 +221,13 @@ const getNeckTypes = () => {
             // Clean stored names to remove any appended UI annotations or parentheticals
             storedList = storedList.map(it => ({ ...it, name: normalizeNeckName(it?.name) }));
             
-            // ⚠️ VALIDATION: Check if any neck has corrupted extraPrice (> 100)
+            // VALIDATION: Check if any neck has corrupted extraPrice (> 100)
             const hasCorruptData = storedList.some(item => 
                 item?.extraPrice && item.extraPrice > 100
             );
             
             if (hasCorruptData) {
-                console.error("🧹 Detected corrupt neckTypes data in localStorage. Cleaning...");
+                console.error("Detected corrupt neckTypes data in localStorage. Cleaning...");
                 localStorage.removeItem('neckTypes');
                 return DEFAULT_NECK_TYPES;
             }
@@ -253,7 +247,7 @@ const getNeckTypes = () => {
                         ...merged[existingIndex],
                         ...item,
                         name: normalizeNeckName(merged[existingIndex].name),
-                        // ⚠️ Clamp extraPrice to safe range (0-100)
+                        // Clamp extraPrice to safe range (0-100)
                         extraPrice: isTongueNeck ? 0 : Math.min(Math.max(item.extraPrice || 0, 0), 100)
                     };
                 } else if (item?.name) {
@@ -313,7 +307,7 @@ const getNeckExtraPrice = (neckName) => {
     const isTongueNeck = (neck?.name || "").includes('มีลิ้น');
     const extraPrice = isTongueNeck ? 0 : (neck?.extraPrice || 0);
 
-    // ⚠️ SANITY CHECK: extraPrice should never exceed 100 THB
+    // SANITY CHECK: extraPrice should never exceed 100 THB
     if (extraPrice > 100) {
         console.error("🚨 CORRUPT DATA: extraPrice =", extraPrice, "for neck:", neckName);
         console.error("This indicates localStorage corruption. Cleaning up...");
@@ -404,7 +398,7 @@ async function fetchWithAuth(endpoint, options = {}) {
     }
 }
 
-// --- COMPONENTS ---
+// COMPONENTS
 // 0. Pagination Component with page numbers
 const PaginationControls = ({ currentPage, totalPages, onPageChange }) => {
     const getPageNumbers = () => {
@@ -542,7 +536,7 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
     const backInputRef = useRef(null);
     const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
   
-  // 🟢 เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
+  // เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
   const handleImageSelect = (side, e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -1279,9 +1273,7 @@ const MetricCard = ({ title, value, color, onClick, isHoverable = true }) => (
     </div>
 );
 
-// -----------------------------------------------------------------------------
 // 2.1 DASHBOARD (FULL UPDATED CODE)
-// -----------------------------------------------------------------------------
 const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     
@@ -1311,7 +1303,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
     const [detailModal, setDetailModal] = useState(null);
     const [detailOrder, setDetailOrder] = useState(null); 
 
-    // --- Helper: Date Range Checker ---
+    // Helper: Date Range Checker
     const isInTimeRange = (dateStr, range) => {
         if (!dateStr) return false;
         const date = new Date(dateStr);
@@ -1338,7 +1330,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
                 const orders = await fetchWithAuth('/orders');
                 const data = orders || [];
                 
-                // --- 1. Apply Brand Filter First ---
+                // 1. Apply Brand Filter First 
                 let filteredData = data;
                 if (brandFilter !== 'All Outlets') {
                     // สมมติว่ามี field brand หรือเดาจากสินค้า (ในที่นี้ถ้าไม่มี field brand ชัดเจน อาจต้องข้ามไปก่อน หรือใช้ logic อื่น)
@@ -1347,7 +1339,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
                     // filteredData = data.filter(o => o.brand === brandFilter);
                 }
 
-                // --- 2. Calculate Metrics based on Time Range ---
+                // 2. Calculate Metrics based on Time Range
                 
                 // 2.1 New Orders (Created Date matches Time Range)
                 const newOrders = filteredData.filter(o => {
@@ -1382,7 +1374,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
                     delivered
                 });
 
-                // --- 3. Calendar Events (Show All for the selected month view) ---
+                // 3. Calendar Events (Show All for the selected month view)
                 const mappedEvents = filteredData.map(o => {
                     const targetDate = o.usage_date ? new Date(o.usage_date) : (o.deadline ? new Date(o.deadline) : null);
                     if (!targetDate) return null;
@@ -1399,7 +1391,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
 
                 setEvents(mappedEvents.filter(e => e.month === currentDate.getMonth() && e.year === currentDate.getFullYear()));
 
-                // --- 3.5 Smart Notifications (Alerts for urgent items) ---
+                // 3.5 Smart Notifications (Alerts for urgent items)
                 const alerts = [];
                 data.forEach(o => {
                     const now = new Date();
@@ -1438,7 +1430,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
                     });
                 }
 
-                // --- 4. Today's Activity List (Fix list generation) ---
+                // 4. Today's Activity List (Fix list generation)
                 const todayItems = [];
                 const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
                 
@@ -1583,7 +1575,7 @@ const DashboardPage = ({ onEdit, onAlertsUpdate }) => {
                         <p className="text-gray-500">ภาพรวมร้านค้าของคุณ</p>
                     </div>
                     
-                    {/* --- GLOBAL FILTER BAR --- */}
+                    {/* GLOBAL FILTER BAR */}
                     <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-gray-200 gap-1">
                         {['today', 'week', 'month'].map(range => (
                             <button
@@ -1976,7 +1968,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setContactChannel(editingOrder.contact_channel || "LINE OA");
         setAddress(editingOrder.address || "");
         
-        // 🟢 Dates & Status (โหลดใส่วันที่จัดส่งช่องเดียว)
+        // Dates & Status (โหลดใส่วันที่จัดส่งช่องเดียว)
         const dDate = editingOrder.usage_date || editingOrder.deadline;
         setDeliveryDate(dDate ? new Date(dDate).toISOString().split('T')[0] : "");
         setStatus(editingOrder.status || "draft");
@@ -2001,7 +1993,6 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             setSelectedFabric(firstItem.fabric_type || "");
             setSelectedNeck(firstItem.neck_type || "");
             setSelectedSleeve(firstItem.sleeve_type || "");
-            // ✅ FIX: Load historical base price and add-ons from the saved order
             // Lock automatic recalculation so the UI preserves historical pricing
             setBasePrice(firstItem.price_per_unit || 0);
 
@@ -2510,7 +2501,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         return;
     }
 
-    // ⚠️ NEW VALIDATION: Check if basePrice is reasonable
+    // NEW VALIDATION: Check if basePrice is reasonable
     if (basePrice < 50 || basePrice > 500) {
         console.error("⛔ SUSPICIOUS BASE PRICE:", basePrice);  
         onNotify(`ราคาต่อหน่วยผิดปกติ: ${basePrice} บาท (ควรอยู่ระหว่าง 50-500)`, "error");
@@ -2633,7 +2624,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             is_vat_included: Boolean(isVatIncluded),
             status: status || "draft",
             urgency_level: urgencyStatus || "normal",
-            // 🟢 โคลนค่าวันที่จัดส่ง ไปเป็น deadline อัตโนมัติ เพื่อให้คำนวณ Urgency และโชว์ในตาราง
+            // โคลนค่าวันที่จัดส่ง ไปเป็น deadline อัตโนมัติ เพื่อให้คำนวณ Urgency และโชว์ในตาราง
             deadline: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             usage_date: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,
             note: note && note.trim() !== "" ? note.trim() : null,
@@ -2682,7 +2673,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
     onNotify("คัดลอกข้อมูลเรียบร้อยแล้ว", "success");
   };
 
-    // 🟢 คำนวณความด่วน (Urgency) จากช่องวันที่จัดส่งช่องเดียว
+    // คำนวณความด่วน (Urgency) จากช่องวันที่จัดส่งช่องเดียว
     useEffect(() => {
         if (!deliveryDate) { setUrgencyStatus("normal"); return; }
         const diffDays = Math.ceil((new Date(deliveryDate) - new Date()) / (1000 * 60 * 60 * 24));
@@ -2850,7 +2841,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                         
                         <select className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={contactChannel} onChange={e => setContactChannel(e.target.value)}><option>LINE OA</option><option>Facebook</option><option>โทรศัพท์</option></select>
 
-                        {/* 🟢 ย้ายช่องวันที่จัดส่งขึ้นมาแทนที่เดิม */}
+                        {/* ย้ายช่องวันที่จัดส่งขึ้นมาแทนที่เดิม */}
                         <div className="flex flex-col">
                             <input type="date" className="border-gray-200 border p-2.5 md:p-3 rounded-xl bg-gray-50 focus:bg-white transition text-sm md:text-base" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
                             <span className="text-[10px] text-gray-400 mt-1 ml-1">กำหนดส่ง</span>
@@ -3906,7 +3897,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
     return (
         <div className="p-3 sm:p-4 md:p-6 lg:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
 
-            {/* 🟢 Payment Link Popup (ลิงก์จ่ายเงินยอดคงเหลือ) */}
+            {/* Payment Link Popup (ลิงก์จ่ายเงินยอดคงเหลือ) */}
             {showPaymentPopup && paymentOrder && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm fade-in px-4">
                     <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full animate-in zoom-in-95 duration-200">
@@ -4165,7 +4156,7 @@ const SettingsPage = ({ onNotify, addOnDefinitions, setAddOnDefinitions }) => {
       } catch(e) { onNotify("บันทึกการตั้งค่าไม่สำเร็จ: " + e.message, "error"); }
   }
 
-  // --- Add-on price editor (Settings) ---
+  // Add-on price editor (Settings)
   const startEditAddOn = (opt) => {
       setEditingAddOnId(opt.id);
       setEditingAddOnPrice(opt.price || 0);
@@ -4629,7 +4620,7 @@ const NavItem = ({ icon, label, active, onClick, badge }) => (
         </button>
 );
 
-// --- 3. MAIN APP (Revised Sidebar & Routing) ---
+// 3. MAIN APP (Revised Sidebar & Routing)
 const App = () => {
     // Public payment pages (mounted before admin UI)
     try{
@@ -4658,8 +4649,7 @@ const App = () => {
   const [unreadCount, setUnreadCount] = useState(0);
     // Authoritative add-on definitions (shared across app)
     const [addOnDefinitions, setAddOnDefinitions] = useState(ADDON_OPTIONS);
-  
-  // ✅ FIX: Track when customer list should refresh (after order creation)
+
   const [customerRefreshTrigger, setCustomerRefreshTrigger] = useState(false);
 
   useEffect(() => {

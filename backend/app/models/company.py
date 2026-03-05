@@ -10,8 +10,7 @@ class Company(Base):
     address = Column(Text, nullable=True)
     tax_id = Column(String, nullable=True)
     phone = Column(String, nullable=True)
-    
-    # Global Config Fields
+
     vat_rate = Column(Float, default=0.07)
     default_shipping_cost = Column(Float, default=0.0)
 

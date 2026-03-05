@@ -9,7 +9,6 @@ import re
 
 router = APIRouter()
 
-
 class MasterCreate(BaseModel):
     name: str
     price_adjustment: float = 0
@@ -18,8 +17,6 @@ class MasterCreate(BaseModel):
     cost_price: float = 0
     force_slope: bool = False
 
-
-# ✅ FIX: ปรับ Limit เป็น 1000 เพื่อให้แสดงข้อมูลครบทุกรายการ
 @router.get("/fabrics", response_model=List[FabricTypeResponse])
 def get_fabrics(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return (
@@ -29,7 +26,6 @@ def get_fabrics(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db))
         .limit(limit)
         .all()
     )
-
 
 @router.get("/necks", response_model=List[NeckTypeResponse])
 def get_necks(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
@@ -42,7 +38,6 @@ def get_necks(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
         .all()
     )
 
-
 @router.get("/sleeves", response_model=List[SleeveTypeResponse])
 def get_sleeves(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return (
@@ -52,7 +47,6 @@ def get_sleeves(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db))
         .limit(limit)
         .all()
     )
-
 
 @router.post("/necks")
 def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
@@ -73,7 +67,6 @@ def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
     db.add(new_item)
     db.commit()
     return new_item
-
 
 @router.put("/necks/{item_id}")
 def update_neck(item_id: int, item: MasterCreate, db: Session = Depends(get_db)):

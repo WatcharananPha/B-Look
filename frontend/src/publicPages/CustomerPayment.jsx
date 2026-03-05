@@ -84,7 +84,6 @@ export default function CustomerPayment({uuid}){
     </div>
   )
 
-
   const installmentForStatus = (status)=>{
     const s=(status||'').toUpperCase()
     if(s==='WAITING_BOOKING') return 'booking'

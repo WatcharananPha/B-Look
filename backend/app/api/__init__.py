@@ -23,6 +23,5 @@ api_router.include_router(
 )
 api_router.include_router(company.router, prefix="/company", tags=["Company"])
 api_router.include_router(admin.router, prefix="/admin", tags=["Admin"])
-# ✅ Add pricing router
 api_router.include_router(pricing.router, prefix="/pricing", tags=["Pricing"])
 api_router.include_router(public.router, prefix="/public", tags=["Public"])

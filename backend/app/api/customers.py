@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
-from pydantic import BaseModel, Field  # ✅ 1. Import Field
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
@@ -15,7 +15,6 @@ class CustomerSchema(BaseModel):
     customer_code: str | None = None
     phone: str | None = None
 
-    # ✅ 2. เพิ่ม validation_alias="channel" เพื่อ Map ข้อมูลจาก DB (channel) -> Frontend (contact_channel)
     contact_channel: str | None = Field(default=None, validation_alias="channel")
 
     address: str | None = None
@@ -31,20 +30,15 @@ class CustomerCreate(BaseModel):
     contact_channel: str | None = None
     address: str | None = None
 
-
-# --- Routes ---
-
-
 @router.get("/", response_model=List[CustomerSchema])
 def read_customers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # เมื่อ query ออกมา Pydantic จะใช้ validation_alias ดึงค่า channel มาใส่ contact_channel ให้เอง
+    # When the query is returned, Pydantic will use `validation_alias` to retrieve the `channel` value and pass it to `contact_channel`.
     return db.query(Customer).offset(skip).limit(limit).all()
-
 
 @router.post("/", response_model=CustomerSchema)
 def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     db_cust = Customer(
-        name=customer.name.strip(),  # ✅ ตัดช่องว่าง
+        name=customer.name.strip(),
         customer_code=customer.customer_code,
         phone=customer.phone,
         channel=customer.contact_channel,
@@ -54,7 +48,6 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_cust)
     return db_cust
-
 
 @router.put("/{customer_id}", response_model=CustomerSchema)
 def update_customer(
@@ -73,7 +66,6 @@ def update_customer(
     db.commit()
     db.refresh(db_cust)
     return db_cust
-
 
 @router.delete("/{customer_id}", status_code=204)
 def delete_customer(customer_id: int, db: Session = Depends(get_db)):

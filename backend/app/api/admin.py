@@ -11,8 +11,6 @@ from fastapi import Body
 
 router = APIRouter()
 
-
-# Schema สำหรับรับค่า Update
 class UserUpdate(BaseModel):
     role: str
     is_active: Optional[bool] = True
@@ -28,21 +26,16 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
-
-# 1. ดูรายชื่อ User ทั้งหมด
 @router.get("/users", response_model=List[UserOut])
 def read_users(
     db: Session = Depends(get_db), current_user: User = Depends(deps.get_current_user)
 ):
-    # เช็คสิทธิ์: เฉพาะ Admin หรือ Owner เท่านั้น
     if current_user.role not in ["admin", "owner"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     users = db.query(User).all()
     return users
 
-
-# 2. เปลี่ยน Role / Approve User
 @router.put("/users/{user_id}", response_model=UserOut)
 def update_user_role(
     user_id: int,
@@ -65,11 +58,8 @@ def update_user_role(
     db.refresh(user)
     return user
 
-
-# --- Approve Order / Advance Status (Admin only) ---
 class ApproveBody(BaseModel):
     next_status: Optional[str] = None
-
 
 @router.post("/orders/{order_id}/approve")
 def approve_order(
@@ -85,7 +75,6 @@ def approve_order(
     if not o:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    # Determine next status if not provided
     if body.next_status:
         o.status = body.next_status
     else:

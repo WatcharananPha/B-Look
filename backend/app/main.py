@@ -6,13 +6,10 @@ from sqlalchemy import text
 from passlib.context import CryptContext
 import logging
 import os
-
 from app.db.session import engine, SessionLocal
 from app.db.base import Base
 from app.core.config import settings
 from fastapi.staticfiles import StaticFiles
-
-# Import Router ทั้งหมด
 from app.api import (
     auth,
     orders,
@@ -29,7 +26,6 @@ from app.api import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# สร้าง Tables เฉพาะเมื่อรันในโหมดพัฒนา (SQLite/local) เท่านั้น
 try:
     is_sqlite = (
         getattr(settings, "DATABASE_URL", "").startswith("sqlite")
@@ -49,8 +45,6 @@ else:
 
 app = FastAPI(title="B-Look OMS API (Production)")
 
-# --- CORS CONFIG ---
-# Restrict origins in production by setting CORS_ORIGINS env var.
 origins = settings.CORS_ORIGINS
 
 app.add_middleware(
@@ -62,12 +56,11 @@ app.add_middleware(
 )
 
 
-# --- SYSTEM AUTO-REPAIR: Reset Admin on Startup ---
+# SYSTEM AUTO-REPAIR: Reset Admin on Startup
 @app.on_event("startup")
 def startup_repair():
     try:
         db = SessionLocal()
-        # 1. เช็คว่ามี admin ไหม
         result = db.execute(
             text("SELECT id FROM users WHERE username = 'admin'")
         ).first()
@@ -92,12 +85,11 @@ def startup_repair():
             )
         else:
             logger.info("✅ Admin user already exists — skipping creation.")
-        # --- DEDUPE: Clean duplicate neck_types entries that may contain UI annotations
         try:
             from app.models.product import NeckType
 
             rows = db.query(NeckType).all()
-            # normalize and group
+
             import re
 
             groups = {}
@@ -113,13 +105,12 @@ def startup_repair():
 
             for name_norm, group in groups.items():
                 if len(group) <= 1:
-                    # ensure stored name is normalized
                     g0 = group[0]
                     if g0.name != name_norm:
                         g0.name = name_norm
                         db.add(g0)
                     continue
-                # pick keeper: prefer one with force_slope True, then higher cost_price
+
                 keeper = sorted(
                     group,
                     key=lambda x: (
@@ -129,7 +120,6 @@ def startup_repair():
                 )[0]
                 keeper.name = name_norm
                 db.add(keeper)
-                # delete others
                 for rdel in group:
                     if rdel.id == keeper.id:
                         continue
@@ -140,7 +130,6 @@ def startup_repair():
         except Exception:
             logger.exception("Neck dedupe step failed")
 
-        # Ensure forced-slope necks have a sensible additional_cost (default 40)
         try:
             from app.models.product import NeckType
 
@@ -151,7 +140,6 @@ def startup_repair():
                         r.additional_cost = 40
                         db.add(r)
                 except Exception:
-                    # If conversion fails, still set to default
                     r.additional_cost = 40
                     db.add(r)
         except Exception:
@@ -162,14 +150,9 @@ def startup_repair():
     except Exception as e:
         logger.error(f"❌ Startup Repair Failed: {e}")
 
-
-# Ensure static directory exists for uploaded slips
 os.makedirs(os.path.join(os.getcwd(), "static", "slips"), exist_ok=True)
-# Ensure static/mockups exists for uploaded mockup images
 os.makedirs(os.path.join(os.getcwd(), "static", "mockups"), exist_ok=True)
 
-
-# --- ROUTERS ---
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(products.router, prefix="/api/v1/products", tags=["Products"])
@@ -183,13 +166,10 @@ app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 
-# Serve uploaded slips
 app.mount(
     "/static", StaticFiles(directory=os.path.join(os.getcwd(), "static")), name="static"
 )
 
-
-# --- ROOT ENDPOINT (กัน Error Not Found หน้าแรก) ---
 @app.get("/")
 def read_root():
     return {
