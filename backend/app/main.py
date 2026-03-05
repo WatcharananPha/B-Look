@@ -62,32 +62,27 @@ app.add_middleware(
 def startup_repair():
     try:
         db = SessionLocal()
-        result = db.execute(
-            text("SELECT id FROM users WHERE username = 'admin'")
-        ).first()
+        # Delete any existing admin user to avoid bcrypt corruption issues
+        db.execute(text("DELETE FROM users WHERE username = 'admin'"))
+        db.commit()
 
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         hashed_pw = pwd_context.hash("password123")
 
-        if not result:
-            logger.warning(
-                "⚠️ Admin not found. Creating initial admin user (password: password123)."
-            )
-            sql = text(
-                """
-                INSERT INTO users (username, password_hash, full_name, role, is_active)
-                VALUES ('admin', :h, 'System Admin', 'owner', true)
+        logger.warning(
+            "⚠️ Creating/resetting admin user (password: password123). Delete this user and create a real one immediately!"
+        )
+        sql = text(
             """
-            )
-            db.execute(sql, {"h": hashed_pw})
-            db.commit()
-            logger.info(
-                "✅ Initial admin created. Change the password immediately after first login."
-            )
-        else:
-            logger.info("✅ Admin user already exists — skipping creation.")
-            # Note: Don't try to verify during startup; corrupted passwords will fail here.
-            # Use /api/v1/emergency/reset endpoint to manually fix if needed.
+            INSERT INTO users (username, password_hash, full_name, role, is_active)
+            VALUES ('admin', :h, 'System Admin', 'owner', true)
+        """
+        )
+        db.execute(sql, {"h": hashed_pw})
+        db.commit()
+        logger.info(
+            "✅ Admin user created/reset. Please change the password immediately after login."
+        )
         try:
             from app.models.product import NeckType
 
