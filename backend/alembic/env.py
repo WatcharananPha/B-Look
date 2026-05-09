@@ -26,6 +26,9 @@ from app.models.customer import Customer
 from app.models.product import *
 from app.models.pricing_rule import PricingRule, ShippingRate
 from app.models.audit_log import AuditLog
+from app.models.notification import Notification
+from app.models.supplier import Supplier
+from app.models.company import Company
 
 # this is the Alembic Config object
 config = context.config

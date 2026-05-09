@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertCircle, User, Key, Lock } from 'lucide-react'; // เพิ่ม Lock icon
 import { GoogleLogin } from '@react-oauth/google';
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
 const LOGO_URL = "/logo.jpg";
 
 const LoginPage = ({ onLogin }) => {

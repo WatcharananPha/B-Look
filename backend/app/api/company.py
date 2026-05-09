@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.company import Company
 from app.schemas.company import CompanyConfig, CompanyUpdate
+from app.api.rbac import require_roles
+from app.models.user import User
 from decimal import Decimal
 
 router = APIRouter()
@@ -41,7 +43,9 @@ def get_company_config(db: Session = Depends(get_db)) -> Any:
 
 @router.put("/config", response_model=CompanyConfig)
 def update_company_config(
-    config_in: CompanyUpdate, db: Session = Depends(get_db)
+    config_in: CompanyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "ADMIN_OPS", "OWNER")),
 ) -> Any:
     company = db.query(Company).first()
     if not company:

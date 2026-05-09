@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.customer import Customer
+from app.api.rbac import require_roles
+from app.models.user import User
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -30,13 +32,19 @@ class CustomerCreate(BaseModel):
     contact_channel: str | None = None
     address: str | None = None
 
+
 @router.get("/", response_model=List[CustomerSchema])
 def read_customers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     # When the query is returned, Pydantic will use `validation_alias` to retrieve the `channel` value and pass it to `contact_channel`.
     return db.query(Customer).offset(skip).limit(limit).all()
 
+
 @router.post("/", response_model=CustomerSchema)
-def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
+def create_customer(
+    customer: CustomerCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("SALES_ADMIN", "ADMIN_D", "ADMIN_OPS")),
+):
     db_cust = Customer(
         name=customer.name.strip(),
         customer_code=customer.customer_code,
@@ -49,9 +57,13 @@ def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     db.refresh(db_cust)
     return db_cust
 
+
 @router.put("/{customer_id}", response_model=CustomerSchema)
 def update_customer(
-    customer_id: int, customer: CustomerCreate, db: Session = Depends(get_db)
+    customer_id: int,
+    customer: CustomerCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("SALES_ADMIN", "ADMIN_D", "ADMIN_OPS")),
 ):
     db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
     if not db_cust:
@@ -67,8 +79,13 @@ def update_customer(
     db.refresh(db_cust)
     return db_cust
 
+
 @router.delete("/{customer_id}", status_code=204)
-def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+def delete_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("ADMIN_OPS", "ADMIN")),
+):
     db_cust = db.query(Customer).filter(Customer.id == customer_id).first()
     if not db_cust:
         raise HTTPException(status_code=404, detail="Customer not found")

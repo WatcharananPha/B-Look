@@ -1,0 +1,123 @@
+"""
+Simple RBAC helpers and transition rules for Order lifecycle.
+This file provides:
+- require_roles(...): a FastAPI dependency to gate endpoints by role
+- can_transition(current, target, role): check allowed state transitions
+- mask_order_for_role(order_dict, role): hide sensitive fields for some roles (e.g. PRODUCTION)
+"""
+
+from typing import Optional
+from fastapi import Depends, HTTPException, status
+from app.api.deps import get_current_user
+
+
+def _is_superuser(role: Optional[str]) -> bool:
+    if not role:
+        return False
+    return role.upper() in ("ADMIN", "SUPERADMIN", "ROOT", "SUPERUSER", "OWNER")
+
+
+def require_roles(*allowed_roles: str):
+    allowed_upper = [r.upper() for r in allowed_roles]
+
+    def _dependency(current_user=Depends(get_current_user)):
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
+        user_role = (getattr(current_user, "role", "") or "").upper()
+        if _is_superuser(user_role) or user_role in allowed_upper:
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
+        )
+
+    return _dependency
+
+
+# Define allowed transitions with minimal set needed for flow
+_TRANSITIONS = {
+    "WAITING_BOOKING": {"WAITING_DEPOSIT": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]},
+    "WAITING_DEPOSIT": {"WAITING_ARTWORK": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]},
+    "WAITING_ARTWORK": {
+        "WAITING_CUSTOMER_APPROVAL": [
+            "GRAPHIC_DESIGNER",
+            "ADMIN_OPS",
+            "SALES_ADMIN",
+            "ADMIN_D",
+        ]
+    },
+    "WAITING_CUSTOMER_APPROVAL": {
+        "ARTWORK_APPROVED": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]
+    },
+    "ARTWORK_APPROVED": {"READY_FOR_PRODUCTION": ["ADMIN_OPS"]},
+    "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC_DESIGNER", "PRODUCTION"]},
+    "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["PRODUCTION", "ADMIN_OPS"]},
+    "READY_FOR_SHIPPING": {"SHIPPED": ["SHIPPING_ADMIN", "ADMIN_OPS"]},
+    # Allow admins to reopen a slip-rejected order back to booking stage
+    "SLIP_REJECTED": {"WAITING_BOOKING": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]},
+}
+
+
+def can_transition(
+    current_status: Optional[str], target_status: Optional[str], role: Optional[str]
+) -> bool:
+    # superusers can always transition
+    if _is_superuser(role):
+        return True
+    if not current_status or not target_status:
+        return False
+    cur = current_status.upper()
+    tgt = target_status.upper()
+    role_up = (role or "").upper()
+    allowed = _TRANSITIONS.get(cur, {})
+    allowed_roles = allowed.get(tgt, [])
+    return role_up in [r.upper() for r in allowed_roles]
+
+
+def mask_order_for_role(order: dict, role: Optional[str]) -> dict:
+    """Return a shallow-masked copy of order for roles that must not see PII/finance.
+
+    Currently masks for role == PRODUCTION by removing customer and financial fields
+    and reducing item payloads to production-relevant fields.
+    """
+    if not role:
+        return order
+    role_up = role.upper()
+    # Production and Graphic Designer roles must not see price/payment/PII
+    if role_up in ("PRODUCTION", "GRAPHIC_DESIGNER"):
+        masked = order.copy()
+        for k in [
+            "grand_total",
+            "total_cost",
+            "vat_amount",
+            "deposit_amount",
+            "deposit_1",
+            "deposit_2",
+            "balance_amount",
+            "phone",
+            "address",
+            "customer_name",
+            "contact_channel",
+            "order_no",
+            "slip_booking_url",
+            "slip_deposit_url",
+            "slip_balance_url",
+        ]:
+            if k in masked:
+                masked.pop(k, None)
+
+        items = []
+        for it in masked.get("items", []) or []:
+            it_mask = {
+                "product_name": it.get("product_name"),
+                "total_qty": it.get("total_qty"),
+                "selected_add_ons": it.get("selected_add_ons"),
+                "neck_type": it.get("neck_type"),
+                "fabric_type": it.get("fabric_type"),
+            }
+            items.append(it_mask)
+        masked["items"] = items
+        return masked
+    return order

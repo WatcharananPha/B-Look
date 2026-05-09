@@ -12,6 +12,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
 
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -67,6 +68,12 @@ class Order(Base):
     # Mockup image URLs (front/back) for order preview/uploads
     mockup_front_url = Column(String, nullable=True)
     mockup_back_url = Column(String, nullable=True)
+    # Artwork / Print files stored as URLs to /static
+    artwork_url = Column(String, nullable=True)
+    print_file_url = Column(String, nullable=True)
+    # Production ticket / tracking
+    production_ticket_issued = Column(Boolean, default=False)
+    tracking_number = Column(String, nullable=True)
 
     # Cost & Profit
     total_cost = Column(DECIMAL(10, 2), default=0)
@@ -83,6 +90,7 @@ class Order(Base):
     items = relationship(
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
     )
+
 
 class OrderItem(Base):
     __tablename__ = "order_items"

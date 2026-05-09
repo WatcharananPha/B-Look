@@ -4,15 +4,18 @@ import {
   Truck, CreditCard, Tag, LogOut, Search, Plus, Edit, Trash2, 
   CheckCircle, Filter, Phone, MessageCircle, MapPin, XCircle,
   LayoutDashboard, Printer, Copy, Lock, ChevronLeft, ChevronRight, Menu, X, ArrowLeft,
-  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag
+  Download, Settings, DollarSign, ChevronDown, Bell, ShoppingCart, MoreHorizontal, Info, Users, Clock, FileClock, Flag,
+  RefreshCw, Package, Image as ImageIcon
 } from 'lucide-react';
 import LoginPage from './login';
 import CustomerPayment from './publicPages/CustomerPayment';
 import PaymentSuccess from './publicPages/PaymentSuccess';
+import SlipUploadPage from './publicPages/SlipUploadPage';
 import OrderAdminExtras from './components/OrderAdminExtras';
 
 /* eslint-disable react-hooks/rules-of-hooks */
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+// Default API URL: prefer `VITE_API_URL`, otherwise use localhost:8080 (dev backend)
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
 
 // Convert backend-served static paths (e.g. "/static/mockups/...") to absolute URLs
 const absoluteStaticUrl = (path) => {
@@ -25,7 +28,18 @@ const absoluteStaticUrl = (path) => {
         return path;
     }
 };
-const LOGO_URL = "/logo.jpg"; 
+const LOGO_URL = "/logo.jpg";
+
+// ─── RBAC Role Utilities ─────────────────────────────────────────────────────
+const SUPERUSER_ROLES = ['ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER'];
+const normalizeRole = (r) => (r || '').toUpperCase();
+const hasRole = (role, ...allowed) => allowed.flat().includes(normalizeRole(role));
+const isSuperuser = (role) => SUPERUSER_ROLES.includes(normalizeRole(role));
+const canViewFinancials = (role) => hasRole(role, 'ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER', 'ADMIN_D', 'ADMIN_OPS', 'SALES_ADMIN');
+const canManageOrders = (role) => hasRole(role, 'ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER', 'ADMIN_D', 'ADMIN_OPS', 'SALES_ADMIN');
+// Roles that should never see prices, payment data, or customer PII (phone/address)
+const isDataMasked = (role) => hasRole(role, 'GRAPHIC_DESIGNER', 'PRODUCTION');
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Application version for cache busting
 const APP_VERSION = "2026.02.06.1649";
@@ -534,7 +548,9 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
     const [backImageFile, setBackImageFile] = useState(null);
     const frontInputRef = useRef(null);
     const backInputRef = useRef(null);
-    const canViewCost = ['owner', 'md'].includes(localStorage.getItem('user_role'));
+    const canViewCost = canViewFinancials(localStorage.getItem('user_role'));
+    // GRAPHIC_DESIGNER and PRODUCTION roles must not see customer PII (phone/address)
+    const maskPII = isDataMasked(localStorage.getItem('user_role'));
   
   // เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
   const handleImageSelect = (side, e) => {
@@ -745,6 +761,50 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
           </div>
       )}
       
+      {/* Order Status Stepper — screen only, not printed */}
+      {data.status && !isFactoryView && (() => {
+        const _steps = [
+          { key: 'WAITING_ARTWORK',            label: 'รอ Artwork',        short: '1' },
+          { key: 'WAITING_CUSTOMER_APPROVAL',  label: 'รอลูกค้าอนุมัติ',  short: '2' },
+          { key: 'ARTWORK_APPROVED',           label: 'อนุมัติแล้ว',       short: '3' },
+          { key: 'IN_PRODUCTION',              label: 'กำลังผลิต',         short: '4' },
+          { key: 'READY_FOR_SHIPPING',         label: 'พร้อมจัดส่ง',       short: '5' },
+          { key: 'SHIPPED',                    label: 'จัดส่งแล้ว',        short: '6' },
+        ];
+        const _cur = _steps.findIndex(s => s.key === (data.status || '').toUpperCase());
+        return (
+          <div className="print:hidden w-[210mm] mx-auto mt-3 mb-1 px-4" onClick={e => e.stopPropagation()}>
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20 shadow-lg">
+              <div className="flex items-center justify-between relative">
+                {/* Connecting line behind dots */}
+                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 bg-white/20 mx-5 z-0"/>
+                {/* Filled portion */}
+                {_cur > 0 && (
+                  <div className="absolute left-5 top-1/2 -translate-y-1/2 h-0.5 bg-emerald-400 z-0 transition-all duration-500"
+                    style={{ width: `calc(${(_cur / (_steps.length - 1)) * 100}% - 2.5rem)` }}/>
+                )}
+                {_steps.map((step, i) => {
+                  const done = i < _cur;
+                  const active = i === _cur;
+                  return (
+                    <div key={step.key} className="flex flex-col items-center gap-1 z-10" style={{ minWidth: '2.5rem' }}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all
+                        ${done ? 'bg-emerald-400 border-emerald-400 text-white' : active ? 'bg-white border-emerald-400 text-emerald-600 ring-2 ring-emerald-300 ring-offset-1 shadow-md' : 'bg-white/10 border-white/30 text-white/50'}`}>
+                        {done ? '✓' : step.short}
+                      </div>
+                      <span className={`text-[9px] font-semibold text-center leading-tight max-w-[3rem]
+                        ${done ? 'text-emerald-300' : active ? 'text-white' : 'text-white/40'}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Main Invoice Content - A4 Paper Size */}
       <div id="invoice-content" className="bg-white w-[210mm] h-[297mm] shadow-2xl relative text-slate-800 font-sans overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
         
@@ -798,7 +858,10 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
         <div className="grid grid-cols-2 border-b border-gray-300 text-sm">
             <div className="p-2 border-r border-gray-300">
                 <span className="text-gray-500 text-xs">โทรศัพท์:</span>
-                <span className="font-medium ml-2">{data.phoneNumber || data.phone || "-"}</span>
+                {maskPII
+                    ? <span className="font-medium ml-2 select-none text-gray-400">•••••••••••</span>
+                    : <span className="font-medium ml-2">{data.phoneNumber || data.phone || "-"}</span>
+                }
             </div>
             <div className="p-2">
                 <span className="text-gray-500 text-xs">วันจัดส่ง:</span>
@@ -875,8 +938,8 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
             </div>
         </div>
         
-        {/* Pricing Section - Hidden in Factory View */}
-        {!isFactoryView && (
+        {/* Pricing Section - Hidden in Factory View and for data-masked roles */}
+        {!isFactoryView && !maskPII && (
             <div className="p-4 border-b border-gray-300">
                 <div className="max-w-md ml-auto">
                     <table className="w-full text-sm">
@@ -1077,7 +1140,7 @@ const OrderDetailModal = ({ order, onClose, onRefresh }) => {
 const UserManagementPage = ({ onNotify }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
-    const currentUserRole = localStorage.getItem('user_role'); // ดึงสิทธิ์ของคนปัจจุบัน
+    const currentUserRole = normalizeRole(localStorage.getItem('user_role')); // ดึงสิทธิ์ของคนปัจจุบัน
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -1111,14 +1174,23 @@ const UserManagementPage = ({ onNotify }) => {
     };
 
     const getRoleBadge = (role) => {
-        switch(role) {
-            case 'owner': return <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner</span>;
-            case 'md': return <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">MD</span>;
-            case 'admin': return <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin</span>;
-            case 'user': return <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">User</span>;
-            case 'pending': return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto animate-pulse"><Lock size={12} className="mr-1"/> รออนุมัติ</span>;
-            default: return <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs">Unknown</span>;
-        }
+        const r = normalizeRole(role);
+        const badges = {
+            'OWNER':            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner</span>,
+            'ADMIN':            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin</span>,
+            'SUPERADMIN':       <span className="bg-violet-100 text-violet-700 px-3 py-1 rounded-full text-xs font-bold border border-violet-200 shadow-sm">Superadmin</span>,
+            'ADMIN_D':          <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">Admin D</span>,
+            'ADMIN_OPS':        <span className="bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full text-xs font-bold border border-cyan-200 shadow-sm">Admin Ops</span>,
+            'SALES_ADMIN':      <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">Sales Admin</span>,
+            'GRAPHIC_DESIGNER': <span className="bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-xs font-bold border border-pink-200 shadow-sm">Designer</span>,
+            'PRODUCTION':       <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold border border-orange-200 shadow-sm">Production</span>,
+            'SHIPPING_ADMIN':   <span className="bg-teal-100 text-teal-700 px-3 py-1 rounded-full text-xs font-bold border border-teal-200 shadow-sm">Shipping</span>,
+            'PENDING':          <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto animate-pulse"><Lock size={12} className="mr-1"/> รออนุมัติ</span>,
+            // Legacy lowercase support
+            'MD':    <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">MD</span>,
+            'USER':  <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs">User</span>,
+        };
+        return badges[r] || <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-full text-xs">{role || 'Unknown'}</span>;
     };
 
     const totalPages = Math.ceil(users.length / itemsPerPage);
@@ -1151,30 +1223,35 @@ const UserManagementPage = ({ onNotify }) => {
                                         <td className="py-2 sm:py-4 px-2 sm:px-6 text-center border-r border-gray-200 hidden sm:table-cell">{getRoleBadge(u.role)}</td>
                                         <td className="py-2 sm:py-4 px-2 sm:px-6 text-center">
                                             <select 
-                                                className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${u.role === 'pending' ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200'}`}
+                                                className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${normalizeRole(u.role) === 'PENDING' ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200'}`}
                                                 value={u.role}
                                                 onChange={(e) => {
                                                     if (window.confirm(`ยืนยันการเปลี่ยนสิทธิ์ของ ${u.username} เป็น "${e.target.value}"?`)) {
                                                         handleUpdateRole(u.id, e.target.value);
                                                     }
                                                 }}
-                                                // ป้องกันการเปลี่ยนสิทธิ์ตัวเอง หรือ ถ้าไม่ใช่ Owner ห้ามเปลี่ยนคนอื่นเป็น Owner
                                                 disabled={
-                                                    (currentUserRole !== 'owner' && u.role === 'owner') || // Admin ทั่วไปห้ามแก้ Owner
-                                                    (currentUserRole !== 'owner' && currentUserRole !== 'admin') // User ห้ามแก้ใครเลย
+                                                    (normalizeRole(u.role) === 'OWNER' && !hasRole(currentUserRole, 'OWNER')) ||
+                                                    !hasRole(currentUserRole, ...SUPERUSER_ROLES, 'ADMIN_D', 'ADMIN_OPS')
                                                 }
                                             >
                                                 <option value="pending">Pending</option>
-                                                <option value="user">General User</option>
-                                                <option value="admin">Admin</option>
+                                                <option value="GRAPHIC_DESIGNER">Graphic Designer</option>
+                                                <option value="PRODUCTION">Production</option>
+                                                <option value="SHIPPING_ADMIN">Shipping Admin</option>
+                                                <option value="SALES_ADMIN">Sales Admin</option>
 
-                                                {(currentUserRole === 'owner' || currentUserRole === 'admin') && (
-                                                    <option value="md">MD</option>
+                                                {hasRole(currentUserRole, ...SUPERUSER_ROLES, 'ADMIN_OPS') && (
+                                                    <option value="ADMIN_OPS">Admin Ops</option>
                                                 )}
-
-                                                {/* แสดงตัวเลือก Owner เฉพาะถ้าคน Login เป็น Owner */}
-                                                {currentUserRole === 'owner' && (
-                                                    <option value="owner">Owner</option>
+                                                {hasRole(currentUserRole, ...SUPERUSER_ROLES) && (
+                                                    <option value="ADMIN_D">Admin D</option>
+                                                )}
+                                                {hasRole(currentUserRole, ...SUPERUSER_ROLES) && (
+                                                    <option value="ADMIN">Admin</option>
+                                                )}
+                                                {hasRole(currentUserRole, 'OWNER') && (
+                                                    <option value="OWNER">Owner</option>
                                                 )}
                                             </select>
                                         </td>
@@ -1904,6 +1981,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
     const [paymentUrl, setPaymentUrl] = useState(null);
+    const [slipUploadUrl, setSlipUploadUrl] = useState(null);
     // NEW: Hold multiple items for this order
     const [orderItems, setOrderItems] = useState([]);
 
@@ -2648,8 +2726,10 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             const payPath = `/pay/${response.order_uuid}`;
             const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
             setPaymentUrl(`${origin}${payPath}`);
+            setSlipUploadUrl(`${origin}/slip/${response.order_uuid}`);
         } else {
             setPaymentUrl(null);
+            setSlipUploadUrl(null);
         }
 
         onNotify(editingOrder ? "แก้ไขออเดอร์สำเร็จ" : "สร้างออเดอร์สำเร็จ", "success");
@@ -2756,7 +2836,18 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                             <a href={paymentUrl} target="_blank" rel="noreferrer" className="inline-block text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-bold mr-2">จ่ายตอนนี้</a>
                             <button onClick={() => { navigator.clipboard.writeText(paymentUrl); onNotify('คัดลอกลิงก์การจ่ายเงินแล้ว', 'success'); }} className="inline-block text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg font-medium">คัดลอกลิงก์</button>
                             <div className="mt-3 text-xs text-gray-500 break-all">{paymentUrl}</div>
-                            <button onClick={() => { setShowSuccess(false); setPaymentUrl(null); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
+                            {/* Slip upload link for customer */}
+                            {slipUploadUrl && (
+                                <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100 text-left">
+                                    <div className="text-xs font-bold text-blue-700 mb-1">ลิงก์สลิปสำหรับลูกค้า</div>
+                                    <div className="text-[11px] text-gray-500 break-all mb-2">{slipUploadUrl}</div>
+                                    <button onClick={() => { navigator.clipboard.writeText(slipUploadUrl); onNotify('คัดลอกลิงก์อัปโหลดสลิปแล้ว', 'success'); }}
+                                        className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition">
+                                        📋 คัดลอกลิงก์สลิป
+                                    </button>
+                                </div>
+                            )}
+                            <button onClick={() => { setShowSuccess(false); setPaymentUrl(null); setSlipUploadUrl(null); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
                         </div>
                     ) : (
                         <button onClick={() => { setShowSuccess(false); onNavigate('order_list'); }} className="w-full bg-slate-900 text-white font-bold py-2.5 sm:py-3 rounded-xl mt-4">กลับหน้ารายการ</button>
@@ -3804,6 +3895,10 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
     const [currentPage, setCurrentPage] = useState(1);
     const [detailOrder, setDetailOrder] = useState(null);
     const itemsPerPage = 10;
+    // Role-based column masking: GRAPHIC_DESIGNER and PRODUCTION must not see prices or customer PII
+    const _listRole = normalizeRole(localStorage.getItem('user_role'));
+    const _masked = isDataMasked(_listRole);
+    const _canEdit = canManageOrders(_listRole);
   
     // State สำหรับ Payment Popup
     const [showPaymentPopup, setShowPaymentPopup] = useState(false);
@@ -4006,7 +4101,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                     <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">รหัสงาน</th>
                                     <th className="py-4 px-6 w-[20%] text-center border-r border-gray-200">ลูกค้า</th>
                                     <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">กำหนดส่ง</th>
-                                    <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>
+                                    {!_masked && <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">ยอดรวม</th>}
                                     <th className="py-4 px-6 w-[15%] text-center border-r border-gray-200">สถานะ</th>
                                     <th className="py-4 px-6 w-[20%] text-center">จัดการ</th>
                                 </tr>
@@ -4017,8 +4112,8 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                         <td className="py-4 px-6 font-mono font-bold text-gray-700 truncate text-center border-r border-gray-200">{order.order_no}</td>
                                         <td className="py-4 px-6 text-gray-700 text-center border-r border-gray-200">
                                             <div className="font-medium truncate">{order.customer_name}</div>
-                                            <div className="text-xs text-gray-400">{order.contact_channel}</div>
-                                            {(order.slip_booking_url || order.slip_deposit_url || order.slip_balance_url) && (
+                                            {!_masked && <div className="text-xs text-gray-400">{order.contact_channel}</div>}
+                                            {!_masked && (order.slip_booking_url || order.slip_deposit_url || order.slip_balance_url) && (
                                                 <div className="flex items-center justify-center gap-1 mt-1">
                                                     {order.slip_booking_url && <span title="สลิปมัดจำจอง" className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-700 border border-amber-200">B</span>}
                                                     {order.slip_deposit_url && <span title="สลิปมัดจำ 50%" className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200">D</span>}
@@ -4027,7 +4122,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                             )}
                                         </td>
                                         <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">{order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}</td>
-                                        <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>
+                                        {!_masked && <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>}
                                         <td className="py-4 px-6 text-center border-r border-gray-200">
                                             <select value={order.status || 'draft'} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }} className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition">
                                                 <option value="ร่าง">ร่าง</option>
@@ -4047,7 +4142,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                     </tr>
                                 ))}
                                 {filteredOrders.length === 0 && (
-                                    <tr><td colSpan="6" className="py-12 text-center"><div className="flex flex-col items-center justify-center text-slate-400"><FileText size={48} className="mb-3 opacity-50" /><p className="text-lg font-medium">ไม่พบรายการ</p></div></td></tr>
+                                    <tr><td colSpan={_masked ? 5 : 6} className="py-12 text-center"><div className="flex flex-col items-center justify-center text-slate-400"><FileText size={48} className="mb-3 opacity-50" /><p className="text-lg font-medium">ไม่พบรายการ</p></div></td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -4620,6 +4715,706 @@ const NavItem = ({ icon, label, active, onClick, badge }) => (
         </button>
 );
 
+// ─── ForbiddenPage: Shown when a role tries to access a page they can't ─────
+const ForbiddenPage = () => (
+    <div className="flex flex-col items-center justify-center h-full p-10 text-center">
+        <div className="w-24 h-24 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock size={48} className="text-rose-500" />
+        </div>
+        <h1 className="text-3xl font-black text-[#1a1c23] mb-2">ไม่มีสิทธิ์เข้าถึง</h1>
+        <p className="text-gray-500 max-w-sm">คุณไม่มีสิทธิ์เข้าถึงหน้านี้ กรุณาติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์</p>
+    </div>
+);
+
+// ─── ArtworkPage ─────────────────────────────────────────────────────────────
+// Graphic designers upload artwork (WAITING_ARTWORK) and print files (ARTWORK_APPROVED).
+// Sales Admin / Admin D approve or reject artwork (WAITING_CUSTOMER_APPROVAL).
+const ArtworkPage = ({ onNotify }) => {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [artworkFiles, setArtworkFiles] = useState({});   // { orderId: File }
+    const [printFiles, setPrintFiles] = useState({});       // { orderId: File }
+    const [uploading, setUploading] = useState({});
+    const [activeTab, setActiveTab] = useState('upload');   // 'upload' | 'review' | 'approved'
+    const role = normalizeRole(localStorage.getItem('user_role'));
+
+    const canUpload  = hasRole(role, 'GRAPHIC_DESIGNER', ...SUPERUSER_ROLES, 'ADMIN_OPS');
+    const canReview  = hasRole(role, 'SALES_ADMIN', 'ADMIN_D', ...SUPERUSER_ROLES, 'ADMIN_OPS');
+
+    const fetchOrders = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/orders');
+            const artworkOrders = (data || []).filter(o =>
+                ['WAITING_ARTWORK', 'WAITING_CUSTOMER_APPROVAL', 'ARTWORK_APPROVED'].includes((o.status || '').toUpperCase())
+            );
+            setOrders(artworkOrders);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+    const countByStatus = (s) => orders.filter(o => (o.status || '').toUpperCase() === s).length;
+
+    const uploadArtwork = async (orderId) => {
+        const file = artworkFiles[orderId];
+        if (!file) { onNotify('กรุณาเลือกไฟล์ก่อน', 'error'); return; }
+        setUploading(prev => ({ ...prev, [orderId]: true }));
+        try {
+            const form = new FormData();
+            form.append('artwork', file);
+            const token = localStorage.getItem('access_token');
+            const res = await fetch(`${API_URL}/orders/${orderId}/artwork`, {
+                method: 'POST',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                body: form
+            });
+            if (!res.ok) throw new Error(await res.text());
+            onNotify('อัปโหลด Artwork สำเร็จ — รอการอนุมัติ', 'success');
+            setArtworkFiles(prev => { const n = { ...prev }; delete n[orderId]; return n; });
+            fetchOrders();
+        } catch (e) { onNotify('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+        finally { setUploading(prev => ({ ...prev, [orderId]: false })); }
+    };
+
+    const uploadPrintFile = async (orderId) => {
+        const file = printFiles[orderId];
+        if (!file) { onNotify('กรุณาเลือกไฟล์ก่อน', 'error'); return; }
+        setUploading(prev => ({ ...prev, [`p_${orderId}`]: true }));
+        try {
+            const form = new FormData();
+            form.append('print_file', file);
+            const token = localStorage.getItem('access_token');
+            const res = await fetch(`${API_URL}/orders/${orderId}/print-file`, {
+                method: 'POST',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                body: form
+            });
+            if (!res.ok) throw new Error(await res.text());
+            onNotify('อัปโหลดไฟล์พิมพ์สำเร็จ → กำลังผลิต', 'success');
+            setPrintFiles(prev => { const n = { ...prev }; delete n[orderId]; return n; });
+            fetchOrders();
+        } catch (e) { onNotify('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+        finally { setUploading(prev => ({ ...prev, [`p_${orderId}`]: false })); }
+    };
+
+    const patchArtworkStatus = async (orderId, status, msg) => {
+        try {
+            await fetchWithAuth(`/orders/${orderId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+            onNotify(msg, 'success');
+            fetchOrders();
+        } catch (e) { onNotify('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+    };
+
+    const DEADLINE_URGENCY = (deadline) => {
+        if (!deadline) return null;
+        const days = Math.ceil((new Date(deadline) - new Date()) / 86400000);
+        if (days <= 2) return { label: `⚠ ${days} วัน`, cls: 'text-rose-600 font-bold' };
+        if (days <= 5) return { label: `${days} วัน`, cls: 'text-amber-600 font-semibold' };
+        return { label: `${days} วัน`, cls: 'text-gray-400' };
+    };
+
+    const TABS = [
+        { key: 'upload',    label: 'รอ Artwork',   count: countByStatus('WAITING_ARTWORK'),            visible: canUpload },
+        { key: 'review',    label: 'รออนุมัติ',    count: countByStatus('WAITING_CUSTOMER_APPROVAL'),  visible: canReview },
+        { key: 'approved',  label: 'อนุมัติแล้ว',  count: countByStatus('ARTWORK_APPROVED'),           visible: canUpload },
+    ];
+
+    const filteredOrders = orders.filter(o => {
+        const s = (o.status || '').toUpperCase();
+        if (activeTab === 'upload')   return s === 'WAITING_ARTWORK';
+        if (activeTab === 'review')   return s === 'WAITING_CUSTOMER_APPROVAL';
+        if (activeTab === 'approved') return s === 'ARTWORK_APPROVED';
+        return false;
+    });
+
+    return (
+        <div className="flex flex-col h-full bg-[#f0f2f5] fade-in overflow-hidden">
+            {/* ── Header ── */}
+            <div className="bg-white border-b border-gray-200 px-4 sm:px-8 pt-6 pb-0 shrink-0">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h1 className="text-2xl font-black text-[#1a1c23] flex items-center gap-2">
+                            <Printer size={22} className="text-indigo-500" /> งาน Artwork
+                        </h1>
+                        <p className="text-gray-400 text-sm mt-0.5">ออเดอร์ที่รอการออกแบบและอนุมัติ</p>
+                    </div>
+                    <button onClick={fetchOrders} disabled={loading} title="รีเฟรช"
+                        className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition disabled:opacity-40">
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+                {/* Tabs */}
+                <div className="flex gap-1">
+                    {TABS.filter(t => t.visible).map(tab => (
+                        <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                            className={`px-4 py-2 text-sm font-semibold rounded-t-xl border-b-2 transition flex items-center gap-2 ${activeTab === tab.key ? 'border-indigo-500 text-indigo-600 bg-indigo-50/50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                            {tab.label}
+                            {tab.count > 0 && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${activeTab === tab.key ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {tab.count}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── Content ── */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                {loading ? (
+                    <div className="flex items-center justify-center h-40 text-gray-400 gap-2">
+                        <RefreshCw size={18} className="animate-spin" /> กำลังโหลด...
+                    </div>
+                ) : filteredOrders.length === 0 ? (
+                    <div className="text-center py-20">
+                        <Printer size={56} className="mx-auto mb-3 text-gray-200" />
+                        <p className="text-gray-400 font-medium">ไม่มีงานในส่วนนี้</p>
+                    </div>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {filteredOrders.map(order => {
+                            const urgency = DEADLINE_URGENCY(order.deadline);
+                            const artworkUrl = order.artwork_url ? absoluteStaticUrl(order.artwork_url) : null;
+                            return (
+                                <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                                    {/* Card header */}
+                                    <div className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="font-black text-[#1a1c23] truncate">{order.order_no}</div>
+                                            <div className="text-sm text-gray-500 truncate">{order.customer_name}</div>
+                                        </div>
+                                        {urgency && (
+                                            <div className={`text-xs shrink-0 flex items-center gap-1 ${urgency.cls}`}>
+                                                <Clock size={11} /> {urgency.label}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Artwork preview */}
+                                    {artworkUrl ? (
+                                        <a href={artworkUrl} target="_blank" rel="noreferrer" className="group relative block shrink-0 h-36 bg-gray-100 overflow-hidden">
+                                            <img src={artworkUrl} alt="artwork" className="w-full h-full object-contain transition group-hover:scale-105" />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition flex items-center justify-center">
+                                                <span className="opacity-0 group-hover:opacity-100 bg-white/90 text-xs px-2 py-1 rounded-full font-semibold text-gray-700">ดูรูปเต็ม</span>
+                                            </div>
+                                        </a>
+                                    ) : (
+                                        <div className="shrink-0 h-20 bg-gray-50 border-b border-gray-100 flex items-center justify-center text-gray-300">
+                                            <ImageIcon size={28} />
+                                        </div>
+                                    )}
+
+                                    {/* Actions */}
+                                    <div className="p-4 mt-auto space-y-3">
+                                        {/* Upload artwork (WAITING_ARTWORK) */}
+                                        {activeTab === 'upload' && canUpload && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">อัปโหลด Artwork</label>
+                                                <input type="file" accept="image/*,.pdf"
+                                                    onChange={(e) => setArtworkFiles(prev => ({ ...prev, [order.id]: e.target.files?.[0] || null }))}
+                                                    className="w-full text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-indigo-50 file:text-indigo-700 file:font-semibold cursor-pointer" />
+                                                <button onClick={() => uploadArtwork(order.id)} disabled={!artworkFiles[order.id] || uploading[order.id]}
+                                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-bold rounded-xl transition flex items-center justify-center gap-2">
+                                                    {uploading[order.id] ? <><RefreshCw size={14} className="animate-spin" /> กำลังอัปโหลด...</> : 'ส่ง Artwork'}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Approve / reject (WAITING_CUSTOMER_APPROVAL) */}
+                                        {activeTab === 'review' && canReview && (
+                                            <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => patchArtworkStatus(order.id, 'ARTWORK_APPROVED', 'อนุมัติ Artwork แล้ว ✅')}
+                                                        className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-1.5">
+                                                        <CheckCircle size={14} /> อนุมัติ
+                                                    </button>
+                                                    <button onClick={() => patchArtworkStatus(order.id, 'WAITING_ARTWORK', 'ส่งกลับแก้ไข Artwork')}
+                                                        className="flex-1 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-1.5">
+                                                        <XCircle size={14} /> ส่งกลับแก้
+                                                    </button>
+                                                </div>
+                                                {artworkUrl && (
+                                                    <button onClick={() => { navigator.clipboard.writeText(artworkUrl); onNotify('คัดลอก URL artwork แล้ว — วางใน LINE / แชทได้เลย 🎨', 'success'); }}
+                                                        className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-semibold transition flex items-center justify-center gap-1.5">
+                                                        📤 ส่งให้ลูกค้าดู (คัดลอก URL)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Upload print file (ARTWORK_APPROVED) */}
+                                        {activeTab === 'approved' && canUpload && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-emerald-700 uppercase tracking-wider block">อัปโหลดไฟล์พิมพ์ → เริ่มผลิต</label>
+                                                <input type="file" accept="image/*,.pdf,.ai,.eps,.psd"
+                                                    onChange={(e) => setPrintFiles(prev => ({ ...prev, [order.id]: e.target.files?.[0] || null }))}
+                                                    className="w-full text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-emerald-50 file:text-emerald-700 file:font-semibold cursor-pointer" />
+                                                <button onClick={() => uploadPrintFile(order.id)} disabled={!printFiles[order.id] || uploading[`p_${order.id}`]}
+                                                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-bold rounded-xl transition flex items-center justify-center gap-2">
+                                                    {uploading[`p_${order.id}`] ? <><RefreshCw size={14} className="animate-spin" /> กำลังอัปโหลด...</> : 'อัปโหลดและเริ่มผลิต'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ─── ProductionQueuePage ──────────────────────────────────────────────────────
+// Shows only IN_PRODUCTION orders. Production team marks each step done.
+// No pricing data is ever shown.
+const ProductionQueuePage = ({ onNotify }) => {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const role = normalizeRole(localStorage.getItem('user_role'));
+
+    const STEPS = [
+        { key: 'printing',  icon: '①', label: 'พิมพ์',  color: 'blue'    },
+        { key: 'screening', icon: '②', label: 'สกรีน', color: 'purple'  },
+        { key: 'cutting',   icon: '③', label: 'ตัด',   color: 'amber'   },
+        { key: 'sewing',    icon: '④', label: 'เย็บ',  color: 'emerald' },
+    ];
+
+    const STEP_COLORS = {
+        blue:    { done: 'bg-blue-50 text-blue-700 border-blue-200',    todo: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200' },
+        purple:  { done: 'bg-purple-50 text-purple-700 border-purple-200',  todo: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200' },
+        amber:   { done: 'bg-amber-50 text-amber-700 border-amber-200',  todo: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200' },
+        emerald: { done: 'bg-emerald-50 text-emerald-700 border-emerald-200', todo: 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200' },
+    };
+
+    const fetchOrders = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/orders');
+            // Show only IN_PRODUCTION so the production team isn't confused by other statuses
+            setOrders((data || []).filter(o => (o.status || '').toUpperCase() === 'IN_PRODUCTION'));
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+    const markStep = async (orderId, step) => {
+        try {
+            await fetchWithAuth(`/orders/${orderId}/production-step`, {
+                method: 'PATCH',
+                body: JSON.stringify({ step, done: true })
+            });
+            onNotify(`✅ บันทึกขั้นตอน "${step}" เรียบร้อย`, 'success');
+            fetchOrders();
+        } catch (e) { onNotify('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+    };
+
+    const DEADLINE_URGENCY = (deadline) => {
+        if (!deadline) return null;
+        const days = Math.ceil((new Date(deadline) - new Date()) / 86400000);
+        if (days < 0)  return { label: 'เกินกำหนด!', cls: 'bg-rose-600 text-white' };
+        if (days <= 2) return { label: `เหลือ ${days} วัน`, cls: 'bg-rose-100 text-rose-700' };
+        if (days <= 5) return { label: `เหลือ ${days} วัน`, cls: 'bg-amber-100 text-amber-700' };
+        return { label: `เหลือ ${days} วัน`, cls: 'bg-gray-100 text-gray-600' };
+    };
+
+    const stepsProgress = (order) => {
+        const steps = order.production_steps || {};
+        const done = STEPS.filter(s => steps[s.key]).length;
+        return { done, total: STEPS.length, pct: Math.round((done / STEPS.length) * 100) };
+    };
+
+    const totalOrders = orders.length;
+    const completedAll = orders.filter(o => stepsProgress(o).done === STEPS.length).length;
+
+    return (
+        <div className="flex flex-col h-full bg-[#f0f2f5] fade-in overflow-hidden">
+            {/* ── Header ── */}
+            <div className="bg-white border-b border-gray-200 px-4 sm:px-8 py-5 shrink-0">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-black text-[#1a1c23] flex items-center gap-2">
+                            <Box size={22} className="text-blue-500" /> คิวการผลิต
+                        </h1>
+                        <p className="text-gray-400 text-sm mt-0.5">ออเดอร์ที่กำลังผลิต (IN_PRODUCTION)</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {/* Summary badges */}
+                        <div className="hidden sm:flex gap-2 text-xs">
+                            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full font-semibold border border-blue-100">{totalOrders} ออเดอร์</span>
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full font-semibold border border-emerald-100">{completedAll} เสร็จครบ</span>
+                        </div>
+                        <button onClick={fetchOrders} disabled={loading} title="รีเฟรช"
+                            className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition disabled:opacity-40">
+                            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Order List ── */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                {loading ? (
+                    <div className="flex items-center justify-center h-40 text-gray-400 gap-2">
+                        <RefreshCw size={18} className="animate-spin" /> กำลังโหลด...
+                    </div>
+                ) : orders.length === 0 ? (
+                    <div className="text-center py-20">
+                        <Box size={56} className="mx-auto mb-3 text-gray-200" />
+                        <p className="text-gray-400 font-medium">ไม่มีออเดอร์ในการผลิต</p>
+                        <p className="text-gray-300 text-sm mt-1">ออเดอร์จะปรากฏที่นี่เมื่อเข้าสู่สถานะ IN_PRODUCTION</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {orders.map(order => {
+                            const urgency = DEADLINE_URGENCY(order.deadline);
+                            const { done, pct } = stepsProgress(order);
+                            const allDone = done === STEPS.length;
+                            const steps = order.production_steps || {};
+
+                            return (
+                                <div key={order.id} className={`bg-white rounded-2xl shadow-sm border overflow-hidden ${allDone ? 'border-emerald-200' : 'border-gray-100'}`}>
+                                    {/* Progress bar at top */}
+                                    <div className="h-1.5 bg-gray-100">
+                                        <div className={`h-full transition-all duration-500 ${allDone ? 'bg-emerald-400' : 'bg-blue-400'}`} style={{ width: `${pct}%` }} />
+                                    </div>
+
+                                    <div className="p-4 sm:p-5">
+                                        {/* Order meta */}
+                                        <div className="flex items-start justify-between gap-3 mb-4">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="font-black text-lg text-[#1a1c23]">{order.order_no}</span>
+                                                    {allDone && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">✓ เสร็จครบทุกขั้นตอน</span>}
+                                                </div>
+                                                <div className="text-sm text-gray-500 mt-0.5 truncate">{order.customer_name}</div>
+                                                {order.deadline && (
+                                                    <div className="text-xs text-gray-400 mt-0.5">กำหนดส่ง: {new Date(order.deadline).toLocaleDateString('th-TH')}</div>
+                                                )}
+                                            </div>
+                                            <div className="shrink-0 flex flex-col items-end gap-1">
+                                                {urgency && (
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${urgency.cls}`}>{urgency.label}</span>
+                                                )}
+                                                <span className="text-xs text-gray-400">{done}/{STEPS.length} ขั้นตอน</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Print file link */}
+                                        {order.print_file_url && (
+                                            <a href={absoluteStaticUrl(order.print_file_url)} target="_blank" rel="noreferrer"
+                                                className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline mb-3 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                                                <FileText size={12} /> ดาวน์โหลดไฟล์พิมพ์
+                                            </a>
+                                        )}
+
+                                        {/* Items list — quantity only, no price */}
+                                        {order.items && order.items.length > 0 && (
+                                            <div className="mb-4 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5">
+                                                {order.items.map((item, idx) => (
+                                                    <span key={idx}>{item.product_name}: <strong>{item.total_qty} ตัว</strong></span>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* 4-Step stepper */}
+                                        {hasRole(role, 'PRODUCTION', 'ADMIN_OPS', ...SUPERUSER_ROLES) && (
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                {STEPS.map(step => {
+                                                    const isDone = !!steps[step.key];
+                                                    const colors = STEP_COLORS[step.color];
+                                                    return (
+                                                        <button key={step.key}
+                                                            onClick={() => !isDone && markStep(order.id, step.key)}
+                                                            disabled={isDone}
+                                                            className={`relative p-3 rounded-xl border text-sm font-semibold flex flex-col items-center gap-1.5 transition ${isDone ? colors.done + ' cursor-default' : colors.todo + ' cursor-pointer active:scale-95'}`}>
+                                                            <span className="text-base leading-none">{step.icon}</span>
+                                                            <span className="leading-none">{step.label}</span>
+                                                            {isDone && (
+                                                                <CheckCircle size={12} className="absolute top-1.5 right-1.5 opacity-70" />
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ─── ShippingQueuePage ────────────────────────────────────────────────────────
+// Tabs: "QC" (ADMIN_OPS — IN_PRODUCTION orders) and "จัดส่ง" (SHIPPING_ADMIN —
+// READY_FOR_SHIPPING orders with barcode-scan style quick entry).
+const ShippingQueuePage = ({ onNotify }) => {
+    const [allOrders, setAllOrders] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [trackingInputs, setTrackingInputs] = useState({});
+    const [submitting, setSubmitting] = useState({});
+    const [qcNotes, setQcNotes] = useState({});
+    const [activeTab, setActiveTab] = useState('shipping');
+    const trackingRefs = useRef({});
+    const role = normalizeRole(localStorage.getItem('user_role'));
+
+    const canQC   = hasRole(role, 'ADMIN_OPS', ...SUPERUSER_ROLES);
+    const canShip = hasRole(role, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', ...SUPERUSER_ROLES);
+
+    const fetchOrders = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchWithAuth('/orders');
+            setAllOrders((data || []).filter(o =>
+                ['IN_PRODUCTION', 'READY_FOR_SHIPPING'].includes((o.status || '').toUpperCase())
+            ));
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchOrders(); }, [fetchOrders]);
+    // Auto-switch to QC tab if user can't ship
+    useEffect(() => {
+        if (!canShip && canQC) setActiveTab('qc');
+    }, [canShip, canQC]);
+
+    const qcOrders       = allOrders.filter(o => (o.status || '').toUpperCase() === 'IN_PRODUCTION');
+    const shippingOrders = allOrders.filter(o => (o.status || '').toUpperCase() === 'READY_FOR_SHIPPING');
+
+    const submitTracking = async (orderId) => {
+        const tracking = (trackingInputs[orderId] || '').trim();
+        if (!tracking) { onNotify('กรุณากรอกเลข Tracking', 'error'); return; }
+        setSubmitting(prev => ({ ...prev, [orderId]: true }));
+        try {
+            await fetchWithAuth(`/orders/${orderId}/shipping`, {
+                method: 'PATCH',
+                body: JSON.stringify({ tracking_number: tracking })
+            });
+            onNotify(`จัดส่งแล้ว — Tracking: ${tracking}`, 'success');
+            setTrackingInputs(prev => { const n = { ...prev }; delete n[orderId]; return n; });
+            fetchOrders();
+        } catch (e) { onNotify('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+        finally { setSubmitting(prev => ({ ...prev, [orderId]: false })); }
+    };
+
+    const submitQC = async (orderId, passed) => {
+        setSubmitting(prev => ({ ...prev, [`qc_${orderId}`]: true }));
+        try {
+            await fetchWithAuth(`/orders/${orderId}/qc`, {
+                method: 'PATCH',
+                body: JSON.stringify({ passed, note: qcNotes[orderId] || '' })
+            });
+            onNotify(passed ? 'QC ผ่าน ✅ — ออเดอร์พร้อมจัดส่ง' : 'QC ไม่ผ่าน — กลับไปแก้ไข', passed ? 'success' : 'error');
+            fetchOrders();
+        } catch (e) { onNotify('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+        finally { setSubmitting(prev => ({ ...prev, [`qc_${orderId}`]: false })); }
+    };
+
+    const TABS = [
+        ...(canShip ? [{ key: 'shipping', label: 'พร้อมจัดส่ง', count: shippingOrders.length }] : []),
+        ...(canQC   ? [{ key: 'qc',       label: 'QC / ตรวจสอบ', count: qcOrders.length }]       : []),
+    ];
+
+    return (
+        <div className="flex flex-col h-full bg-[#f0f2f5] fade-in overflow-hidden">
+            {/* ── Header ── */}
+            <div className="bg-white border-b border-gray-200 px-4 sm:px-8 pt-6 pb-0 shrink-0">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h1 className="text-2xl font-black text-[#1a1c23] flex items-center gap-2">
+                            <Truck size={22} className="text-emerald-500" /> จัดส่ง & QC
+                        </h1>
+                        <p className="text-gray-400 text-sm mt-0.5">
+                            {shippingOrders.length} รายการรอจัดส่ง · {qcOrders.length} รายการรอ QC
+                        </p>
+                    </div>
+                    <button onClick={fetchOrders} disabled={loading} title="รีเฟรช"
+                        className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition disabled:opacity-40">
+                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+                {/* Tabs */}
+                <div className="flex gap-1">
+                    {TABS.map(tab => (
+                        <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                            className={`px-4 py-2 text-sm font-semibold rounded-t-xl border-b-2 transition flex items-center gap-2 ${activeTab === tab.key ? 'border-emerald-500 text-emerald-600 bg-emerald-50/50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                            {tab.label}
+                            {tab.count > 0 && (
+                                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${activeTab === tab.key ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    {tab.count}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* ── Content ── */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                {loading ? (
+                    <div className="flex items-center justify-center h-40 text-gray-400 gap-2">
+                        <RefreshCw size={18} className="animate-spin" /> กำลังโหลด...
+                    </div>
+                ) : activeTab === 'shipping' ? (
+                    /* ── SHIPPING TAB ── barcode-scan style quick entry */
+                    shippingOrders.length === 0 ? (
+                        <div className="text-center py-20">
+                            <Truck size={56} className="mx-auto mb-3 text-gray-200" />
+                            <p className="text-gray-400 font-medium">ไม่มีออเดอร์รอจัดส่ง</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {shippingOrders.map(order => (
+                                <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-emerald-100 overflow-hidden">
+                                    <div className="grid sm:grid-cols-[1fr_auto] gap-0">
+                                        {/* Left: customer info */}
+                                        <div className="p-4 sm:p-5 min-w-0">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                                                    <Package size={18} className="text-emerald-600" />
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="font-black text-[#1a1c23]">{order.order_no}</div>
+                                                    <div className="text-sm font-semibold text-gray-700 mt-0.5">{order.customer_name}</div>
+                                                    {order.phone && (
+                                                        <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                                                            <Phone size={11} /> {order.phone}
+                                                        </div>
+                                                    )}
+                                                    {order.address && (
+                                                        <div className="text-xs text-gray-400 mt-0.5 flex items-start gap-1">
+                                                            <MapPin size={11} className="mt-0.5 shrink-0" />
+                                                            <span className="leading-relaxed">{order.address}</span>
+                                                        </div>
+                                                    )}
+                                                    {order.items && order.items.length > 0 && (
+                                                        <div className="mt-2 text-xs text-gray-400">
+                                                            {order.items.map((item, idx) => (
+                                                                <span key={idx} className="mr-2">{item.product_name}: {item.total_qty} ตัว</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right: tracking input — large and prominent */}
+                                        <div className="bg-emerald-50 border-t sm:border-t-0 sm:border-l border-emerald-100 p-4 sm:p-5 flex flex-col justify-center gap-2 sm:min-w-[240px]">
+                                            {order.tracking_number ? (
+                                                <div className="text-center">
+                                                    <div className="text-xs text-gray-400 mb-1">Tracking</div>
+                                                    <div className="font-mono text-sm font-bold text-emerald-700 bg-emerald-100 px-3 py-2 rounded-xl border border-emerald-200">
+                                                        {order.tracking_number}
+                                                    </div>
+                                                    <div className="text-xs text-emerald-600 mt-1 font-semibold">จัดส่งแล้ว ✓</div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <label className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Tracking Number</label>
+                                                    <input
+                                                        ref={el => { if (el) trackingRefs.current[order.id] = el; }}
+                                                        type="text"
+                                                        placeholder="สแกนหรือพิมพ์เลข Tracking"
+                                                        value={trackingInputs[order.id] || ''}
+                                                        onChange={(e) => setTrackingInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                        onKeyDown={(e) => { if (e.key === 'Enter') submitTracking(order.id); }}
+                                                        className="w-full border border-emerald-300 rounded-xl px-3 py-2.5 text-sm font-mono font-semibold bg-white focus:ring-2 focus:ring-emerald-400 outline-none transition placeholder:font-normal"
+                                                        autoComplete="off"
+                                                    />
+                                                    <button onClick={() => submitTracking(order.id)}
+                                                        disabled={!trackingInputs[order.id]?.trim() || submitting[order.id]}
+                                                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-bold rounded-xl transition flex items-center justify-center gap-2 active:scale-95">
+                                                        {submitting[order.id] ? <><RefreshCw size={14} className="animate-spin" /> กำลังบันทึก...</> : <><Truck size={14} /> ยืนยันจัดส่ง</>}
+                                                    </button>
+                                                    <p className="text-center text-xs text-emerald-500">กด Enter เพื่อยืนยันได้เลย</p>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                ) : (
+                    /* ── QC TAB ── */
+                    qcOrders.length === 0 ? (
+                        <div className="text-center py-20">
+                            <CheckCircle size={56} className="mx-auto mb-3 text-gray-200" />
+                            <p className="text-gray-400 font-medium">ไม่มีออเดอร์รอ QC</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {qcOrders.map(order => (
+                                <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5">
+                                    <div className="flex items-start justify-between gap-3 mb-4">
+                                        <div className="min-w-0">
+                                            <div className="font-black text-[#1a1c23]">{order.order_no}</div>
+                                            <div className="text-sm text-gray-500 mt-0.5">{order.customer_name}</div>
+                                            {order.items && order.items.length > 0 && (
+                                                <div className="mt-1 text-xs text-gray-400">
+                                                    {order.items.map((item, idx) => (
+                                                        <span key={idx} className="mr-2">{item.product_name}: {item.total_qty} ตัว</span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className="shrink-0 px-2.5 py-1 bg-blue-100 text-blue-700 border border-blue-200 rounded-full text-xs font-bold">กำลังผลิต</span>
+                                    </div>
+
+                                    {/* Print file link */}
+                                    {order.print_file_url && (
+                                        <a href={absoluteStaticUrl(order.print_file_url)} target="_blank" rel="noreferrer"
+                                            className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline mb-3 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                                            <FileText size={12} /> ดูไฟล์พิมพ์อ้างอิง
+                                        </a>
+                                    )}
+
+                                    {/* Production steps summary */}
+                                    {order.production_steps && (
+                                        <div className="flex gap-1.5 mb-4 flex-wrap">
+                                            {['printing','screening','cutting','sewing'].map(s => (
+                                                <span key={s} className={`px-2 py-0.5 rounded text-xs font-semibold border ${order.production_steps[s] ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                                                    {order.production_steps[s] ? '✓' : '○'} {s}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* QC form */}
+                                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                                        <label className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-2 block">ผลการตรวจสอบ QC</label>
+                                        <textarea placeholder="บันทึก QC (ไม่บังคับ)" value={qcNotes[order.id] || ''}
+                                            onChange={(e) => setQcNotes(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                            className="w-full text-sm border border-purple-200 rounded-xl p-3 mb-3 resize-none outline-none focus:ring-2 focus:ring-purple-300 bg-white" rows={2} />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => submitQC(order.id, true)} disabled={submitting[`qc_${order.id}`]}
+                                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 active:scale-95">
+                                                <CheckCircle size={14} /> QC ผ่าน
+                                            </button>
+                                            <button onClick={() => submitQC(order.id, false)} disabled={submitting[`qc_${order.id}`]}
+                                                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 active:scale-95">
+                                                <XCircle size={14} /> QC ไม่ผ่าน
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                )}
+            </div>
+        </div>
+    );
+};
+
 // 3. MAIN APP (Revised Sidebar & Routing)
 const App = () => {
     // Public payment pages (mounted before admin UI)
@@ -4629,12 +5424,16 @@ const App = () => {
             const uuid = _pathname.split('/pay/')[1] || '';
             return <CustomerPayment uuid={uuid} />;
         }
+        if(_pathname.startsWith('/slip/')){
+            const uuid = _pathname.split('/slip/')[1] || '';
+            return <SlipUploadPage uuid={uuid} />;
+        }
         if(_pathname === '/payment-success'){
             return <PaymentSuccess />;
         }
     } catch { /* ignore when SSR or not available */ }
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'));
-  const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'user'); // Add State for Role
+  const [userRole, setUserRole] = useState(normalizeRole(localStorage.getItem('user_role') || 'USER')); // Add State for Role
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -4752,10 +5551,122 @@ const App = () => {
     return () => window.removeEventListener('addNotification', handleAddNotification);
   }, [addNotification]);
 
-  // Mark notification as read
+    // WebSocket: connect to backend notifications WS and forward messages into app
+    useEffect(() => {
+        let ws = null;
+        let reconnectTimer = null;
+
+        const connect = () => {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+            try {
+                const apiOrigin = new URL(API_URL).origin; // e.g. http://localhost:8000
+                const wsUrl = apiOrigin.replace(/^http/, 'ws') + '/api/v1/notifications/ws?token=' + encodeURIComponent(token);
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    console.debug('Notifications WS connected');
+                };
+
+                ws.onmessage = (evt) => {
+                    try {
+                        const payload = JSON.parse(evt.data || '{}');
+                        // Normalize payload to fields expected by addNotification
+                        const type = payload.type || 'info';
+                        const title = payload.title || payload.subject || '';
+                        const message = payload.message || payload.text || payload.body || payload.msg || '';
+                        const link = payload.link || payload.url || null;
+
+                        // Dispatch same event shape used across the app
+                        window.dispatchEvent(new CustomEvent('addNotification', {
+                            detail: { type, title, message, link }
+                        }));
+                    } catch (e) {
+                        console.warn('Invalid WS notification payload', e);
+                    }
+                };
+
+                ws.onerror = (err) => {
+                    console.warn('Notifications WS error', err);
+                    try {
+                        ws.close();
+                    } catch (closeErr) {
+                        console.warn('Failed to close WS after error', closeErr);
+                    }
+                };
+
+                ws.onclose = () => {
+                    console.debug('Notifications WS closed, reconnecting in 5s');
+                    reconnectTimer = setTimeout(() => connect(), 5000);
+                };
+            } catch (e) {
+                console.error('Failed to initialize notifications WS', e);
+            }
+        };
+
+        connect();
+
+        const onLogout = () => {
+            if (ws) {
+                try {
+                    ws.close();
+                } catch (closeErr) {
+                    console.warn('Failed to close WS on logout', closeErr);
+                }
+            }
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            ws = null;
+        };
+
+        window.addEventListener('blook:logout', onLogout);
+
+        return () => {
+            window.removeEventListener('blook:logout', onLogout);
+            if (ws) {
+                try {
+                    ws.close();
+                } catch (closeErr) {
+                    console.warn('Failed to close WS on cleanup', closeErr);
+                }
+            }
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+        };
+    }, []);
+
+  // On login: fetch historical notifications from backend and merge into local state
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetchWithAuth('/notifications').then(data => {
+      if (!Array.isArray(data)) return;
+      const backendIds = new Set(data.filter(n => typeof n.id === 'number').map(n => n.id));
+      const backendNormed = data.map(n => ({
+        id: n.id,
+        type: n.type || 'info',
+        title: n.type || 'แจ้งเตือน',
+        message: n.message || '',
+        link: n.payload?.link || null,
+        timestamp: n.created_at || new Date().toISOString(),
+        read: n.is_read === true,
+      }));
+      // Merge: keep local-only notifs (negative/string IDs) + use backend source of truth for numeric IDs
+      setNotifications(prev => {
+        const localOnly = prev.filter(n => !backendIds.has(n.id));
+        const merged = [...backendNormed, ...localOnly].slice(0, 100);
+        try { localStorage.setItem('notifications', JSON.stringify(merged)); } catch { /* storage full */ }
+        setUnreadCount(merged.filter(n => !n.read).length);
+        return merged;
+      });
+    }).catch(() => {});
+  }, [isLoggedIn]);
+
+  // Mark notification as read (local + backend sync)
   const markAsRead = useCallback((id) => {
     const updated = notifications.map(n => n.id === id ? {...n, read: true} : n);
     saveNotifications(updated);
+    // Sync to backend for persisted numeric IDs
+    if (typeof id === 'number') {
+      fetchWithAuth(`/notifications/${id}/read`, { method: 'PATCH' }).catch(() => {});
+    }
   }, [notifications, saveNotifications]);
 
   // Mark all as read
@@ -4770,20 +5681,53 @@ const App = () => {
   }, [saveNotifications]);
 
   if (!isLoggedIn) return <LoginPage onLogin={(role) => {
+      const _norm = normalizeRole(role);
       setIsLoggedIn(true);
-      setUserRole(role);
+      setUserRole(_norm);
+      // Redirect ops roles to their dedicated page immediately after login
+      if (_norm === 'GRAPHIC_DESIGNER') setCurrentPage('artwork');
+      else if (_norm === 'PRODUCTION') setCurrentPage('production');
+      else if (_norm === 'SHIPPING_ADMIN') setCurrentPage('shipping');
   }} />;
 
   const renderContent = () => {
+    // Role-based default page redirect for ops roles
+    const _roleNorm = normalizeRole(userRole);
+    const _getOpsDefaultPage = () => {
+        if (normalizeRole(_roleNorm) === 'GRAPHIC_DESIGNER') return 'artwork';
+        if (normalizeRole(_roleNorm) === 'PRODUCTION') return 'production';
+        if (normalizeRole(_roleNorm) === 'SHIPPING_ADMIN') return 'shipping';
+        return null;
+    };
     switch(currentPage) {
         case 'dashboard': return <DashboardPage onEdit={handleEditOrder} onAlertsUpdate={setAlertCount} />;
-        case 'order_list': return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
-        case 'settings': return <SettingsPage onNotify={handleNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} />;
-        case 'create_order': return <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleOrderNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} />;
-        case 'product': return <ProductPage />;
-        case 'customer': return <CustomerPage refreshTrigger={customerRefreshTrigger} />;
-        case 'users': return <UserManagementPage onNotify={handleNotify} />;
-        default: return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
+        case 'order_list': {
+            // Ops roles that have a dedicated page should not land on the full order list
+            const _opsDefault = _getOpsDefaultPage();
+            if (_opsDefault) {
+                // Redirect to their dedicated page without showing ForbiddenPage
+                setTimeout(() => handleNavigate(_opsDefault), 0);
+                return null;
+            }
+            return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
+        }
+        case 'settings': return isSuperuser(userRole) || hasRole(userRole, 'ADMIN_OPS', 'ADMIN_D') ? <SettingsPage onNotify={handleNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} /> : <ForbiddenPage />;
+        case 'create_order': return canManageOrders(userRole) ? <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleOrderNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} /> : <ForbiddenPage />;
+        case 'product': return hasRole(userRole, ...SUPERUSER_ROLES, 'ADMIN_OPS') ? <ProductPage /> : <ForbiddenPage />;
+        case 'customer': return canManageOrders(userRole) ? <CustomerPage refreshTrigger={customerRefreshTrigger} /> : <ForbiddenPage />;
+        case 'users': return isSuperuser(userRole) ? <UserManagementPage onNotify={handleNotify} /> : <ForbiddenPage />;
+        case 'artwork': return hasRole(userRole, 'GRAPHIC_DESIGNER', ...SUPERUSER_ROLES, 'ADMIN_OPS', 'ADMIN_D', 'SALES_ADMIN') ? <ArtworkPage onNotify={handleNotify} /> : <ForbiddenPage />;
+        case 'production': return hasRole(userRole, 'PRODUCTION', ...SUPERUSER_ROLES, 'ADMIN_OPS') ? <ProductionQueuePage onNotify={handleNotify} /> : <ForbiddenPage />;
+        case 'shipping': return hasRole(userRole, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', ...SUPERUSER_ROLES) ? <ShippingQueuePage onNotify={handleNotify} /> : <ForbiddenPage />;
+        default: {
+            // Default page: redirect ops roles to their home page
+            const _opsDefault2 = _getOpsDefaultPage();
+            if (_opsDefault2) {
+                setTimeout(() => handleNavigate(_opsDefault2), 0);
+                return null;
+            }
+            return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
+        }
     }
   };
 
@@ -4949,17 +5893,51 @@ const App = () => {
             
             <nav className="flex-1 px-2 sm:px-3 md:px-4 space-y-1 sm:space-y-2 mt-2 sm:mt-4">
                 <NavItem id="dashboard" icon={LayoutDashboard} label="หน้าหลัก" active={currentPage === 'dashboard'} onClick={() => handleNavigate('dashboard')} badge={alertCount} />
-                <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} onClick={() => handleNavigate('create_order')} />
-                <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} onClick={() => handleNavigate('order_list')} />
-                <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} onClick={() => handleNavigate('product')} />
-                <NavItem id="customer" icon={User} label="ลูกค้า" active={currentPage === 'customer'} onClick={() => handleNavigate('customer')} />
                 
-                {/* --- แสดงเฉพาะ Admin หรือ Owner --- */}
-                {(userRole === 'admin' || userRole === 'owner') && (
+                {/* Order creation: sales and admin roles */}
+                {canManageOrders(userRole) && (
+                    <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} onClick={() => handleNavigate('create_order')} />
+                )}
+                
+                {/* Order list: everyone except PRODUCTION-only */}
+                {!hasRole(userRole, 'PRODUCTION') && (
+                    <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} onClick={() => handleNavigate('order_list')} />
+                )}
+
+                {/* Artwork queue: graphic designer and admin types */}
+                {hasRole(userRole, 'GRAPHIC_DESIGNER', ...SUPERUSER_ROLES, 'ADMIN_OPS', 'ADMIN_D', 'SALES_ADMIN') && (
+                    <NavItem id="artwork" icon={Printer} label="งาน Artwork" active={currentPage === 'artwork'} onClick={() => handleNavigate('artwork')} />
+                )}
+
+                {/* Production queue: production role and admin */}
+                {hasRole(userRole, 'PRODUCTION', ...SUPERUSER_ROLES, 'ADMIN_OPS') && (
+                    <NavItem id="production" icon={Box} label="คิวการผลิต" active={currentPage === 'production'} onClick={() => handleNavigate('production')} />
+                )}
+
+                {/* Shipping & QC queue */}
+                {hasRole(userRole, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', ...SUPERUSER_ROLES) && (
+                    <NavItem id="shipping" icon={Truck} label="จัดส่ง & QC" active={currentPage === 'shipping'} onClick={() => handleNavigate('shipping')} />
+                )}
+
+                {/* Product master data: admin and ops */}
+                {hasRole(userRole, ...SUPERUSER_ROLES, 'ADMIN_OPS') && (
+                    <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} onClick={() => handleNavigate('product')} />
+                )}
+
+                {/* Customer database: sales and admin roles */}
+                {canManageOrders(userRole) && (
+                    <NavItem id="customer" icon={User} label="ลูกค้า" active={currentPage === 'customer'} onClick={() => handleNavigate('customer')} />
+                )}
+                
+                {/* User management: superuser tier only */}
+                {isSuperuser(userRole) && (
                     <NavItem id="users" icon={Users} label="จัดการผู้ใช้" active={currentPage === 'users'} onClick={() => handleNavigate('users')} />
                 )}
                 
-                <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} onClick={() => handleNavigate('settings')} />
+                {/* System settings: admins and ops */}
+                {(isSuperuser(userRole) || hasRole(userRole, 'ADMIN_OPS', 'ADMIN_D')) && (
+                    <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} onClick={() => handleNavigate('settings')} />
+                )}
             </nav>
 
             {/* Profile Section */}
@@ -4970,8 +5948,27 @@ const App = () => {
                             {userRole.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <div className="text-xs sm:text-sm font-bold text-white group-hover:text-[#d4e157] transition capitalize">{userRole}</div>
-                            <div className="text-[9px] sm:text-[10px] text-gray-500">ออกจากระบบ</div>
+                            {(() => {
+                              const _ROLE_TH = {
+                                'GRAPHIC_DESIGNER':'นักออกแบบ','PRODUCTION':'ฝ่ายผลิต','SHIPPING_ADMIN':'จัดส่ง',
+                                'SALES_ADMIN':'เซลล์','ADMIN_D':'แอดมิน','ADMIN_OPS':'Ops','OWNER':'เจ้าของ',
+                                'ADMIN':'แอดมิน','SUPERADMIN':'ซูเปอร์แอดมิน','ROOT':'Root','SUPERUSER':'ซูเปอร์'
+                              };
+                              const _rn = (userRole||'').toUpperCase();
+                              const _rTh = _ROLE_TH[_rn] || userRole;
+                              const _badgeColor = isSuperuser(userRole)
+                                ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
+                                : ['ADMIN_D','ADMIN_OPS','SALES_ADMIN'].includes(_rn)
+                                  ? 'bg-blue-400/20 text-blue-200 border-blue-400/40'
+                                  : 'bg-violet-400/20 text-violet-200 border-violet-400/40';
+                              return (
+                                <>
+                                  <div className="text-xs sm:text-sm font-bold text-white group-hover:text-[#d4e157] transition capitalize">{userRole}</div>
+                                  <span className={`inline-block mt-0.5 px-2 py-0.5 text-[9px] font-bold rounded-full border ${_badgeColor}`}>{_rTh}</span>
+                                </>
+                              );
+                            })()}
+                            <div className="text-[9px] sm:text-[10px] text-gray-500 mt-0.5">ออกจากระบบ</div>
                         </div>
                     </div>
                     <ChevronDown size={14} className="sm:w-4 sm:h-4 text-gray-500"/>

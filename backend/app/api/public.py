@@ -124,4 +124,19 @@ def public_upload_slip(
 
     db.commit()
 
+    # Notify admins (Sales/Admin Ops) that a new slip was uploaded
+    try:
+        from app.api.notifications import notify_roles
+
+        notify_roles(
+            db,
+            ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"],
+            "SLIP_UPLOADED",
+            f"Slip uploaded for order {o.order_no or o.id}",
+            {"order_id": o.id, "installment": inst, "url": url_path},
+        )
+    except Exception:
+        # non-fatal
+        pass
+
     return {"url": url_path}

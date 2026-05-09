@@ -4,10 +4,13 @@ from typing import List
 from app.db.session import get_db
 from app.models.product import FabricType, NeckType, SleeveType
 from app.schemas.master import FabricTypeResponse, NeckTypeResponse, SleeveTypeResponse
+from app.models.user import User
+from app.api.rbac import require_roles
 from pydantic import BaseModel
 import re
 
 router = APIRouter()
+
 
 class MasterCreate(BaseModel):
     name: str
@@ -16,6 +19,7 @@ class MasterCreate(BaseModel):
     quantity: int = 0
     cost_price: float = 0
     force_slope: bool = False
+
 
 @router.get("/fabrics", response_model=List[FabricTypeResponse])
 def get_fabrics(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
@@ -26,6 +30,7 @@ def get_fabrics(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db))
         .limit(limit)
         .all()
     )
+
 
 @router.get("/necks", response_model=List[NeckTypeResponse])
 def get_necks(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
@@ -38,6 +43,7 @@ def get_necks(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
         .all()
     )
 
+
 @router.get("/sleeves", response_model=List[SleeveTypeResponse])
 def get_sleeves(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return (
@@ -48,8 +54,13 @@ def get_sleeves(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db))
         .all()
     )
 
+
 @router.post("/necks")
-def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
+def create_neck(
+    item: MasterCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "ADMIN_OPS")),
+):
     # sanitize name: normalize common misspelling and collapse duplicate forced-slope annotation
     name = (item.name or "").replace("นํ้า", "น้ำ").strip()
     # collapse repeated annotation occurrences like "(...)(...)" -> single
@@ -68,8 +79,14 @@ def create_neck(item: MasterCreate, db: Session = Depends(get_db)):
     db.commit()
     return new_item
 
+
 @router.put("/necks/{item_id}")
-def update_neck(item_id: int, item: MasterCreate, db: Session = Depends(get_db)):
+def update_neck(
+    item_id: int,
+    item: MasterCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "ADMIN_OPS")),
+):
     db_item = db.query(NeckType).filter(NeckType.id == item_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="Not found")

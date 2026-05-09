@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.product import NeckType
 from app.models.audit_log import AuditLog
 from app.api import deps
+from app.api.rbac import require_roles, can_transition, mask_order_for_role
 from app.schemas.order import OrderCreate, Order as OrderSchema
 from app.core.config import settings
 from datetime import datetime, timedelta
@@ -54,9 +55,15 @@ DEFAULT_ADDON_PRICES = {
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 @router.get("", response_model=List[OrderSchema])
 @router.get("/", response_model=List[OrderSchema])
-def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_orders(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
     orders = (
         db.query(OrderModel)
         .options(selectinload(OrderModel.customer), selectinload(OrderModel.items))
@@ -144,8 +151,14 @@ def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
                                 pass
                 items_list.append(i_dict)
             o_dict["items"] = items_list
-        results.append(o_dict)
+        # Apply per-role masking when a current_user is present
+        try:
+            masked = mask_order_for_role(o_dict, getattr(current_user, "role", None))
+        except Exception:
+            masked = o_dict
+        results.append(masked)
     return results
+
 
 def calculate_item_price(item, order_prod_type, db: Session):
     qty = sum(item.quantity_matrix.values()) if item.quantity_matrix else 0
@@ -222,12 +235,13 @@ def calculate_item_price(item, order_prod_type, db: Session):
         "addon_total": total_addon_line,
     }
 
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_order(
     order_in: OrderCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user),
+    current_user: User = Depends(require_roles("SALES_ADMIN", "ADMIN_D", "ADMIN_OPS")),
 ):
     clean_name = order_in.customer_name.strip() if order_in.customer_name else "Unknown"
     customer = db.query(Customer).filter(Customer.name == clean_name).first()
@@ -370,6 +384,7 @@ def create_order(
     db.refresh(new_order)
     # Return serialized representation to match update_order/read_order output
     return read_order(new_order.id, db)
+
 
 @router.put("/{order_id}", response_model=OrderSchema)
 def update_order(
@@ -723,20 +738,31 @@ def update_order(
     # Return serialized dict similar to read_order to satisfy response_model types
     return read_order(order_id, db)
 
+
 @router.delete("/{order_id}", status_code=204)
-def delete_order(order_id: int, db: Session = Depends(get_db)):
+def delete_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "ADMIN_OPS")),
+):
     o = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if o:
         db.delete(o)
         db.commit()
     return
 
+
 @router.get("/{order_id}/logs")
 def get_logs(order_id: int):
     return []
 
+
 @router.get("/{order_id}")
-def read_order(order_id: int, db: Session = Depends(get_db)):
+def read_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
     o = (
         db.query(OrderModel)
         .options(selectinload(OrderModel.customer), selectinload(OrderModel.items))
@@ -821,7 +847,11 @@ def read_order(order_id: int, db: Session = Depends(get_db)):
                     o_dict[k] = Decimal(str(v))
                 except Exception:
                     pass
-    return o_dict
+    try:
+        return mask_order_for_role(o_dict, getattr(current_user, "role", None))
+    except Exception:
+        return o_dict
+
 
 @router.put("/{order_id}/mockups")
 async def upload_order_mockups(
@@ -844,10 +874,12 @@ async def upload_order_mockups(
     async def _save_file(upload: UploadFile, kind: str):
         if upload.content_type not in ("image/png", "image/jpeg"):
             raise HTTPException(status_code=400, detail="Unsupported file type")
+        data = await upload.read()
+        if len(data) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
         ext = "png" if upload.content_type == "image/png" else "jpg"
         fname = f"order_{order_id}_{kind}_{uuid4().hex}.{ext}"
         dest = os.path.join(storage_dir, fname)
-        data = await upload.read()
         with open(dest, "wb") as f:
             f.write(data)
         return f"/static/mockups/{fname}"
@@ -878,6 +910,363 @@ async def upload_order_mockups(
         logger.exception("Failed uploading mockups")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/{order_id}/artwork")
+async def upload_artwork(
+    order_id: int,
+    artwork: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    uploader: User = Depends(
+        require_roles(
+            "GRAPHIC_DESIGNER", "ADMIN_OPS", "SALES_ADMIN", "ADMIN", "ADMIN_D"
+        )
+    ),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # allow upload only when order is waiting for artwork
+    if (
+        not can_transition(
+            order.status,
+            "WAITING_CUSTOMER_APPROVAL",
+            getattr(uploader, "role", None),
+        )
+        and order.status != "WAITING_ARTWORK"
+    ):
+        raise HTTPException(
+            status_code=403, detail="Cannot upload artwork in current state"
+        )
+
+    storage_dir = os.path.join(settings.STATIC_DIR, "artworks")
+    os.makedirs(storage_dir, exist_ok=True)
+    try:
+        data = await artwork.read()
+        if len(data) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+        ext = "png" if artwork.content_type == "image/png" else "jpg"
+        fname = f"order_{order_id}_artwork_{uuid4().hex}.{ext}"
+        dest = os.path.join(storage_dir, fname)
+        with open(dest, "wb") as f:
+            f.write(data)
+        url = f"/static/artworks/{fname}"
+        order.artwork_url = url
+        # transition to waiting customer approval
+        if can_transition(
+            order.status,
+            "WAITING_CUSTOMER_APPROVAL",
+            getattr(uploader, "role", None),
+        ):
+            order.status = "WAITING_CUSTOMER_APPROVAL"
+
+        db.add(order)
+        audit = AuditLog(
+            action="UPLOAD_ARTWORK",
+            target_type="order",
+            target_id=str(order.id),
+            details=json.dumps({"url": url}),
+            user_id=getattr(uploader, "id", None),
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(order)
+        # Notify Sales/Admin Ops that artwork uploaded
+        try:
+            from app.api.notifications import notify_roles
+
+            notify_roles(
+                db,
+                ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"],
+                "ARTWORK_UPLOADED",
+                f"Artwork uploaded for order {order.order_no or order.id}",
+                {"order_id": order.id, "url": url},
+            )
+        except Exception:
+            pass
+
+        return {"ok": True, "url": url, "status": order.status}
+    except Exception:
+        logger.exception("Failed saving artwork")
+        raise HTTPException(status_code=500, detail="Failed saving artwork")
+
+
+@router.post("/{order_id}/production-ticket")
+def issue_production_ticket(
+    order_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("ADMIN_OPS", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # validate transition
+    if not can_transition(
+        order.status, "READY_FOR_PRODUCTION", getattr(actor, "role", None)
+    ):
+        raise HTTPException(
+            status_code=403, detail="Not allowed to issue production ticket"
+        )
+
+    order.production_ticket_issued = True
+    order.status = "READY_FOR_PRODUCTION"
+    db.add(order)
+    audit = AuditLog(
+        action="ISSUE_PRODUCTION_TICKET",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps(payload or {}),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    # Notify Production team that order is READY_FOR_PRODUCTION
+    try:
+        from app.api.notifications import notify_roles
+
+        notify_roles(
+            db,
+            ["PRODUCTION"],
+            "READY_FOR_PRODUCTION",
+            f"Order {order.order_no or order.id} is READY_FOR_PRODUCTION",
+            {"order_id": order.id},
+        )
+    except Exception:
+        pass
+
+    return {"ok": True, "status": order.status}
+
+
+@router.post("/{order_id}/print-file")
+async def upload_print_file(
+    order_id: int,
+    print_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("GRAPHIC_DESIGNER", "ADMIN_OPS", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    storage_dir = os.path.join(settings.STATIC_DIR, "print_files")
+    os.makedirs(storage_dir, exist_ok=True)
+    try:
+        ext = (
+            "pdf"
+            if print_file.content_type == "application/pdf"
+            else ("png" if print_file.content_type == "image/png" else "jpg")
+        )
+        fname = f"order_{order_id}_print_{uuid4().hex}.{ext}"
+        dest = os.path.join(storage_dir, fname)
+        data = await print_file.read()
+        if len(data) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large (max 50 MB)")
+        with open(dest, "wb") as f:
+            f.write(data)
+        url = f"/static/print_files/{fname}"
+        order.print_file_url = url
+        # move to IN_PRODUCTION if allowed
+        if can_transition(order.status, "IN_PRODUCTION", getattr(actor, "role", None)):
+            order.status = "IN_PRODUCTION"
+
+        db.add(order)
+        audit = AuditLog(
+            action="UPLOAD_PRINT_FILE",
+            target_type="order",
+            target_id=str(order.id),
+            details=json.dumps({"url": url}),
+            user_id=getattr(actor, "id", None),
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(order)
+        # Notify Production team that print file uploaded and IN_PRODUCTION
+        try:
+            from app.api.notifications import notify_roles
+
+            notify_roles(
+                db,
+                ["PRODUCTION"],
+                "PRINT_FILE_UPLOADED",
+                f"Print file uploaded for order {order.order_no or order.id}",
+                {"order_id": order.id, "url": url},
+            )
+        except Exception:
+            pass
+
+        return {"ok": True, "url": url, "status": order.status}
+    except Exception:
+        logger.exception("Failed saving print file")
+        raise HTTPException(status_code=500, detail="Failed saving print file")
+
+
+class ProductionStepPayload(BaseModel):
+    step: str
+    done: bool = True
+    note: Optional[str] = None
+
+
+@router.patch("/{order_id}/production-step")
+def production_step(
+    order_id: int,
+    payload: ProductionStepPayload,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("PRODUCTION", "ADMIN_OPS", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Record production step in audit log
+    audit = AuditLog(
+        action="PRODUCTION_STEP",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps(
+            {"step": payload.step, "done": payload.done, "note": payload.note}
+        ),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    # Ensure status at least IN_PRODUCTION
+    if payload.done and can_transition(
+        order.status, "IN_PRODUCTION", getattr(actor, "role", None)
+    ):
+        order.status = "IN_PRODUCTION"
+        db.add(order)
+
+    db.commit()
+    return {"ok": True, "status": order.status}
+
+
+class QCPayload(BaseModel):
+    passed: bool
+    note: Optional[str] = None
+
+
+@router.patch("/{order_id}/qc")
+def qc_result(
+    order_id: int,
+    payload: QCPayload,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("ADMIN_OPS", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if payload.passed:
+        target = "READY_FOR_SHIPPING"
+    else:
+        target = "ON_HOLD"
+
+    if payload.passed and not can_transition(
+        order.status, target, getattr(actor, "role", None)
+    ):
+        raise HTTPException(
+            status_code=403, detail="Not allowed to move to READY_FOR_SHIPPING"
+        )
+
+    order.status = target
+    db.add(order)
+    audit = AuditLog(
+        action=("QC_PASS" if payload.passed else "QC_FAIL"),
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps({"note": payload.note}),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    # If QC passed -> notify Shipping Admin and Sales
+    try:
+        if payload.passed:
+            from app.api.notifications import notify_roles
+
+            notify_roles(
+                db,
+                ["SHIPPING_ADMIN"],
+                "READY_FOR_SHIPPING",
+                f"Order {order.order_no or order.id} ready for shipping",
+                {"order_id": order.id},
+            )
+            notify_roles(
+                db,
+                ["SALES_ADMIN"],
+                "READY_FOR_SHIPPING",
+                f"Order {order.order_no or order.id} ready for shipping",
+                {"order_id": order.id},
+            )
+    except Exception:
+        pass
+
+    return {"ok": True, "status": order.status}
+
+
+class ShippingPayload(BaseModel):
+    tracking_number: str
+
+
+@router.patch("/{order_id}/shipping")
+def update_shipping(
+    order_id: int,
+    payload: ShippingPayload,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("SHIPPING_ADMIN", "ADMIN_OPS", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not can_transition(order.status, "SHIPPED", getattr(actor, "role", None)):
+        raise HTTPException(status_code=403, detail="Not allowed to mark as SHIPPED")
+
+    order.tracking_number = payload.tracking_number
+    order.status = "SHIPPED"
+    db.add(order)
+    audit = AuditLog(
+        action="SHIPPING_UPDATE",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps({"tracking_number": payload.tracking_number}),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    # Notify Sales/Admin and order creator that order has shipped
+    try:
+        from app.api.notifications import notify_roles, create_notification
+
+        notify_roles(
+            db,
+            ["SALES_ADMIN", "ADMIN_OPS"],
+            "ORDER_SHIPPED",
+            f"Order {order.order_no or order.id} shipped (Tracking: {payload.tracking_number})",
+            {"order_id": order.id, "tracking": payload.tracking_number},
+        )
+        # notify order creator if present
+        if getattr(order, "created_by_id", None):
+            try:
+                create_notification(
+                    db,
+                    order.created_by_id,
+                    "ORDER_SHIPPED",
+                    f"Your order {order.order_no or order.id} has been shipped",
+                    {"order_id": order.id, "tracking": payload.tracking_number},
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return {"ok": True, "status": order.status}
+
+
 # Patch: Dedicated endpoint to update only order status (avoids touching items) ---
 class UpdateOrderStatus(BaseModel):
     status: str
@@ -895,6 +1284,15 @@ def update_order_status(
         raise HTTPException(status_code=404, detail="Order not found")
 
     old_status = getattr(existing, "status", None)
+    # Validate allowed transition for the caller's role
+    if not can_transition(
+        old_status, payload.status, getattr(current_user, "role", None)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Role not allowed to change status",
+        )
+
     existing.status = payload.status
     db.add(existing)
 
@@ -911,6 +1309,7 @@ def update_order_status(
             target_type="order",
             target_id=str(existing.id),
             details=json.dumps(details),
+            user_id=getattr(current_user, "id", None),
         )
         db.add(audit)
     except Exception:
@@ -919,22 +1318,42 @@ def update_order_status(
 
     db.commit()
     db.refresh(existing)
+
+    # Notify Graphic Designer when artwork is approved so they can upload the print file
+    if payload.status == "ARTWORK_APPROVED":
+        try:
+            from app.api.notifications import notify_roles
+
+            notify_roles(
+                db,
+                ["GRAPHIC_DESIGNER"],
+                "ARTWORK_APPROVED",
+                f"Artwork approved for order {existing.order_no or existing.id} — please upload print file",
+                {"order_id": existing.id},
+            )
+        except Exception:
+            logger.exception("Failed to notify GRAPHIC_DESIGNER on ARTWORK_APPROVED")
+
     return read_order(order_id, db)
 
 
 # Admin: Approve / Reject Slip Endpoint ---
+
 
 class ApproveSlipRequest(BaseModel):
     installment: Literal["booking", "deposit", "balance"]
     approved: bool
     note: Optional[str] = None
 
+
 @router.patch("/{order_id}/approve-slip")
 def approve_slip(
     order_id: int,
     payload: ApproveSlipRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user),
+    approver: User = Depends(
+        require_roles("SALES_ADMIN", "ADMIN_OPS", "ADMIN", "ADMIN_D")
+    ),
 ):
     # Find order
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
@@ -943,26 +1362,25 @@ def approve_slip(
             status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
         )
 
-    # Expected status mapping for installments -> next status
-    expected_waiting = {
-        "booking": "WAITING_BOOKING",
-        "deposit": "WAITING_DEPOSIT",
-        "balance": "WAITING_BALANCE",
-    }
+    # Expected mapping: booking -> WAITING_DEPOSIT, deposit -> WAITING_ARTWORK, balance -> COMPLETED
     next_status = {
-        "booking": "BOOKING_VERIFIED",
-        "deposit": "PRODUCTION",
+        "booking": "WAITING_DEPOSIT",
+        "deposit": "WAITING_ARTWORK",
         "balance": "COMPLETED",
     }
 
     old_status = getattr(order, "status", None)
 
     if payload.approved:
-        # Move order forward according to the mapping. This is idempotent.
         new_status = next_status.get(payload.installment)
+        # Validate transition through RBAC/state machine
+        if not can_transition(old_status, new_status, getattr(approver, "role", None)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Role not allowed to perform this transition",
+            )
         order.status = new_status
     else:
-        # On reject, set a rejection status to make it visible in admin.
         order.status = "SLIP_REJECTED"
 
     db.add(order)
@@ -974,13 +1392,14 @@ def approve_slip(
         "note": payload.note,
         "changed_from": old_status,
         "changed_to": order.status,
-        "admin": getattr(current_user, "username", None),
+        "admin": getattr(approver, "username", None),
     }
     audit = AuditLog(
         action=("APPROVE_SLIP" if payload.approved else "REJECT_SLIP"),
         target_type="order",
         target_id=str(order.id),
         details=json.dumps(details),
+        user_id=getattr(approver, "id", None),
     )
     db.add(audit)
 
@@ -988,12 +1407,13 @@ def approve_slip(
 
     return {"ok": True, "order_id": order.id, "status": order.status}
 
+
 # Generate a canonical payment link for an order (admin) ---
 @router.post("/{order_id}/generate-payment-link")
 def generate_payment_link(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user),
+    current_user: User = Depends(require_roles("SALES_ADMIN", "ADMIN_D", "ADMIN_OPS")),
 ):
 
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
@@ -1036,6 +1456,7 @@ def generate_payment_link(
             target_type="order",
             target_id=str(order.id),
             details=json.dumps(details),
+            user_id=getattr(current_user, "id", None),
         )
         db.add(audit)
         db.commit()

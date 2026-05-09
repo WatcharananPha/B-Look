@@ -7,9 +7,11 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.order import Order as OrderModel
 from app.api import deps
+from app.api.rbac import require_roles, can_transition
 from fastapi import Body
 
 router = APIRouter()
+
 
 class UserUpdate(BaseModel):
     role: str
@@ -26,26 +28,23 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+
 @router.get("/users", response_model=List[UserOut])
 def read_users(
-    db: Session = Depends(get_db), current_user: User = Depends(deps.get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "OWNER")),
 ):
-    if current_user.role not in ["admin", "owner"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
     users = db.query(User).all()
     return users
+
 
 @router.put("/users/{user_id}", response_model=UserOut)
 def update_user_role(
     user_id: int,
     user_in: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user),
+    current_user: User = Depends(require_roles("ADMIN", "OWNER")),
 ):
-    if current_user.role not in ["admin", "owner"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -58,25 +57,39 @@ def update_user_role(
     db.refresh(user)
     return user
 
+
 class ApproveBody(BaseModel):
     next_status: Optional[str] = None
+
+
+# Valid next-status values for the manual approve endpoint (whitelist against injection)
+_APPROVE_NEXT_STATUSES = {
+    "WAITING_DEPOSIT",
+    "WAITING_ARTWORK",
+    "WAITING_BALANCE",
+    "COMPLETED",
+    "PAID",
+}
+
 
 @router.post("/orders/{order_id}/approve")
 def approve_order(
     order_id: int,
     body: ApproveBody = Body(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_user),
+    current_user: User = Depends(require_roles("ADMIN", "OWNER")),
 ):
-    if current_user.role not in ["admin", "owner"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
     o = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not o:
         raise HTTPException(status_code=404, detail="Order not found")
 
     if body.next_status:
-        o.status = body.next_status
+        target = body.next_status.upper()
+        if target not in _APPROVE_NEXT_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid target status")
+        if not can_transition(o.status, target, getattr(current_user, "role", None)):
+            raise HTTPException(status_code=403, detail="Transition not allowed")
+        o.status = target
     else:
         s = (o.status or "").upper()
         if s == "WAITING_BOOKING":

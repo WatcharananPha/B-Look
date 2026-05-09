@@ -19,6 +19,7 @@ from app.api import (
     pricing,
     admin,
     public,
+    notifications,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -56,6 +57,8 @@ app.add_middleware(
 
 os.makedirs(os.path.join(settings.STATIC_DIR, "slips"), exist_ok=True)
 os.makedirs(os.path.join(settings.STATIC_DIR, "mockups"), exist_ok=True)
+os.makedirs(os.path.join(settings.STATIC_DIR, "artworks"), exist_ok=True)
+os.makedirs(os.path.join(settings.STATIC_DIR, "print_files"), exist_ok=True)
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
@@ -69,6 +72,9 @@ app.include_router(pricing.router, prefix="/api/v1/pricing", tags=["Pricing"])
 app.include_router(company.router, prefix="/api/v1/company", tags=["Company"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
+app.include_router(
+    notifications.router, prefix="/api/v1/notifications", tags=["Notifications"]
+)
 
 app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
 
