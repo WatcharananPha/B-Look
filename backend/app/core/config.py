@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     CORS_ORIGINS: List[str] = ["*"]
     GOOGLE_CLIENT_ID: str = ""
+    # Supabase Storage: set both to enable cloud file storage on Railway/production.
+    # Leave empty to fall back to local disk (dev mode).
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
     # On Azure App Service, set STATIC_DIR=/home/static via App Settings.
     # For local dev this defaults to <cwd>/static (works out of the box).
     STATIC_DIR: str = os.path.join(os.getcwd(), "static")

@@ -18,6 +18,7 @@ from app.api import deps
 from app.api.rbac import require_roles, can_transition, mask_order_for_role
 from app.schemas.order import OrderCreate, Order as OrderSchema
 from app.core.config import settings
+from app.core.storage import save_upload
 from datetime import datetime, timedelta
 from jose import jwt
 
@@ -866,9 +867,6 @@ async def upload_order_mockups(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    storage_dir = os.path.join(settings.STATIC_DIR, "mockups")
-    os.makedirs(storage_dir, exist_ok=True)
-
     result = {}
 
     async def _save_file(upload: UploadFile, kind: str):
@@ -879,10 +877,7 @@ async def upload_order_mockups(
             raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
         ext = "png" if upload.content_type == "image/png" else "jpg"
         fname = f"order_{order_id}_{kind}_{uuid4().hex}.{ext}"
-        dest = os.path.join(storage_dir, fname)
-        with open(dest, "wb") as f:
-            f.write(data)
-        return f"/static/mockups/{fname}"
+        return save_upload(data, "mockups", fname, upload.content_type or "image/jpeg")
 
     try:
         updated = False
@@ -939,18 +934,13 @@ async def upload_artwork(
             status_code=403, detail="Cannot upload artwork in current state"
         )
 
-    storage_dir = os.path.join(settings.STATIC_DIR, "artworks")
-    os.makedirs(storage_dir, exist_ok=True)
     try:
         data = await artwork.read()
         if len(data) > 10 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
         ext = "png" if artwork.content_type == "image/png" else "jpg"
         fname = f"order_{order_id}_artwork_{uuid4().hex}.{ext}"
-        dest = os.path.join(storage_dir, fname)
-        with open(dest, "wb") as f:
-            f.write(data)
-        url = f"/static/artworks/{fname}"
+        url = save_upload(data, "artworks", fname, artwork.content_type or "image/jpeg")
         order.artwork_url = url
         # transition to waiting customer approval
         if can_transition(
@@ -1051,8 +1041,6 @@ async def upload_print_file(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    storage_dir = os.path.join(settings.STATIC_DIR, "print_files")
-    os.makedirs(storage_dir, exist_ok=True)
     try:
         ext = (
             "pdf"
@@ -1060,13 +1048,15 @@ async def upload_print_file(
             else ("png" if print_file.content_type == "image/png" else "jpg")
         )
         fname = f"order_{order_id}_print_{uuid4().hex}.{ext}"
-        dest = os.path.join(storage_dir, fname)
         data = await print_file.read()
         if len(data) > 50 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large (max 50 MB)")
-        with open(dest, "wb") as f:
-            f.write(data)
-        url = f"/static/print_files/{fname}"
+        url = save_upload(
+            data,
+            "print-files",
+            fname,
+            print_file.content_type or "application/octet-stream",
+        )
         order.print_file_url = url
         # move to IN_PRODUCTION if allowed
         if can_transition(order.status, "IN_PRODUCTION", getattr(actor, "role", None)):

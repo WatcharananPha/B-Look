@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import Optional
-import os
 import time
-import imghdr
 import uuid
 from app.db.session import get_db
 from app.models.order import Order
 from app.models.audit_log import AuditLog
 from app.core.config import settings
+from app.core.storage import save_upload, detect_image_type
 
 router = APIRouter()
 
@@ -65,10 +64,6 @@ def public_upload_slip(
     if inst not in ("booking", "deposit", "balance"):
         raise HTTPException(status_code=400, detail="Invalid installment type")
 
-    # Ensure storage directory exists
-    static_dir = os.path.join(settings.STATIC_DIR, "slips")
-    os.makedirs(static_dir, exist_ok=True)
-
     # Basic validations
     MAX_BYTES = 5 * 1024 * 1024  # 5 MB
     allowed_ct = ("image/jpeg", "image/png")
@@ -82,23 +77,17 @@ def public_upload_slip(
     if size > MAX_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
 
-    # Validate image content using imghdr
-    detected = imghdr.what(None, h=data)
+    # Validate image magic bytes (replaces deprecated imghdr)
+    detected = detect_image_type(data)
     if detected not in ("jpeg", "png"):
         raise HTTPException(
             status_code=400, detail="Uploaded file is not a valid JPEG/PNG image"
         )
 
-    # derive extension
     ext = ".jpg" if detected == "jpeg" else ".png"
     fn = f"{order_uuid}_{inst}_{uuid.uuid4().hex}{ext}"
-    dst = os.path.join(static_dir, fn)
-
-    # Write file bytes to disk
-    with open(dst, "wb") as f:
-        f.write(data)
-
-    url_path = f"/static/slips/{fn}"
+    content_type = "image/jpeg" if detected == "jpeg" else "image/png"
+    url_path = save_upload(data, "slips", fn, content_type)
 
     if inst == "booking":
         o.slip_booking_url = url_path

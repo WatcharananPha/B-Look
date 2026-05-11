@@ -79,6 +79,11 @@ app.include_router(
 app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
 
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 @app.get("/")
 def read_root():
     return {
