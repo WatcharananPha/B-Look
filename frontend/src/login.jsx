@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { AlertCircle, User, Key, Lock } from 'lucide-react'; // เพิ่ม Lock icon
-import { GoogleLogin } from '@react-oauth/google';
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
 const LOGO_URL = "/logo.jpg";
@@ -10,37 +9,6 @@ const LoginPage = ({ onLogin }) => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setIsLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${API_URL}/auth/login/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: credentialResponse.credential })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        // --- ดักจับ Case Pending (403) ---
-        if (res.status === 403) {
-            throw new Error("บัญชีของคุณอยู่ระหว่างรออนุมัติ กรุณาติดต่อ Admin");
-        }
-        throw new Error(data.detail || 'Google Login Failed');
-      }
-
-      localStorage.setItem('access_token', data.access_token || data.token);
-      localStorage.setItem('user_role', data.role || 'user'); 
-      onLogin(data.role || 'user');
-    } catch (err) {
-      console.error(err);
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -122,28 +90,7 @@ const LoginPage = ({ onLogin }) => {
           </button>
         </form>
 
-        <div className="relative mt-8 mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-slate-200"></span>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-slate-400">หรือเข้าสู่ระบบด้วย</span>
-          </div>
-        </div>
 
-        <div className="flex justify-center w-full">
-            <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => {
-                    console.error('Google Login Failed');
-                    setError("Google Login ไม่สำเร็จ");
-                }}
-                theme="outline"
-                size="large"
-                 
-                text="continue_with"
-            />
-        </div>
       </div>
     </div>
   );

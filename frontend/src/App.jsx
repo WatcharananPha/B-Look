@@ -1137,9 +1137,147 @@ const OrderDetailModal = ({ order, onClose, onRefresh }) => {
 };
 
 // 2.7 USER MANAGEMENT PAGE
+const ROLE_OPTIONS = [
+    { value: 'SALES_ADMIN',      label: 'Sales Admin' },
+    { value: 'ADMIN_OPS',        label: 'Admin Ops' },
+    { value: 'ADMIN_D',          label: 'Admin D' },
+    { value: 'GRAPHIC_DESIGNER', label: 'Graphic Designer' },
+    { value: 'PRODUCTION',       label: 'Production' },
+    { value: 'SHIPPING_ADMIN',   label: 'Shipping Admin' },
+    { value: 'ADMIN',            label: 'Admin' },
+    { value: 'OWNER',            label: 'Owner' },
+];
+
+const CreateUserModal = ({ onClose, onSuccess, onNotify, currentUserRole }) => {
+    const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'SALES_ADMIN' });
+    const [saving, setSaving] = useState(false);
+    const [showPass, setShowPass] = useState(false);
+
+    const visibleRoles = ROLE_OPTIONS.filter(r => {
+        if (r.value === 'OWNER') return hasRole(currentUserRole, 'OWNER');
+        if (r.value === 'ADMIN') return isSuperuser(currentUserRole);
+        if (r.value === 'ADMIN_D') return isSuperuser(currentUserRole);
+        return true;
+    });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!form.username.trim() || !form.password.trim()) {
+            onNotify('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน', 'error');
+            return;
+        }
+        setSaving(true);
+        try {
+            const res = await fetchWithAuth('/admin/users', {
+                method: 'POST',
+                body: JSON.stringify({
+                    username: form.username.trim(),
+                    password: form.password,
+                    full_name: form.full_name.trim() || form.username.trim(),
+                    role: form.role,
+                }),
+            });
+            if (res) {
+                onNotify(`สร้างบัญชี "${form.username}" สำเร็จแล้ว`, 'success');
+                onSuccess();
+                onClose();
+            }
+        } catch (err) {
+            onNotify('สร้างบัญชีไม่สำเร็จ: ' + err.message, 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 fade-in">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                    <div>
+                        <h3 className="text-lg font-bold text-[#1a1c23]">สร้างบัญชีผู้ใช้งาน</h3>
+                        <p className="text-xs text-gray-400 mt-0.5">กรอกข้อมูลและกำหนดสิทธิ์</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition">
+                        <X size={20} className="text-slate-500" />
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">ชื่อผู้ใช้ (Username) <span className="text-red-400">*</span></label>
+                        <input
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none transition"
+                            placeholder="เช่น sales01"
+                            value={form.username}
+                            onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                            autoFocus
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">ชื่อ-นามสกุล</label>
+                        <input
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none transition"
+                            placeholder="เช่น สมชาย ใจดี"
+                            value={form.full_name}
+                            onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">รหัสผ่าน <span className="text-red-400">*</span></label>
+                        <div className="relative">
+                            <input
+                                type={showPass ? 'text' : 'password'}
+                                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-12 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none transition"
+                                placeholder="รหัสผ่านเริ่มต้น"
+                                value={form.password}
+                                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPass(s => !s)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition"
+                            >
+                                {showPass ? <X size={16}/> : <Lock size={16}/>}
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">สิทธิ์การเข้าถึง</label>
+                        <select
+                            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer transition"
+                            value={form.role}
+                            onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                        >
+                            {visibleRoles.map(r => (
+                                <option key={r.value} value={r.value}>{r.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 border border-gray-200 text-gray-600 font-bold py-2.5 rounded-xl hover:bg-gray-50 transition text-sm"
+                        >
+                            ยกเลิก
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="flex-1 bg-[#1a1c23] text-white font-bold py-2.5 rounded-xl hover:bg-[#2d3041] transition text-sm disabled:opacity-60"
+                        >
+                            {saving ? 'กำลังสร้าง...' : 'สร้างบัญชี'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const UserManagementPage = ({ onNotify }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const currentUserRole = normalizeRole(localStorage.getItem('user_role')); // ดึงสิทธิ์ของคนปัจจุบัน
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -1173,6 +1311,17 @@ const UserManagementPage = ({ onNotify }) => {
         }
     };
 
+    const handleDeleteUser = async (userId, username) => {
+        if (!window.confirm(`ยืนยันการลบบัญชี "${username}"? ไม่สามารถกู้คืนได้`)) return;
+        try {
+            await fetchWithAuth(`/admin/users/${userId}`, { method: 'DELETE' });
+            onNotify(`ลบบัญชี "${username}" เรียบร้อยแล้ว`, 'success');
+            fetchUsers();
+        } catch (error) {
+            onNotify('ลบบัญชีไม่สำเร็จ: ' + error.message, 'error');
+        }
+    };
+
     const getRoleBadge = (role) => {
         const r = normalizeRole(role);
         const badges = {
@@ -1198,9 +1347,29 @@ const UserManagementPage = ({ onNotify }) => {
 
     return (
         <div className="p-3 sm:p-6 md:p-10 fade-in h-full bg-[#f0f2f5] overflow-y-auto flex flex-col">
-            <header className="mb-4 sm:mb-8">
-                <h1 className="text-2xl sm:text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
-                <p className="text-gray-500 font-medium text-sm sm:text-base">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
+            {showCreateModal && (
+                <CreateUserModal
+                    onClose={() => setShowCreateModal(false)}
+                    onSuccess={fetchUsers}
+                    onNotify={onNotify}
+                    currentUserRole={currentUserRole}
+                />
+            )}
+            <header className="mb-4 sm:mb-8 flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-black text-[#1a1c23]">จัดการผู้ใช้งาน</h1>
+                    <p className="text-gray-500 font-medium text-sm sm:text-base">กำหนดสิทธิ์เข้าถึงการใช้งาน</p>
+                </div>
+                {isSuperuser(currentUserRole) && (
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="flex items-center gap-2 bg-[#1a1c23] text-white font-bold px-4 py-2.5 rounded-xl shadow hover:bg-[#2d3041] transition text-sm whitespace-nowrap shrink-0"
+                    >
+                        <Plus size={16} />
+                        <span className="hidden sm:inline">สร้างบัญชีใหม่</span>
+                        <span className="sm:hidden">เพิ่ม</span>
+                    </button>
+                )}
             </header>
 
             <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 flex-1 flex flex-col overflow-hidden min-h-[400px] sm:min-h-[500px]">
@@ -1209,10 +1378,11 @@ const UserManagementPage = ({ onNotify }) => {
                         <table className="w-full text-left min-w-full sm:min-w-[800px] border-collapse">
                             <thead className="bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-200">
                                 <tr>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%] border-r border-gray-200">ชื่อผู้ใช้ / Email</th>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%] border-r border-gray-200 hidden sm:table-cell">ชื่อ-นามสกุล</th>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%] border-r border-gray-200 hidden sm:table-cell">สถานะปัจจุบัน</th>
-                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[25%]">เปลี่ยนสิทธิ์</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[22%] border-r border-gray-200">ชื่อผู้ใช้ / Email</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[22%] border-r border-gray-200 hidden sm:table-cell">ชื่อ-นามสกุล</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[22%] border-r border-gray-200 hidden sm:table-cell">สถานะปัจจุบัน</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[26%] border-r border-gray-200">เปลี่ยนสิทธิ์</th>
+                                    <th className="py-2 sm:py-4 px-2 sm:px-6 text-center w-[8%]"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -1221,7 +1391,7 @@ const UserManagementPage = ({ onNotify }) => {
                                         <td className="py-2 sm:py-4 px-2 sm:px-6 font-bold text-xs sm:text-base text-gray-700 text-center border-r border-gray-200">{u.username}</td>
                                         <td className="py-2 sm:py-4 px-2 sm:px-6 text-sm text-gray-600 text-center border-r border-gray-200 hidden sm:table-cell">{u.full_name || "-"}</td>
                                         <td className="py-2 sm:py-4 px-2 sm:px-6 text-center border-r border-gray-200 hidden sm:table-cell">{getRoleBadge(u.role)}</td>
-                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center">
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center border-r border-gray-200">
                                             <select 
                                                 className={`border rounded-lg p-2 text-sm focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-300 transition ${normalizeRole(u.role) === 'PENDING' ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-gray-200'}`}
                                                 value={u.role}
@@ -1254,6 +1424,17 @@ const UserManagementPage = ({ onNotify }) => {
                                                     <option value="OWNER">Owner</option>
                                                 )}
                                             </select>
+                                        </td>
+                                        <td className="py-2 sm:py-4 px-2 sm:px-6 text-center">
+                                            {isSuperuser(currentUserRole) && normalizeRole(u.role) !== 'OWNER' && (
+                                                <button
+                                                    onClick={() => handleDeleteUser(u.id, u.username)}
+                                                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition"
+                                                    title="ลบบัญชี"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

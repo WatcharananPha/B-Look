@@ -29,3 +29,6 @@ npmrc
 .pnpmfile.cjs
 .cache
 client_secret_1089787808310-3aljvvaq32ipo1hcjnv27i96avjgq45j.apps.googleusercontent.com.json
+.vercel
+
+.env.production

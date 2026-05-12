@@ -222,7 +222,7 @@ def upgrade() -> None:
         sa.Column("type", sa.String(), nullable=True),
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column("payload", sa.Text(), nullable=True),
-        sa.Column("is_read", sa.Boolean(), nullable=True, server_default=sa.text("0")),
+        sa.Column("is_read", sa.Boolean(), nullable=True, server_default=sa.false()),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -297,7 +297,7 @@ def upgrade() -> None:
             "production_ticket_issued",
             sa.Boolean(),
             nullable=True,
-            server_default=sa.text("0"),
+            server_default=sa.false(),
         ),
         sa.Column("tracking_number", sa.String(), nullable=True),
         sa.ForeignKeyConstraint(["created_by_id"], ["users.id"]),
@@ -344,21 +344,21 @@ def upgrade() -> None:
         INSERT INTO neck_types
             (name, price_adjustment, quantity, cost_price, additional_cost, force_slope, is_active)
         VALUES
-            ('คอกลม',                                                                   0, 0, 0,  0, 0, 1),
-            ('คอวีชน',                                                                  0, 0, 0,  0, 0, 1),
-            ('คอวีไขว้',                                                                0, 0, 0,  0, 0, 1),
-            ('คอวีตัด',                                                                 0, 0, 0,  0, 0, 1),
-            ('คอวีปก',                                                                  0, 0, 0,  0, 0, 1),
-            ('คอห้าเหลี่ยม',                                                            0, 0, 0,  0, 0, 1),
-            ('คอปกคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)',                       0, 0, 0, 40, 1, 1),
-            ('คอหยดนํ้า (บังคับไหล่สโลป+40 บาท/ตัว)',                                 0, 0, 0, 40, 1, 1),
-            ('คอห้าเหลี่ยมคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)',              0, 0, 0, 40, 1, 1),
-            ('คอห้าเหลี่ยมคางหมู (ไม่มีลื่น) (บังคับไหล่สโลป+40 บาท/ตัว)',           0, 0, 0, 40, 1, 1),
-            ('คอจีน',                                                                   0, 0, 0,  0, 0, 1),
-            ('คอวีปก (มีลิ้น)',                                                         0, 0, 0,  0, 0, 1),
-            ('คอโปโล',                                                                  0, 0, 0,  0, 0, 1),
-            ('คอวาย',                                                                   0, 0, 0,  0, 0, 1),
-            ('คอเชิ้ตฐานตั้ง',                                                         0, 0, 0,  0, 0, 1)
+            ('คอกลม',                                                                   0, 0, 0,  0, false, true),
+            ('คอวีชน',                                                                  0, 0, 0,  0, false, true),
+            ('คอวีไขว้',                                                                0, 0, 0,  0, false, true),
+            ('คอวีตัด',                                                                 0, 0, 0,  0, false, true),
+            ('คอวีปก',                                                                  0, 0, 0,  0, false, true),
+            ('คอห้าเหลี่ยม',                                                            0, 0, 0,  0, false, true),
+            ('คอปกคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)',                       0, 0, 0, 40,  true, true),
+            ('คอหยดนํ้า (บังคับไหล่สโลป+40 บาท/ตัว)',                                 0, 0, 0, 40,  true, true),
+            ('คอห้าเหลี่ยมคางหมู (มีลิ้น) (บังคับไหล่สโลป+40 บาท/ตัว)',              0, 0, 0, 40,  true, true),
+            ('คอห้าเหลี่ยมคางหมู (ไม่มีลื่น) (บังคับไหล่สโลป+40 บาท/ตัว)',           0, 0, 0, 40,  true, true),
+            ('คอจีน',                                                                   0, 0, 0,  0, false, true),
+            ('คอวีปก (มีลิ้น)',                                                         0, 0, 0,  0, false, true),
+            ('คอโปโล',                                                                  0, 0, 0,  0, false, true),
+            ('คอวาย',                                                                   0, 0, 0,  0, false, true),
+            ('คอเชิ้ตฐานตั้ง',                                                         0, 0, 0,  0, false, true)
         """)
 
 

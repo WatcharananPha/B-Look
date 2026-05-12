@@ -8,9 +8,17 @@ from app.models.user import User
 from app.models.order import Order as OrderModel
 from app.api import deps
 from app.api.rbac import require_roles, can_transition
+from app.core import security
 from fastapi import Body
 
 router = APIRouter()
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    full_name: Optional[str] = None
+    role: str = "SALES_ADMIN"
 
 
 class UserUpdate(BaseModel):
@@ -36,6 +44,44 @@ def read_users(
 ):
     users = db.query(User).all()
     return users
+
+
+@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+def create_user(
+    user_in: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "OWNER")),
+):
+    existing = db.query(User).filter(User.username == user_in.username).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Username already exists")
+    hashed = security.pwd_context.hash(user_in.password)
+    user = User(
+        username=user_in.username,
+        password_hash=hashed,
+        full_name=user_in.full_name or user_in.username,
+        role=user_in.role,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("ADMIN", "OWNER")),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    db.delete(user)
+    db.commit()
 
 
 @router.put("/users/{user_id}", response_model=UserOut)
