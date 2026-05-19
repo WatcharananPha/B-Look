@@ -1146,7 +1146,7 @@ const ROLE_OPTIONS = [
     { value: 'ADMIN_D', label: 'Admin D' },
 ];
 
-const CreateUserModal = ({ onClose, onSuccess, onNotify, currentUserRole }) => {
+const CreateUserModal = ({ onClose, onSuccess, onNotify }) => {
     const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'ADMIN_A' });
     const [saving, setSaving] = useState(false);
     const [showPass, setShowPass] = useState(false);
@@ -1344,7 +1344,6 @@ const UserManagementPage = ({ onNotify }) => {
                     onClose={() => setShowCreateModal(false)}
                     onSuccess={fetchUsers}
                     onNotify={onNotify}
-                    currentUserRole={currentUserRole}
                 />
             )}
             <header className="mb-4 sm:mb-8 flex items-start justify-between gap-4">
