@@ -28,6 +28,7 @@ def _normalize_role(role: Optional[str]) -> str:
         return ""
     r = role.strip().upper()
     mapping = {
+        # Legacy underscore variants
         "SALES_ADMIN": "ADMIN_A",
         "SALES": "ADMIN_A",
         "ADMIN_OPS": "ADMIN_B",
@@ -37,6 +38,11 @@ def _normalize_role(role: Optional[str]) -> str:
         "GRAPHIC_DESIGNER": "GRAPHIC",
         "GRAPHIC": "GRAPHIC",
         "PRODUCTION": "ADMIN_C",
+        # Space-separated variants (stored in some older DB rows)
+        "SALES ADMIN": "ADMIN_A",
+        "ADMIN OPS": "ADMIN_B",
+        "GRAPHIC DESIGNER": "GRAPHIC",
+        "SHIPPING ADMIN": "ADMIN_D",
     }
     return mapping.get(r, r)
 

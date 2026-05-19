@@ -100,13 +100,13 @@ export default function OrderAdminExtras({order, onApproved}){
   const markShipping = () => doAction('PATCH', `/orders/${order.id}/shipping`, { tracking_number: tracking })
 
   // Permission helpers
-  const canApproveSlip = _hasRole(userRole, 'SALES_ADMIN', 'ADMIN_D', 'ADMIN_OPS', 'ADMIN', 'OWNER', 'SUPERADMIN')
-  const canApproveArtwork = _hasRole(userRole, 'SALES_ADMIN', 'ADMIN_D', 'ADMIN_OPS', 'ADMIN', 'OWNER', 'SUPERADMIN')
-  const canUploadPrintFile = _hasRole(userRole, 'GRAPHIC_DESIGNER', 'ADMIN', 'OWNER', 'SUPERADMIN')
-  const canDoProduction = _hasRole(userRole, 'PRODUCTION', 'ADMIN_OPS', 'ADMIN', 'OWNER', 'SUPERADMIN')
-  const canIssueTicket = _hasRole(userRole, 'ADMIN_OPS', 'ADMIN', 'OWNER', 'SUPERADMIN')
-  const canDoQC = _hasRole(userRole, 'ADMIN_OPS', 'ADMIN', 'OWNER', 'SUPERADMIN')
-  const canShip = _hasRole(userRole, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canApproveSlip = _hasRole(userRole, 'ADMIN_A', 'ADMIN_B', 'ADMIN_D', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canApproveArtwork = _hasRole(userRole, 'ADMIN_A', 'ADMIN_B', 'ADMIN_D', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canUploadPrintFile = _hasRole(userRole, 'GRAPHIC', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canDoProduction = _hasRole(userRole, 'ADMIN_C', 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canIssueTicket = _hasRole(userRole, 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canDoQC = _hasRole(userRole, 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canShip = _hasRole(userRole, 'ADMIN_D', 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
 
   const PRODUCTION_STEPS = [
     { key: 'printing', label: '① พิมพ์' },

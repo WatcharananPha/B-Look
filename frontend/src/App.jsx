@@ -35,10 +35,10 @@ const SUPERUSER_ROLES = ['ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER'];
 const normalizeRole = (r) => (r || '').toUpperCase();
 const hasRole = (role, ...allowed) => allowed.flat().includes(normalizeRole(role));
 const isSuperuser = (role) => SUPERUSER_ROLES.includes(normalizeRole(role));
-const canViewFinancials = (role) => hasRole(role, 'ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER', 'ADMIN_D', 'ADMIN_OPS', 'SALES_ADMIN');
-const canManageOrders = (role) => hasRole(role, 'ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER', 'ADMIN_D', 'ADMIN_OPS', 'SALES_ADMIN');
+const canViewFinancials = (role) => hasRole(role, 'ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER', 'ADMIN_A', 'ADMIN_B', 'ADMIN_D');
+const canManageOrders = (role) => hasRole(role, 'ADMIN', 'OWNER', 'SUPERADMIN', 'ROOT', 'SUPERUSER', 'ADMIN_A', 'ADMIN_B', 'ADMIN_D');
 // Roles that should never see prices, payment data, or customer PII (phone/address)
-const isDataMasked = (role) => hasRole(role, 'GRAPHIC_DESIGNER', 'PRODUCTION');
+const isDataMasked = (role) => hasRole(role, 'GRAPHIC', 'ADMIN_C');
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Application version for cache busting
@@ -549,7 +549,7 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
     const frontInputRef = useRef(null);
     const backInputRef = useRef(null);
     const canViewCost = canViewFinancials(localStorage.getItem('user_role'));
-    // GRAPHIC_DESIGNER and PRODUCTION roles must not see customer PII (phone/address)
+    // GRAPHIC and ADMIN_C roles must not see customer PII (phone/address)
     const maskPII = isDataMasked(localStorage.getItem('user_role'));
   
   // เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
@@ -1138,18 +1138,17 @@ const OrderDetailModal = ({ order, onClose, onRefresh }) => {
 
 // 2.7 USER MANAGEMENT PAGE
 const ROLE_OPTIONS = [
-    { value: 'SALES_ADMIN',      label: 'Sales Admin' },
-    { value: 'ADMIN_OPS',        label: 'Admin Ops' },
-    { value: 'ADMIN_D',          label: 'Admin D' },
-    { value: 'GRAPHIC_DESIGNER', label: 'Graphic Designer' },
-    { value: 'PRODUCTION',       label: 'Production' },
-    { value: 'SHIPPING_ADMIN',   label: 'Shipping Admin' },
-    { value: 'ADMIN',            label: 'Admin' },
-    { value: 'OWNER',            label: 'Owner' },
+    { value: 'ADMIN_A',  label: 'Admin A' },
+    { value: 'ADMIN_B',  label: 'Admin B' },
+    { value: 'GRAPHIC',  label: 'Graphic' },
+    { value: 'ADMIN_C',  label: 'Admin C' },
+    { value: 'ADMIN_D',  label: 'Admin D' },
+    { value: 'ADMIN',    label: 'Admin' },
+    { value: 'OWNER',    label: 'Owner' },
 ];
 
 const CreateUserModal = ({ onClose, onSuccess, onNotify, currentUserRole }) => {
-    const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'SALES_ADMIN' });
+    const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'ADMIN_A' });
     const [saving, setSaving] = useState(false);
     const [showPass, setShowPass] = useState(false);
 
@@ -1328,12 +1327,11 @@ const UserManagementPage = ({ onNotify }) => {
             'OWNER':            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-200 shadow-sm">Owner</span>,
             'ADMIN':            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200 shadow-sm">Admin</span>,
             'SUPERADMIN':       <span className="bg-violet-100 text-violet-700 px-3 py-1 rounded-full text-xs font-bold border border-violet-200 shadow-sm">Superadmin</span>,
-            'ADMIN_D':          <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">Admin D</span>,
-            'ADMIN_OPS':        <span className="bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full text-xs font-bold border border-cyan-200 shadow-sm">Admin Ops</span>,
-            'SALES_ADMIN':      <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">Sales Admin</span>,
-            'GRAPHIC_DESIGNER': <span className="bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-xs font-bold border border-pink-200 shadow-sm">Designer</span>,
-            'PRODUCTION':       <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold border border-orange-200 shadow-sm">Production</span>,
-            'SHIPPING_ADMIN':   <span className="bg-teal-100 text-teal-700 px-3 py-1 rounded-full text-xs font-bold border border-teal-200 shadow-sm">Shipping</span>,
+            'ADMIN_A':  <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200 shadow-sm">Admin A</span>,
+            'ADMIN_B':  <span className="bg-cyan-100 text-cyan-700 px-3 py-1 rounded-full text-xs font-bold border border-cyan-200 shadow-sm">Admin B</span>,
+            'GRAPHIC':  <span className="bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-xs font-bold border border-pink-200 shadow-sm">Graphic</span>,
+            'ADMIN_C':  <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold border border-orange-200 shadow-sm">Admin C</span>,
+            'ADMIN_D':  <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">Admin D</span>,
             'PENDING':          <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold border border-amber-200 flex items-center w-fit mx-auto animate-pulse"><Lock size={12} className="mr-1"/> รออนุมัติ</span>,
             // Legacy lowercase support
             'MD':    <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200 shadow-sm">MD</span>,
