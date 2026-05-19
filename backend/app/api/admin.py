@@ -18,7 +18,7 @@ class UserCreate(BaseModel):
     username: str
     password: str
     full_name: Optional[str] = None
-    role: str = "SALES_ADMIN"
+    role: str = "ADMIN_A"
 
 
 class UserUpdate(BaseModel):
@@ -108,13 +108,18 @@ class ApproveBody(BaseModel):
     next_status: Optional[str] = None
 
 
-# Valid next-status values for the manual approve endpoint (whitelist against injection)
+# Valid next-status values for the manual approve endpoint — must match state machine
 _APPROVE_NEXT_STATUSES = {
     "WAITING_DEPOSIT",
     "WAITING_ARTWORK",
-    "WAITING_BALANCE",
-    "COMPLETED",
-    "PAID",
+    "WAITING_CUSTOMER_APPROVAL",
+    "ARTWORK_APPROVED",
+    "READY_FOR_PRODUCTION",
+    "IN_PRODUCTION",
+    "READY_FOR_SHIPPING",
+    "SHIPPED",
+    "WAITING_BOOKING",
+    "CANCELLED",
 }
 
 
@@ -138,12 +143,22 @@ def approve_order(
         o.status = target
     else:
         s = (o.status or "").upper()
-        if s == "WAITING_BOOKING":
-            o.status = "WAITING_DEPOSIT"
-        elif s == "WAITING_DEPOSIT":
-            o.status = "WAITING_BALANCE"
-        else:
-            o.status = "PAID"
+        _auto_advance = {
+            "WAITING_BOOKING": "WAITING_DEPOSIT",
+            "WAITING_DEPOSIT": "WAITING_ARTWORK",
+            "WAITING_ARTWORK": "WAITING_CUSTOMER_APPROVAL",
+            "WAITING_CUSTOMER_APPROVAL": "ARTWORK_APPROVED",
+            "ARTWORK_APPROVED": "READY_FOR_PRODUCTION",
+            "READY_FOR_PRODUCTION": "IN_PRODUCTION",
+            "IN_PRODUCTION": "READY_FOR_SHIPPING",
+            "READY_FOR_SHIPPING": "SHIPPED",
+        }
+        next_s = _auto_advance.get(s)
+        if not next_s:
+            raise HTTPException(
+                status_code=400, detail="No auto-advance available for current status"
+            )
+        o.status = next_s
 
     db.add(o)
     db.commit()

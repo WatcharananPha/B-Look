@@ -17,8 +17,47 @@ def _is_superuser(role: Optional[str]) -> bool:
     return role.upper() in ("ADMIN", "SUPERADMIN", "ROOT", "SUPERUSER", "OWNER")
 
 
+def _normalize_role(role: Optional[str]) -> str:
+    """Normalize various role names to the canonical flow roles.
+
+    Canonical roles used in the flow: ADMIN_A, ADMIN_B, GRAPHIC, ADMIN_C, ADMIN_D
+    This function maps legacy/alternative role names to those canonical values
+    so existing callers keep working while the state machine uses the new names.
+    """
+    if not role:
+        return ""
+    r = role.strip().upper()
+    mapping = {
+        "SALES_ADMIN": "ADMIN_A",
+        "SALES": "ADMIN_A",
+        "ADMIN_OPS": "ADMIN_B",
+        "OPS": "ADMIN_B",
+        "ADMIN_D": "ADMIN_D",
+        "SHIPPING_ADMIN": "ADMIN_D",
+        "GRAPHIC_DESIGNER": "GRAPHIC",
+        "GRAPHIC": "GRAPHIC",
+        "PRODUCTION": "ADMIN_C",
+    }
+    return mapping.get(r, r)
+
+
+def normalize_status(s: Optional[str]) -> Optional[str]:
+    """Normalize status values into canonical uppercase workflow states.
+
+    Accepts legacy friendly values such as 'draft' and converts them to
+    the canonical 'WAITING_BOOKING'. Returns None for falsy inputs.
+    """
+    if not s:
+        return None
+    su = str(s).strip().upper()
+    if su in ("DRAFT", "SP-DRAFT", "SP_DRAFT"):
+        return "WAITING_BOOKING"
+    return su
+
+
 def require_roles(*allowed_roles: str):
-    allowed_upper = [r.upper() for r in allowed_roles]
+    # normalize allowed role names to canonical roles for comparison
+    allowed_upper = [_normalize_role(r.upper()) for r in allowed_roles]
 
     def _dependency(current_user=Depends(get_current_user)):
         if not current_user:
@@ -26,8 +65,9 @@ def require_roles(*allowed_roles: str):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required",
             )
-        user_role = (getattr(current_user, "role", "") or "").upper()
-        if _is_superuser(user_role) or user_role in allowed_upper:
+        raw_user_role = (getattr(current_user, "role", "") or "").upper()
+        user_role = _normalize_role(raw_user_role)
+        if _is_superuser(raw_user_role) or user_role in allowed_upper:
             return current_user
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
@@ -37,26 +77,18 @@ def require_roles(*allowed_roles: str):
 
 
 # Define allowed transitions with minimal set needed for flow
+# Canonical role names: ADMIN_A, ADMIN_B, GRAPHIC, ADMIN_C, ADMIN_D
 _TRANSITIONS = {
-    "WAITING_BOOKING": {"WAITING_DEPOSIT": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]},
-    "WAITING_DEPOSIT": {"WAITING_ARTWORK": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]},
-    "WAITING_ARTWORK": {
-        "WAITING_CUSTOMER_APPROVAL": [
-            "GRAPHIC_DESIGNER",
-            "ADMIN_OPS",
-            "SALES_ADMIN",
-            "ADMIN_D",
-        ]
-    },
-    "WAITING_CUSTOMER_APPROVAL": {
-        "ARTWORK_APPROVED": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]
-    },
-    "ARTWORK_APPROVED": {"READY_FOR_PRODUCTION": ["ADMIN_OPS"]},
-    "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC_DESIGNER", "PRODUCTION"]},
-    "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["PRODUCTION", "ADMIN_OPS"]},
-    "READY_FOR_SHIPPING": {"SHIPPED": ["SHIPPING_ADMIN", "ADMIN_OPS"]},
+    "WAITING_BOOKING": {"WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B"]},
+    "WAITING_DEPOSIT": {"WAITING_ARTWORK": ["ADMIN_B", "ADMIN_A"]},
+    "WAITING_ARTWORK": {"WAITING_CUSTOMER_APPROVAL": ["GRAPHIC", "ADMIN_B"]},
+    "WAITING_CUSTOMER_APPROVAL": {"ARTWORK_APPROVED": ["ADMIN_B", "ADMIN_A"]},
+    "ARTWORK_APPROVED": {"READY_FOR_PRODUCTION": ["ADMIN_B", "ADMIN_C"]},
+    "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC", "ADMIN_C"]},
+    "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D"]},
+    "READY_FOR_SHIPPING": {"SHIPPED": ["ADMIN_D"]},
     # Allow admins to reopen a slip-rejected order back to booking stage
-    "SLIP_REJECTED": {"WAITING_BOOKING": ["SALES_ADMIN", "ADMIN_OPS", "ADMIN_D"]},
+    "SLIP_REJECTED": {"WAITING_BOOKING": ["ADMIN_A", "ADMIN_B", "ADMIN_D"]},
 }
 
 
@@ -68,9 +100,14 @@ def can_transition(
         return True
     if not current_status or not target_status:
         return False
-    cur = current_status.upper()
-    tgt = target_status.upper()
-    role_up = (role or "").upper()
+
+    cur = normalize_status(current_status)
+    tgt = normalize_status(target_status)
+    role_up = _normalize_role(role)
+
+    if not cur or not tgt:
+        return False
+
     allowed = _TRANSITIONS.get(cur, {})
     allowed_roles = allowed.get(tgt, [])
     return role_up in [r.upper() for r in allowed_roles]
@@ -84,9 +121,10 @@ def mask_order_for_role(order: dict, role: Optional[str]) -> dict:
     """
     if not role:
         return order
-    role_up = role.upper()
-    # Production and Graphic Designer roles must not see price/payment/PII
-    if role_up in ("PRODUCTION", "GRAPHIC_DESIGNER"):
+    # Normalize role and decide which roles must not see PII/finance
+    role_up = _normalize_role(role)
+    # Production (ADMIN_C) and Graphic (GRAPHIC) roles must not see price/payment/PII
+    if role_up in ("ADMIN_C", "GRAPHIC"):
         masked = order.copy()
         for k in [
             "grand_total",

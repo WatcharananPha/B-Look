@@ -2080,7 +2080,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
 
     // NEW: State for deliveryDate (single date field used for both deadline & usage_date) and status
     const [deliveryDate, setDeliveryDate] = useState(""); 
-  const [status, setStatus] = useState("draft");
+    const [status, setStatus] = useState("WAITING_BOOKING");
   
     // NEW: Customer info fields
     const [customerId, setCustomerId] = useState("");
@@ -2230,7 +2230,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         // Dates & Status (โหลดใส่วันที่จัดส่งช่องเดียว)
         const dDate = editingOrder.usage_date || editingOrder.deadline;
         setDeliveryDate(dDate ? new Date(dDate).toISOString().split('T')[0] : "");
-        setStatus(editingOrder.status || "draft");
+        setStatus(editingOrder.status || "WAITING_BOOKING");
         setUrgencyStatus(editingOrder.urgency_level || "normal");
         
         // Financial Info
@@ -2319,7 +2319,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
         setAddress("");
         setGraphicCode("");
         setDeliveryDate("");
-        setStatus("draft");
+        setStatus("WAITING_BOOKING");
         setUrgencyStatus("normal");
         setDeposit1(0);
         setDeposit2(0);
@@ -2881,7 +2881,7 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
             deposit_2: Number(deposit2) || 0,
             deposit_amount: Number(deposit1 + deposit2) || 0,
             is_vat_included: Boolean(isVatIncluded),
-            status: status || "draft",
+            status: status || "WAITING_BOOKING",
             urgency_level: urgencyStatus || "normal",
             // โคลนค่าวันที่จัดส่ง ไปเป็น deadline อัตโนมัติ เพื่อให้คำนวณ Urgency และโชว์ในตาราง
             deadline: deliveryDate && deliveryDate.trim() !== "" ? new Date(deliveryDate).toISOString() : null,

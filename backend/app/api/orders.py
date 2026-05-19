@@ -15,7 +15,12 @@ from app.models.user import User
 from app.models.product import NeckType
 from app.models.audit_log import AuditLog
 from app.api import deps
-from app.api.rbac import require_roles, can_transition, mask_order_for_role
+from app.api.rbac import (
+    require_roles,
+    can_transition,
+    mask_order_for_role,
+    normalize_status,
+)
 from app.schemas.order import OrderCreate, Order as OrderSchema
 from app.core.config import settings
 from app.core.storage import save_upload
@@ -62,17 +67,18 @@ logger = logging.getLogger(__name__)
 def read_orders(
     skip: int = 0,
     limit: int = 100,
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_user),
 ):
-    orders = (
+    query = (
         db.query(OrderModel)
         .options(selectinload(OrderModel.customer), selectinload(OrderModel.items))
         .order_by(OrderModel.id.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
     )
+    if status:
+        query = query.filter(OrderModel.status == normalize_status(status))
+    orders = query.offset(skip).limit(limit).all()
 
     results = []
     for o in orders:
@@ -339,7 +345,7 @@ def create_order(
         contact_channel=customer.channel,
         address=order_in.address,
         phone=order_in.phone,
-        status=order_in.status or "WAITING_BOOKING",
+        status=normalize_status(order_in.status) or "WAITING_BOOKING",
         grand_total=grand_total,
         total_cost=items_total_cost,
         vat_amount=vat,
@@ -707,13 +713,13 @@ def update_order(
     existing.contact_channel = customer.channel
     existing.address = order_in.address
     existing.phone = order_in.phone
-    existing.status = order_in.status
+    existing.status = normalize_status(order_in.status) or existing.status
     existing.grand_total = grand_total
     existing.total_cost = items_total_cost
     existing.vat_amount = vat
     existing.shipping_cost = shipping
     existing.add_on_cost = manual_addon
-    existing.add_on_options_total = item_addons_grand
+    existing.add_on_options_total = Decimal(item_addons_grand)
     existing.design_fee = design_fee
     existing.discount_amount = discount
     existing.is_vat_included = order_in.is_vat_included
@@ -1363,6 +1369,8 @@ def approve_slip(
 
     if payload.approved:
         new_status = next_status.get(payload.installment)
+        if new_status is None:
+            raise HTTPException(status_code=400, detail="Unknown installment type")
         # Validate transition through RBAC/state machine
         if not can_transition(old_status, new_status, getattr(approver, "role", None)):
             raise HTTPException(
