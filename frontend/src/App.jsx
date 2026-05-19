@@ -1394,27 +1394,14 @@ const UserManagementPage = ({ onNotify }) => {
                                                 }}
                                                 disabled={
                                                     (normalizeRole(u.role) === 'OWNER' && !hasRole(currentUserRole, 'OWNER')) ||
-                                                    !hasRole(currentUserRole, ...SUPERUSER_ROLES, 'ADMIN_D', 'ADMIN_OPS')
+                                                    !hasRole(currentUserRole, ...SUPERUSER_ROLES, 'ADMIN_A', 'ADMIN_B')
                                                 }
                                             >
-                                                <option value="pending">Pending</option>
-                                                <option value="GRAPHIC_DESIGNER">Graphic Designer</option>
-                                                <option value="PRODUCTION">Production</option>
-                                                <option value="SHIPPING_ADMIN">Shipping Admin</option>
-                                                <option value="SALES_ADMIN">Sales Admin</option>
-
-                                                {hasRole(currentUserRole, ...SUPERUSER_ROLES, 'ADMIN_OPS') && (
-                                                    <option value="ADMIN_OPS">Admin Ops</option>
-                                                )}
-                                                {hasRole(currentUserRole, ...SUPERUSER_ROLES) && (
-                                                    <option value="ADMIN_D">Admin D</option>
-                                                )}
-                                                {hasRole(currentUserRole, ...SUPERUSER_ROLES) && (
-                                                    <option value="ADMIN">Admin</option>
-                                                )}
-                                                {hasRole(currentUserRole, 'OWNER') && (
-                                                    <option value="OWNER">Owner</option>
-                                                )}
+                                                <option value="ADMIN_A">Admin A</option>
+                                                <option value="ADMIN_B">Admin B</option>
+                                                <option value="GRAPHIC">Graphic</option>
+                                                <option value="ADMIN_C">Admin C</option>
+                                                <option value="ADMIN_D">Admin D</option>
                                             </select>
                                         </td>
                                         <td className="py-2 sm:py-4 px-2 sm:px-6 text-center">
@@ -4068,7 +4055,7 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
     const [currentPage, setCurrentPage] = useState(1);
     const [detailOrder, setDetailOrder] = useState(null);
     const itemsPerPage = 10;
-    // Role-based column masking: GRAPHIC_DESIGNER and PRODUCTION must not see prices or customer PII
+    // Role-based column masking: GRAPHIC and ADMIN_C must not see prices or customer PII
     const _listRole = normalizeRole(localStorage.getItem('user_role'));
     const _masked = isDataMasked(_listRole);
     const _canEdit = canManageOrders(_listRole);
@@ -4911,8 +4898,8 @@ const ArtworkPage = ({ onNotify }) => {
     const [activeTab, setActiveTab] = useState('upload');   // 'upload' | 'review' | 'approved'
     const role = normalizeRole(localStorage.getItem('user_role'));
 
-    const canUpload  = hasRole(role, 'GRAPHIC_DESIGNER', ...SUPERUSER_ROLES, 'ADMIN_OPS');
-    const canReview  = hasRole(role, 'SALES_ADMIN', 'ADMIN_D', ...SUPERUSER_ROLES, 'ADMIN_OPS');
+    const canUpload  = hasRole(role, 'GRAPHIC', ...SUPERUSER_ROLES, 'ADMIN_B');
+    const canReview  = hasRole(role, 'ADMIN_A', 'ADMIN_B', 'ADMIN_D', ...SUPERUSER_ROLES);
 
     const fetchOrders = useCallback(async () => {
         setLoading(true);
@@ -5295,7 +5282,7 @@ const ProductionQueuePage = ({ onNotify }) => {
                                         )}
 
                                         {/* 4-Step stepper */}
-                                        {hasRole(role, 'PRODUCTION', 'ADMIN_OPS', ...SUPERUSER_ROLES) && (
+                                        {hasRole(role, 'ADMIN_C', 'ADMIN_B', ...SUPERUSER_ROLES) && (
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                                 {STEPS.map(step => {
                                                     const isDone = !!steps[step.key];
@@ -5327,7 +5314,7 @@ const ProductionQueuePage = ({ onNotify }) => {
 };
 
 // ─── ShippingQueuePage ────────────────────────────────────────────────────────
-// Tabs: "QC" (ADMIN_OPS — IN_PRODUCTION orders) and "จัดส่ง" (SHIPPING_ADMIN —
+// Tabs: "QC" (ADMIN_B — IN_PRODUCTION orders) and "จัดส่ง" (ADMIN_D —
 // READY_FOR_SHIPPING orders with barcode-scan style quick entry).
 const ShippingQueuePage = ({ onNotify }) => {
     const [allOrders, setAllOrders] = useState([]);
@@ -5339,8 +5326,8 @@ const ShippingQueuePage = ({ onNotify }) => {
     const trackingRefs = useRef({});
     const role = normalizeRole(localStorage.getItem('user_role'));
 
-    const canQC   = hasRole(role, 'ADMIN_OPS', ...SUPERUSER_ROLES);
-    const canShip = hasRole(role, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', ...SUPERUSER_ROLES);
+    const canQC   = hasRole(role, 'ADMIN_B', ...SUPERUSER_ROLES);
+    const canShip = hasRole(role, 'ADMIN_D', 'ADMIN_B', ...SUPERUSER_ROLES);
 
     const fetchOrders = useCallback(async () => {
         setLoading(true);
@@ -5858,18 +5845,18 @@ const App = () => {
       setIsLoggedIn(true);
       setUserRole(_norm);
       // Redirect ops roles to their dedicated page immediately after login
-      if (_norm === 'GRAPHIC_DESIGNER') setCurrentPage('artwork');
-      else if (_norm === 'PRODUCTION') setCurrentPage('production');
-      else if (_norm === 'SHIPPING_ADMIN') setCurrentPage('shipping');
+      if (_norm === 'GRAPHIC') setCurrentPage('artwork');
+      else if (_norm === 'ADMIN_C') setCurrentPage('production');
+      else if (_norm === 'ADMIN_D') setCurrentPage('shipping');
   }} />;
 
   const renderContent = () => {
     // Role-based default page redirect for ops roles
     const _roleNorm = normalizeRole(userRole);
     const _getOpsDefaultPage = () => {
-        if (normalizeRole(_roleNorm) === 'GRAPHIC_DESIGNER') return 'artwork';
-        if (normalizeRole(_roleNorm) === 'PRODUCTION') return 'production';
-        if (normalizeRole(_roleNorm) === 'SHIPPING_ADMIN') return 'shipping';
+        if (normalizeRole(_roleNorm) === 'GRAPHIC') return 'artwork';
+        if (normalizeRole(_roleNorm) === 'ADMIN_C') return 'production';
+        if (normalizeRole(_roleNorm) === 'ADMIN_D') return 'shipping';
         return null;
     };
     switch(currentPage) {
@@ -5884,14 +5871,14 @@ const App = () => {
             }
             return <OrderListPage onNavigate={handleNavigate} onEdit={handleEditOrder} onNotify={handleNotify} />;
         }
-        case 'settings': return isSuperuser(userRole) || hasRole(userRole, 'ADMIN_OPS', 'ADMIN_D') ? <SettingsPage onNotify={handleNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} /> : <ForbiddenPage />;
+        case 'settings': return isSuperuser(userRole) || hasRole(userRole, 'ADMIN_B', 'ADMIN_D') ? <SettingsPage onNotify={handleNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} /> : <ForbiddenPage />;
         case 'create_order': return canManageOrders(userRole) ? <OrderCreationPage onNavigate={handleNavigate} editingOrder={editingOrder} onNotify={handleOrderNotify} addOnDefinitions={addOnDefinitions} setAddOnDefinitions={setAddOnDefinitions} /> : <ForbiddenPage />;
-        case 'product': return hasRole(userRole, ...SUPERUSER_ROLES, 'ADMIN_OPS') ? <ProductPage /> : <ForbiddenPage />;
+        case 'product': return hasRole(userRole, ...SUPERUSER_ROLES, 'ADMIN_B') ? <ProductPage /> : <ForbiddenPage />;
         case 'customer': return canManageOrders(userRole) ? <CustomerPage refreshTrigger={customerRefreshTrigger} /> : <ForbiddenPage />;
         case 'users': return isSuperuser(userRole) ? <UserManagementPage onNotify={handleNotify} /> : <ForbiddenPage />;
-        case 'artwork': return hasRole(userRole, 'GRAPHIC_DESIGNER', ...SUPERUSER_ROLES, 'ADMIN_OPS', 'ADMIN_D', 'SALES_ADMIN') ? <ArtworkPage onNotify={handleNotify} /> : <ForbiddenPage />;
-        case 'production': return hasRole(userRole, 'PRODUCTION', ...SUPERUSER_ROLES, 'ADMIN_OPS') ? <ProductionQueuePage onNotify={handleNotify} /> : <ForbiddenPage />;
-        case 'shipping': return hasRole(userRole, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', ...SUPERUSER_ROLES) ? <ShippingQueuePage onNotify={handleNotify} /> : <ForbiddenPage />;
+        case 'artwork': return hasRole(userRole, 'GRAPHIC', ...SUPERUSER_ROLES, 'ADMIN_B', 'ADMIN_D', 'ADMIN_A') ? <ArtworkPage onNotify={handleNotify} /> : <ForbiddenPage />;
+        case 'production': return hasRole(userRole, 'ADMIN_C', ...SUPERUSER_ROLES, 'ADMIN_B') ? <ProductionQueuePage onNotify={handleNotify} /> : <ForbiddenPage />;
+        case 'shipping': return hasRole(userRole, 'ADMIN_D', 'ADMIN_B', ...SUPERUSER_ROLES) ? <ShippingQueuePage onNotify={handleNotify} /> : <ForbiddenPage />;
         default: {
             // Default page: redirect ops roles to their home page
             const _opsDefault2 = _getOpsDefaultPage();
@@ -6072,28 +6059,28 @@ const App = () => {
                     <NavItem id="create_order" icon={DollarSign} label="สร้างออเดอร์ใหม่" active={currentPage === 'create_order'} onClick={() => handleNavigate('create_order')} />
                 )}
                 
-                {/* Order list: everyone except PRODUCTION-only */}
-                {!hasRole(userRole, 'PRODUCTION') && (
+                {/* Order list: everyone except ADMIN_C-only */}
+                {!hasRole(userRole, 'ADMIN_C') && (
                     <NavItem id="order_list" icon={FileText} label="รายการออเดอร์" active={currentPage === 'order_list'} onClick={() => handleNavigate('order_list')} />
                 )}
 
-                {/* Artwork queue: graphic designer and admin types */}
-                {hasRole(userRole, 'GRAPHIC_DESIGNER', ...SUPERUSER_ROLES, 'ADMIN_OPS', 'ADMIN_D', 'SALES_ADMIN') && (
+                {/* Artwork queue: Graphic, Admin A/B/D */}
+                {hasRole(userRole, 'GRAPHIC', ...SUPERUSER_ROLES, 'ADMIN_B', 'ADMIN_D', 'ADMIN_A') && (
                     <NavItem id="artwork" icon={Printer} label="งาน Artwork" active={currentPage === 'artwork'} onClick={() => handleNavigate('artwork')} />
                 )}
 
-                {/* Production queue: production role and admin */}
-                {hasRole(userRole, 'PRODUCTION', ...SUPERUSER_ROLES, 'ADMIN_OPS') && (
+                {/* Production queue: Admin C and Admin B */}
+                {hasRole(userRole, 'ADMIN_C', ...SUPERUSER_ROLES, 'ADMIN_B') && (
                     <NavItem id="production" icon={Box} label="คิวการผลิต" active={currentPage === 'production'} onClick={() => handleNavigate('production')} />
                 )}
 
-                {/* Shipping & QC queue */}
-                {hasRole(userRole, 'SHIPPING_ADMIN', 'ADMIN_OPS', 'ADMIN_D', ...SUPERUSER_ROLES) && (
+                {/* Shipping & QC queue: Admin D and Admin B */}
+                {hasRole(userRole, 'ADMIN_D', 'ADMIN_B', ...SUPERUSER_ROLES) && (
                     <NavItem id="shipping" icon={Truck} label="จัดส่ง & QC" active={currentPage === 'shipping'} onClick={() => handleNavigate('shipping')} />
                 )}
 
-                {/* Product master data: admin and ops */}
-                {hasRole(userRole, ...SUPERUSER_ROLES, 'ADMIN_OPS') && (
+                {/* Product master data: Admin B and superusers */}
+                {hasRole(userRole, ...SUPERUSER_ROLES, 'ADMIN_B') && (
                     <NavItem id="product" icon={ShoppingCart} label="สินค้า" active={currentPage === 'product'} onClick={() => handleNavigate('product')} />
                 )}
 
@@ -6108,7 +6095,7 @@ const App = () => {
                 )}
                 
                 {/* System settings: admins and ops */}
-                {(isSuperuser(userRole) || hasRole(userRole, 'ADMIN_OPS', 'ADMIN_D')) && (
+                {(isSuperuser(userRole) || hasRole(userRole, 'ADMIN_B', 'ADMIN_D')) && (
                     <NavItem id="settings" icon={Settings} label="ตั้งค่าระบบ" active={currentPage === 'settings'} onClick={() => handleNavigate('settings')} />
                 )}
             </nav>
@@ -6123,15 +6110,15 @@ const App = () => {
                         <div>
                             {(() => {
                               const _ROLE_TH = {
-                                'GRAPHIC_DESIGNER':'นักออกแบบ','PRODUCTION':'ฝ่ายผลิต','SHIPPING_ADMIN':'จัดส่ง',
-                                'SALES_ADMIN':'เซลล์','ADMIN_D':'แอดมิน','ADMIN_OPS':'Ops','OWNER':'เจ้าของ',
+                                'GRAPHIC':'Graphic','ADMIN_C':'Admin C','ADMIN_D':'Admin D',
+                                'ADMIN_A':'Admin A','ADMIN_B':'Admin B','OWNER':'เจ้าของ',
                                 'ADMIN':'แอดมิน','SUPERADMIN':'ซูเปอร์แอดมิน','ROOT':'Root','SUPERUSER':'ซูเปอร์'
                               };
                               const _rn = (userRole||'').toUpperCase();
                               const _rTh = _ROLE_TH[_rn] || userRole;
                               const _badgeColor = isSuperuser(userRole)
                                 ? 'bg-amber-400/20 text-amber-300 border-amber-400/40'
-                                : ['ADMIN_D','ADMIN_OPS','SALES_ADMIN'].includes(_rn)
+                                : ['ADMIN_A','ADMIN_B','ADMIN_D'].includes(_rn)
                                   ? 'bg-blue-400/20 text-blue-200 border-blue-400/40'
                                   : 'bg-violet-400/20 text-violet-200 border-violet-400/40';
                               return (
