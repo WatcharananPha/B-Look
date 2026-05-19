@@ -1,4 +1,5 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
+import {createPortal} from 'react-dom'
 import { Link, Copy, CheckCircle, XCircle, ExternalLink, X, ZoomIn } from 'lucide-react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
@@ -15,6 +16,14 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
   const [file, setFile] = useState(null)
   // Slip image lightbox preview
   const [previewSlip, setPreviewSlip] = useState(null) // { url, type, label }
+
+  // Close lightbox on Escape key
+  useEffect(() => {
+    if (!previewSlip) return
+    const onKey = (e) => { if (e.key === 'Escape') setPreviewSlip(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [previewSlip])
 
   if(!order) return null
 
@@ -117,9 +126,9 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
 
   return (
     <div className="flex flex-col min-h-full bg-white print:hidden">
-      {/* Slip image lightbox */}
-      {previewSlip && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setPreviewSlip(null)}>
+      {/* Slip image lightbox — rendered via portal so it escapes the modal's stacking context */}
+      {previewSlip && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setPreviewSlip(null)}>
           <div className="relative max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-white font-bold text-sm px-3 py-1 bg-white/10 rounded-full">{previewSlip.label}</span>
@@ -146,14 +155,20 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
               </a>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Header */}
       <div className="sticky top-0 z-10 bg-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
-        <h3 className="font-bold text-white text-sm flex items-center gap-2">
-          <Link size={15} className="text-blue-400"/>
-          จัดการออเดอร์
-        </h3>
+        <div className="flex flex-col leading-tight min-w-0">
+          <h3 className="font-bold text-white text-sm flex items-center gap-1.5">
+            <Link size={14} className="text-blue-400 shrink-0"/>
+            จัดการออเดอร์
+          </h3>
+          {order.order_no && (
+            <span className="text-[10px] text-slate-400 font-mono ml-[1.4rem] truncate">{order.order_no}</span>
+          )}
+        </div>
         {onClose && (
           <button onClick={onClose} className="p-1 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white" title="ปิด">
             <X size={16}/>
@@ -196,7 +211,16 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
                     {/* Thumbnail — click to open lightbox preview */}
                     <button type="button" onClick={() => setPreviewSlip({ url: slipUrl, type, label: labels[type] })}
                       className="shrink-0 relative group block w-20 h-20 bg-white rounded border border-slate-200 overflow-hidden cursor-zoom-in" title="คลิกเพื่อดูรูปขยาย">
-                      <img src={slipUrl} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`slip-${type}`} loading="lazy"/>
+                      <img
+                        src={slipUrl}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-110"
+                        alt={`slip-${type}`}
+                        loading="eager"
+                        onError={e => {
+                          e.currentTarget.style.opacity = '0.15'
+                          e.currentTarget.title = 'โหลดรูปไม่สำเร็จ — คลิกเพื่อเปิดลิงก์โดยตรง'
+                        }}
+                      />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
                         <ZoomIn size={18} className="text-white opacity-0 group-hover:opacity-100 drop-shadow"/>
                       </div>
@@ -212,6 +236,11 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
                           className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded text-xs font-semibold transition-colors disabled:opacity-50">
                           <XCircle size={14}/> ปฏิเสธ
                         </button>
+                        <a href={slipUrl} target="_blank" rel="noreferrer"
+                          className="flex items-center justify-center p-1.5 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-slate-200 rounded transition-colors"
+                          title="เปิดในแท็บใหม่">
+                          <ExternalLink size={13}/>
+                        </a>
                       </div>
                     </div>
                   </div>

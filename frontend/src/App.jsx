@@ -551,7 +551,27 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
     const canViewCost = canViewFinancials(localStorage.getItem('user_role'));
     // GRAPHIC and ADMIN_C roles must not see customer PII (phone/address)
     const maskPII = isDataMasked(localStorage.getItem('user_role'));
-  
+
+  // Scale the A4 invoice to fit the available column width — avoids horizontal overflow
+  // and the need to zoom out. The DOM stays at true 210×297 mm for accurate PDF export.
+  const invoiceWrapperRef = useRef(null)
+  const [invoiceScale, setInvoiceScale] = useState(1)
+  useEffect(() => {
+    const A4_W_PX = (210 / 25.4) * 96 // 210 mm at 96 dpi ≈ 793.7 px
+    const update = () => {
+      const el = invoiceWrapperRef.current
+      if (!el) return
+      const available = el.getBoundingClientRect().width
+      setInvoiceScale(available > 0 && available < A4_W_PX
+        ? parseFloat((available / A4_W_PX).toFixed(4))
+        : 1)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    if (invoiceWrapperRef.current) ro.observe(invoiceWrapperRef.current)
+    return () => ro.disconnect()
+  }, [])
+
   // เพิ่มฟังก์ชันตรวจสอบและอัปโหลดไฟล์ (รับเฉพาะ PNG / JPG)
   const handleImageSelect = (side, e) => {
       const file = e.target.files?.[0];
@@ -653,7 +673,12 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
         const element = invoiceElement.cloneNode(true);
         element.style.margin = '0';
         element.style.padding = '0';
-        
+        // Reset screen-scale transform so PDF is exported at true A4 dimensions
+        element.style.transform = 'none';
+        element.style.transformOrigin = 'initial';
+        element.style.width = '210mm';
+        element.style.height = '297mm';
+
         const opt = {
           margin: 0,
           filename: `order-${data.order_no || 'draft'}.pdf`,
@@ -686,7 +711,16 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
       <style>{`
         @media print {
           body * { visibility: hidden; }
-          #invoice-content, #invoice-content * { visibility: visible; }
+          #invoice-content {
+            visibility: visible !important;
+            position: fixed !important;
+            inset: 0 !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            transform: none !important;
+            margin: 0 !important;
+          }
+          #invoice-content * { visibility: visible; }
         }
       `}</style>
 
@@ -810,8 +844,16 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
         );
       })()}
 
-      {/* Main Invoice Content - A4 Paper Size */}
-      <div id="invoice-content" className="bg-white w-[210mm] h-[297mm] shadow-2xl relative text-slate-800 font-sans overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+      {/* Main Invoice Content — A4 paper; DOM stays at 210×297 mm for PDF accuracy.
+           CSS transform scales it to fit the available column width on screen. */}
+      <div ref={invoiceWrapperRef} className="w-full" onClick={e => e.stopPropagation()}>
+        {/* Scale shell: height matches the visually-scaled content so following elements flow correctly */}
+        <div style={{ height: `calc(${invoiceScale} * 297mm)`, overflow: 'hidden' }}>
+          <div
+            id="invoice-content"
+            className="bg-white shadow-2xl relative text-slate-800 font-sans overflow-hidden flex flex-col"
+            style={{ width: '210mm', height: '297mm', transform: `scale(${invoiceScale})`, transformOrigin: 'top left' }}
+          >
         
         {/* Header - Red Banner (30mm) */}
         <div className={`${invoiceTheme[urgencyStatus]?.header || invoiceTheme.normal.header} px-6 py-3 flex-shrink-0`}>
@@ -1022,7 +1064,9 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
         <div className="bg-gray-50 p-3 text-center text-xs text-gray-400 border-t border-gray-200">
             พิมพ์เมื่อ: {new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
         </div>
-      </div>
+          </div>{/* /#invoice-content */}
+        </div>{/* /scale-shell */}
+      </div>{/* /invoice-wrapper */}
       <div className="h-8 shrink-0 print:hidden"/>
       </div>{/* end left column */}
 
