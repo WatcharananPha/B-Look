@@ -51,8 +51,8 @@ def update_company_config(
     if not company:
         company = Company()
         db.add(company)
-    company.vat_rate = config_in.vat_rate
-    company.default_shipping_cost = config_in.default_shipping_cost
+    company.vat_rate = config_in.vat_rate  # type: ignore[assignment]
+    company.default_shipping_cost = config_in.default_shipping_cost  # type: ignore[assignment]
 
     db.commit()
     db.refresh(company)

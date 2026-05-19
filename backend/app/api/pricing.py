@@ -8,6 +8,7 @@ from app.models.product import NeckType
 
 router = APIRouter()
 
+
 class PricingRequestItem(BaseModel):
     product_type: str = "shirt"
     neck_type: str
@@ -15,8 +16,10 @@ class PricingRequestItem(BaseModel):
     selected_add_ons: List[str] = []
     is_oversize: bool = False
 
+
 class PricingRequest(BaseModel):
     items: List[PricingRequestItem]
+
 
 def calculate_shipping(total_qty: int) -> int:
     if total_qty < 10:
@@ -49,6 +52,7 @@ def _normalize_name(s: str) -> str:
     ns = re.sub(r"\(.*?\)", "", ns)
     ns = re.sub(r"\s+", " ", ns).strip()
     return ns
+
 
 @router.post("/calc")
 def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
@@ -152,7 +156,8 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
 
         # determine pricing table
         is_round_v = "ปก" not in neck_name_raw and any(
-            k in neck_name_raw for k in ["คอกลม", "คอวี", "คอวีตัด", "คอวีชน", "คอวีไขว้"]
+            k in neck_name_raw
+            for k in ["คอกลม", "คอวี", "คอวีตัด", "คอวีชน", "คอวีไขว้"]
         )
         table = (
             STEP_PRICING["roundVNeck"] if is_round_v else STEP_PRICING["collarOthers"]
@@ -181,13 +186,16 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
                 addons.discard("slopeShoulder")
             addons.add("oversizeSlopeShoulder")
 
-        # slope cost comes from db_neck.additional_cost if present, otherwise default 40
+        # slope cost comes from db_neck.additional_cost if set to a non-zero value, otherwise default 40
+        # Decimal("0") (the column default) means "not configured — use hardcoded fallback"
         slope_cost = Decimal(40)
-        if db_neck and getattr(db_neck, "additional_cost", None) is not None:
-            try:
-                slope_cost = Decimal(db_neck.additional_cost)
-            except Exception:
-                slope_cost = Decimal(40)
+        if db_neck:
+            _ac = getattr(db_neck, "additional_cost", None)
+            if _ac:  # truthy: non-None and non-zero Decimal
+                try:
+                    slope_cost = Decimal(_ac)
+                except Exception:
+                    slope_cost = Decimal(40)
 
         # Do NOT embed slope into base unit for special necks — treat slope as an add-on
         # keep first_unit_price as the base unit (before addons)
