@@ -724,26 +724,29 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
         }
       `}</style>
 
-      {/* ── Left column: invoice area (scrollable) ── */}
-      <div className="flex-1 overflow-y-auto flex flex-col items-center py-6 px-4 gap-3 min-w-0" onClick={e => e.stopPropagation()}>
+      {/* ── Left column: document viewer ── */}
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-slate-800" onClick={e => e.stopPropagation()}>
 
-        {/* Toolbar */}
-        <div id="no-print-btn" className="flex items-center gap-2 w-full max-w-[210mm] print:hidden">
+        {/* ── Sticky toolbar — always visible above the scrollable document ── */}
+        <div id="no-print-btn" className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-black/40 border-b border-white/10 print:hidden">
           <div className="flex-1"/>
           {!isFactoryView && (
             <>
-              <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
-                <Printer size={18} className="mr-2"/> บันทึก PDF
+              <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-1.5 rounded-lg shadow flex items-center gap-1.5 transition font-medium text-sm">
+                <Printer size={15}/> บันทึก PDF
               </button>
-              <button onClick={() => setShowImageInput(!showImageInput)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
-                <Plus size={18} className="mr-1"/> ภาพ 3D
+              <button onClick={() => setShowImageInput(!showImageInput)} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg shadow flex items-center gap-1 transition font-medium text-sm">
+                <Plus size={15}/> ภาพ 3D
               </button>
             </>
           )}
-          <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition">
-            <XCircle size={24}/>
+          <button onClick={onClose} className="bg-white/10 hover:bg-white/20 text-white/80 hover:text-white p-1.5 rounded-lg transition" title="ปิด">
+            <XCircle size={19}/>
           </button>
         </div>
+
+        {/* ── Scrollable document area ── */}
+        <div className="flex-1 overflow-y-auto flex flex-col items-center py-8 px-4 gap-4">
 
         {/* Payment link */}
         {paymentLink && (
@@ -812,7 +815,7 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
         ];
         const _cur = _steps.findIndex(s => s.key === (data.status || '').toUpperCase());
         return (
-          <div className="print:hidden w-[210mm] mx-auto mt-3 mb-1 px-4" onClick={e => e.stopPropagation()}>
+          <div className="print:hidden w-full max-w-[210mm] mt-1 mb-2 px-2" onClick={e => e.stopPropagation()}>
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20 shadow-lg">
               <div className="flex items-center justify-between relative">
                 {/* Connecting line behind dots */}
@@ -846,7 +849,7 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
 
       {/* Main Invoice Content — A4 paper; DOM stays at 210×297 mm for PDF accuracy.
            CSS transform scales it to fit the available column width on screen. */}
-      <div ref={invoiceWrapperRef} className="w-full" onClick={e => e.stopPropagation()}>
+      <div ref={invoiceWrapperRef} className="max-w-[210mm] w-full">
         {/* Scale shell: height matches the visually-scaled content so following elements flow correctly */}
         <div style={{ height: `calc(${invoiceScale} * 297mm)`, overflow: 'hidden' }}>
           <div
@@ -1067,8 +1070,9 @@ const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
           </div>{/* /#invoice-content */}
         </div>{/* /scale-shell */}
       </div>{/* /invoice-wrapper */}
-      <div className="h-8 shrink-0 print:hidden"/>
-      </div>{/* end left column */}
+      <div className="h-10 shrink-0"/>
+        </div>{/* /scrollable area */}
+      </div>{/* /left column */}
 
       {/* ── Right sidebar: admin actions ── */}
       {sidePanel && (
