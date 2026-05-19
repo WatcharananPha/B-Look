@@ -1137,14 +1137,13 @@ const OrderDetailModal = ({ order, onClose, onRefresh }) => {
 };
 
 // 2.7 USER MANAGEMENT PAGE
+// Only the 5 roles that appear in the workflow: A → B → Graphic → C → D
 const ROLE_OPTIONS = [
-    { value: 'ADMIN_A',  label: 'Admin A' },
-    { value: 'ADMIN_B',  label: 'Admin B' },
-    { value: 'GRAPHIC',  label: 'Graphic' },
-    { value: 'ADMIN_C',  label: 'Admin C' },
-    { value: 'ADMIN_D',  label: 'Admin D' },
-    { value: 'ADMIN',    label: 'Admin' },
-    { value: 'OWNER',    label: 'Owner' },
+    { value: 'ADMIN_A', label: 'Admin A' },
+    { value: 'ADMIN_B', label: 'Admin B' },
+    { value: 'GRAPHIC', label: 'Graphic' },
+    { value: 'ADMIN_C', label: 'Admin C' },
+    { value: 'ADMIN_D', label: 'Admin D' },
 ];
 
 const CreateUserModal = ({ onClose, onSuccess, onNotify, currentUserRole }) => {
@@ -1152,12 +1151,7 @@ const CreateUserModal = ({ onClose, onSuccess, onNotify, currentUserRole }) => {
     const [saving, setSaving] = useState(false);
     const [showPass, setShowPass] = useState(false);
 
-    const visibleRoles = ROLE_OPTIONS.filter(r => {
-        if (r.value === 'OWNER') return hasRole(currentUserRole, 'OWNER');
-        if (r.value === 'ADMIN') return isSuperuser(currentUserRole);
-        if (r.value === 'ADMIN_D') return isSuperuser(currentUserRole);
-        return true;
-    });
+    const visibleRoles = ROLE_OPTIONS;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
