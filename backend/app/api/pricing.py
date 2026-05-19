@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Union
@@ -5,6 +7,12 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.product import NeckType
+from app.core.pricing_constants import (
+    STEP_PRICING,
+    ADDON_PRICES,
+    DEFAULT_SLOPE_COST,
+    SPECIAL_SLOPE_NECKS,
+)
 
 router = APIRouter()
 
@@ -47,7 +55,6 @@ def _normalize_name(s: str) -> str:
     ns = str(s)
     ns = ns.replace("นํ้า", "น้ำ")
     # remove parenthetical annotations
-    import re
 
     ns = re.sub(r"\(.*?\)", "", ns)
     ns = re.sub(r"\s+", " ", ns).strip()
@@ -59,35 +66,8 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
     if not payload or not payload.items:
         raise HTTPException(status_code=400, detail="No items provided")
 
-    STEP_PRICING = {
-        "roundVNeck": [
-            {"min": 10, "max": 30, "price": 240},
-            {"min": 31, "max": 50, "price": 220},
-            {"min": 51, "max": 100, "price": 190},
-            {"min": 101, "max": 300, "price": 180},
-            {"min": 301, "max": 99999, "price": 170},
-        ],
-        "collarOthers": [
-            {"min": 10, "max": 30, "price": 300},
-            {"min": 31, "max": 50, "price": 260},
-            {"min": 51, "max": 100, "price": 240},
-            {"min": 101, "max": 300, "price": 220},
-            {"min": 301, "max": 99999, "price": 200},
-        ],
-    }
-
-    ADDON_PRICES = {
-        "longSleeve": 40,
-        "pocket": 20,
-        "numberName": 20,
-        "slopeShoulder": 40,
-        "collarTongue": 10,
-        "shortSleeveAlt": 20,
-        "oversizeSlopeShoulder": 60,
-    }
-
-    # Special necks that should show price as base(300) + slope add-on (40) in UI
-    SPECIAL_NECKS_FORCE_340_UI = ["คอปกคางหมู", "คอหยดน้ำ", "คอห้าเหลี่ยมคางหมู"]
+    # Special necks that present as base(300) + slope-addon in the UI
+    SPECIAL_NECKS_FORCE_340_UI = SPECIAL_SLOPE_NECKS
 
     total_qty_all = 0
     grand_total = Decimal(0)
@@ -167,7 +147,7 @@ def calculate_price(payload: PricingRequest, db: Session = Depends(get_db)):
         unit = Decimal(table[0]["price"]) if table else Decimal(0)
         if qty >= 10:
             matched = next(
-                (t for t in table if qty >= t["min"] and qty <= t["max"]), None
+                (t for t in table if qty >= t["min_qty"] and qty <= t["max_qty"]), None
             )
             unit = Decimal(matched["price"]) if matched else Decimal(table[-1]["price"])
 

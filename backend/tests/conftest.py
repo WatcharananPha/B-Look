@@ -101,7 +101,7 @@ def seeded_db():
 
 
 @pytest.fixture(scope="session")
-def admin_token():
+def admin_token(seeded_db):
     """Return a valid JWT Bearer token for the seeded admin user."""
     from app.core.security import create_access_token
 

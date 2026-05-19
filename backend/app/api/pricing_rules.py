@@ -1,7 +1,7 @@
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.db.session import get_db
 from app.models.pricing_rule import PricingRule
 from app.models.user import User
@@ -24,8 +24,7 @@ class PricingRuleCreate(PricingRuleBase):
 class PricingRuleOut(PricingRuleBase):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # GET: Public Access (No Login Required) ---
@@ -48,7 +47,7 @@ def create_pricing_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("ADMIN", "ADMIN_OPS")),
 ):
-    rule = PricingRule(**rule_in.dict())
+    rule = PricingRule(**rule_in.model_dump())
     db.add(rule)
     db.commit()
     db.refresh(rule)

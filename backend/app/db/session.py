@@ -2,6 +2,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 
+# Explicit DATABASE_URL env var wins. Falls back to local SQLite for dev/test
+# runs without any environment setup. Production deployments (Railway, Azure)
+# always set DATABASE_URL explicitly.
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./blook_dev.db"
 
 _is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
@@ -21,6 +24,7 @@ else:
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     db = SessionLocal()

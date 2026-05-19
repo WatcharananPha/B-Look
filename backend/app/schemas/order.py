@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from decimal import Decimal
 from datetime import datetime
 
@@ -34,8 +34,7 @@ class OrderItem(OrderItemBase):
     id: int
     order_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Order Schema
@@ -188,6 +187,4 @@ class Order(OrderBase):
     updated_at: Optional[datetime] = None
     items: List[OrderItem] = []
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

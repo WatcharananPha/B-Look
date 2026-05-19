@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from contextlib import asynccontextmanager
 import logging
 import os
 from app.db.session import engine, SessionLocal
@@ -42,7 +43,18 @@ if is_sqlite:
 else:
     logger.info("Skipping create_all(): not running in sqlite dev environment")
 
-app = FastAPI(title="B-Look OMS API (Production)")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting %s", settings.PROJECT_NAME)
+    # Ensure static directories exist at startup regardless of environment
+    for subdir in ("slips", "mockups", "artworks", "print_files"):
+        os.makedirs(os.path.join(settings.STATIC_DIR, subdir), exist_ok=True)
+    yield
+    logger.info("Shutting down %s", settings.PROJECT_NAME)
+
+
+app = FastAPI(title="B-Look OMS API (Production)", lifespan=lifespan)
 
 origins = settings.CORS_ORIGINS
 
@@ -55,10 +67,14 @@ app.add_middleware(
 )
 
 
-os.makedirs(os.path.join(settings.STATIC_DIR, "slips"), exist_ok=True)
-os.makedirs(os.path.join(settings.STATIC_DIR, "mockups"), exist_ok=True)
-os.makedirs(os.path.join(settings.STATIC_DIR, "artworks"), exist_ok=True)
-os.makedirs(os.path.join(settings.STATIC_DIR, "print_files"), exist_ok=True)
+# ---------------------------------------------------------------------------
+# Health check — required by container orchestrators and load balancers
+# ---------------------------------------------------------------------------
+@app.get("/health", tags=["Health"], include_in_schema=False)
+def health_check():
+    """Lightweight liveness probe. Returns 200 when the app is running."""
+    return {"status": "ok"}
+
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(orders.router, prefix="/api/v1/orders", tags=["Orders"])
@@ -77,11 +93,6 @@ app.include_router(
 )
 
 app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
-
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
 
 
 @app.get("/")

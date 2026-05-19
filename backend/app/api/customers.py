@@ -5,24 +5,20 @@ from app.db.session import get_db
 from app.models.customer import Customer
 from app.api.rbac import require_roles
 from app.models.user import User
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 router = APIRouter()
 
 
-# Schema ของ Pydantic
 class CustomerSchema(BaseModel):
     id: int
     name: str
     customer_code: str | None = None
     phone: str | None = None
-
     contact_channel: str | None = Field(default=None, validation_alias="channel")
-
     address: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CustomerCreate(BaseModel):

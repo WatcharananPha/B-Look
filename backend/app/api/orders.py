@@ -24,39 +24,14 @@ from app.api.rbac import (
 from app.schemas.order import OrderCreate, Order as OrderSchema
 from app.core.config import settings
 from app.core.storage import save_upload
+from app.core.pricing_constants import (
+    STEP_PRICING,
+    ADDON_PRICES,
+    DEFAULT_SLOPE_COST,
+    SPECIAL_SLOPE_NECKS,
+)
 from datetime import datetime, timedelta
 from jose import jwt
-
-# Base Price
-STEP_PRICING = {
-    "roundVNeck": [
-        {"minQty": 10, "maxQty": 30, "price": Decimal(240)},
-        {"minQty": 31, "maxQty": 50, "price": Decimal(220)},
-        {"minQty": 51, "maxQty": 100, "price": Decimal(190)},
-        {"minQty": 101, "maxQty": 300, "price": Decimal(180)},
-        {"minQty": 301, "maxQty": 99999, "price": Decimal(170)},
-    ],
-    "collarOthers": [
-        {"minQty": 10, "maxQty": 30, "price": Decimal(300)},
-        {"minQty": 31, "maxQty": 50, "price": Decimal(260)},
-        {"minQty": 51, "maxQty": 100, "price": Decimal(240)},
-        {"minQty": 101, "maxQty": 300, "price": Decimal(220)},
-        {"minQty": 301, "maxQty": 99999, "price": Decimal(200)},
-    ],
-    "sportsPants": Decimal(210),
-    "fashionPants": Decimal(280),
-}
-
-# Basic Add-on Pricing
-DEFAULT_ADDON_PRICES = {
-    "longSleeve": Decimal(40),
-    "pocket": Decimal(20),
-    "numberName": Decimal(20),
-    "slopeShoulder": Decimal(40),
-    "collarTongue": Decimal(10),
-    "shortSleeveAlt": Decimal(20),
-    "oversizeSlopeShoulder": Decimal(60),
-}
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -186,7 +161,7 @@ def calculate_item_price(item, order_prod_type, db: Session):
         )
         if qty >= 10:
             found = next(
-                (t for t in table if qty >= t["minQty"] and qty <= t["maxQty"]), None
+                (t for t in table if qty >= t["min_qty"] and qty <= t["max_qty"]), None
             )
             unit_price = found["price"] if found else table[0]["price"]
         else:
@@ -198,15 +173,15 @@ def calculate_item_price(item, order_prod_type, db: Session):
 
     # Retrieving prices from the database.
     db_neck = db.query(NeckType).filter(NeckType.name == neck_str).first()
-    slope_price_db = (
-        Decimal(db_neck.additional_cost)
-        if db_neck and db_neck.additional_cost is not None
-        else Decimal(40)
-    )
+    # Use truthy check: Decimal("0") is the SQLAlchemy column default and means
+    # "not configured" — fall back to DEFAULT_SLOPE_COST in that case.
+    _ac = db_neck.additional_cost if db_neck else None
+    try:
+        slope_price_db = Decimal(_ac) if _ac else DEFAULT_SLOPE_COST
+    except Exception:
+        slope_price_db = DEFAULT_SLOPE_COST
 
-    # If this neck is one of the special shapes we want to include slope cost in base unit
-    SPECIAL_NECKS_FORCE_340_UI = ["คอปกคางหมู", "คอหยดน้ำ", "คอห้าเหลี่ยมคางหมู"]
-    is_special_340 = any(k in neck_str for k in SPECIAL_NECKS_FORCE_340_UI)
+    is_special_340 = any(k in neck_str for k in SPECIAL_SLOPE_NECKS)
 
     # Treat slope as an add-on: add slopeShoulder when neck requires it (by name or DB flag)
     if "(บังคับไหล่สโลป" in neck_str or (
@@ -225,7 +200,7 @@ def calculate_item_price(item, order_prod_type, db: Session):
     # Calculate Addon Total
     addon_sum = Decimal(0)
     for code in selected:
-        cost = DEFAULT_ADDON_PRICES.get(code, Decimal(0))
+        cost = ADDON_PRICES.get(code, Decimal(0))
         if code == "slopeShoulder":
             cost = slope_price_db
         addon_sum += cost
