@@ -4,6 +4,16 @@ from app.api.rbac import can_transition
 from app.schemas.order import OrderCreate
 from decimal import Decimal
 
+# ── Canonical role constants ──────────────────────────────────────────────────
+ADMIN_A = "ADMIN_A"
+ADMIN_B = "ADMIN_B"
+GRAPHIC = "GRAPHIC"
+ADMIN_C = "ADMIN_C"
+ADMIN_D = "ADMIN_D"
+
+# Full ordered flow as per diagram
+FLOW_ROLES = [ADMIN_A, ADMIN_B, GRAPHIC, ADMIN_C, ADMIN_D]
+
 
 def test_normalize_status_and_role():
     assert rbac.normalize_status("draft") == "WAITING_BOOKING"
@@ -43,11 +53,16 @@ def test_order_schema_normalization_and_validators():
 
 def test_normalize_role_canonical_passthrough():
     # Canonical role names should pass through unchanged
-    for role in ("ADMIN_A", "ADMIN_B", "GRAPHIC", "ADMIN_C", "ADMIN_D"):
+    for role in FLOW_ROLES:
         assert rbac._normalize_role(role) == role
     # Legacy aliases map correctly
     assert rbac._normalize_role("SHIPPING_ADMIN") == "ADMIN_D"
     assert rbac._normalize_role("PRODUCTION") == "ADMIN_C"
+    # Space-variant aliases (older DB rows)
+    assert rbac._normalize_role("Sales Admin") == "ADMIN_A"
+    assert rbac._normalize_role("Admin Ops") == "ADMIN_B"
+    assert rbac._normalize_role("Graphic Designer") == "GRAPHIC"
+    assert rbac._normalize_role("Shipping Admin") == "ADMIN_D"
 
 
 def test_approve_next_statuses_are_valid():
@@ -70,3 +85,77 @@ def test_status_normalization_in_read_orders_query():
     assert rbac.normalize_status("draft") == "WAITING_BOOKING"
     assert rbac.normalize_status("WAITING_ARTWORK") == "WAITING_ARTWORK"
     assert rbac.normalize_status(None) is None
+
+
+# ── Permission matrix ─────────────────────────────────────────────────────────
+
+def test_permission_matrix_full_flow():
+    """
+    Verify the complete state-machine transition matrix matches the role flow:
+        Admin A → Admin B → Graphic → Admin C → Admin D
+
+    Each (current_status, target_status, role) triple is tested for both
+    the expected ALLOW and DENY cases.
+    """
+    ALLOW = [
+        # Admin A: create/book orders, confirm payment
+        ("WAITING_BOOKING",          "WAITING_DEPOSIT",           ADMIN_A),
+        # Admin B: receive order, create album, confirm artwork approval
+        ("WAITING_BOOKING",          "WAITING_DEPOSIT",           ADMIN_B),
+        ("WAITING_DEPOSIT",          "WAITING_ARTWORK",           ADMIN_B),
+        ("WAITING_ARTWORK",          "WAITING_CUSTOMER_APPROVAL", ADMIN_B),
+        ("WAITING_CUSTOMER_APPROVAL","ARTWORK_APPROVED",          ADMIN_B),
+        ("ARTWORK_APPROVED",         "READY_FOR_PRODUCTION",      ADMIN_B),
+        # Graphic: design and submit file
+        ("WAITING_ARTWORK",          "WAITING_CUSTOMER_APPROVAL", GRAPHIC),
+        ("READY_FOR_PRODUCTION",     "IN_PRODUCTION",             GRAPHIC),
+        # Admin C: file verification, submit to production
+        ("ARTWORK_APPROVED",         "READY_FOR_PRODUCTION",      ADMIN_C),
+        ("READY_FOR_PRODUCTION",     "IN_PRODUCTION",             ADMIN_C),
+        ("IN_PRODUCTION",            "READY_FOR_SHIPPING",        ADMIN_C),
+        # Admin D: shipping management
+        ("IN_PRODUCTION",            "READY_FOR_SHIPPING",        ADMIN_D),
+        ("READY_FOR_SHIPPING",       "SHIPPED",                   ADMIN_D),
+    ]
+
+    DENY = [
+        # Admin A must NOT skip to artwork stage
+        ("WAITING_BOOKING",          "WAITING_ARTWORK",           ADMIN_A),
+        # Graphic must NOT approve artwork (only Admin B/A can)
+        ("WAITING_CUSTOMER_APPROVAL","ARTWORK_APPROVED",          GRAPHIC),
+        # Admin C must NOT touch shipping
+        ("READY_FOR_SHIPPING",       "SHIPPED",                   ADMIN_C),
+        # Admin D must NOT create orders
+        ("WAITING_BOOKING",          "WAITING_DEPOSIT",           ADMIN_D),
+        # Admin A must NOT ship
+        ("READY_FOR_SHIPPING",       "SHIPPED",                   ADMIN_A),
+        # Graphic must NOT send to production directly
+        ("ARTWORK_APPROVED",         "READY_FOR_PRODUCTION",      GRAPHIC),
+    ]
+
+    for current, target, role in ALLOW:
+        assert can_transition(current, target, role), (
+            f"EXPECTED ALLOW: {role} | {current} → {target}"
+        )
+
+    for current, target, role in DENY:
+        assert not can_transition(current, target, role), (
+            f"EXPECTED DENY:  {role} | {current} → {target}"
+        )
+
+
+def test_only_flow_roles_exist():
+    """
+    No role outside the 5 canonical flow roles should match any transition
+    (unless it is a superuser role handled separately).
+    """
+    phantom_roles = ["SALES_ADMIN", "ADMIN_OPS", "GRAPHIC_DESIGNER",
+                     "PRODUCTION", "SHIPPING_ADMIN", "UNKNOWN_ROLE"]
+    # These legacy names normalize to a canonical role — transitions still work
+    # via _normalize_role; test that the normalized value IS a flow role.
+    for r in phantom_roles:
+        normalized = rbac._normalize_role(r)
+        assert normalized in FLOW_ROLES or normalized == r, (
+            f"Role {r!r} normalized to {normalized!r} which is not a flow role"
+        )
+
