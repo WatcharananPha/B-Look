@@ -7,7 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
 const _normalizeRole = (r) => (r || '').toUpperCase()
 const _hasRole = (role, ...allowed) => allowed.flat().includes(_normalizeRole(role))
 
-export default function OrderAdminExtras({order, onApproved}){
+export default function OrderAdminExtras({order, onApproved, onClose}){
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -116,7 +116,7 @@ export default function OrderAdminExtras({order, onApproved}){
   ]
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden mt-4 print:hidden" style={{width: '320px'}}>
+    <div className="flex flex-col min-h-full bg-white print:hidden">
       {/* Slip image lightbox */}
       {previewSlip && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setPreviewSlip(null)}>
@@ -149,11 +149,16 @@ export default function OrderAdminExtras({order, onApproved}){
         </div>
       )}
       {/* Header */}
-      <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-          <Link size={16} className="text-blue-500"/>
-          จัดการสลิป & ลิงก์ชำระเงิน
+      <div className="sticky top-0 z-10 bg-slate-800 px-4 py-3 flex items-center justify-between shrink-0">
+        <h3 className="font-bold text-white text-sm flex items-center gap-2">
+          <Link size={15} className="text-blue-400"/>
+          จัดการออเดอร์
         </h3>
+        {onClose && (
+          <button onClick={onClose} className="p-1 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white" title="ปิด">
+            <X size={16}/>
+          </button>
+        )}
       </div>
 
       <div className="p-4 space-y-5">

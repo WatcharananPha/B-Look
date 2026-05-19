@@ -540,7 +540,7 @@ const HistoryLogModal = ({ orderId, onClose }) => {
 };
 
 // 2. Invoice Modal
-const InvoiceModal = ({ data, onClose, paymentLink }) => {
+const InvoiceModal = ({ data, onClose, paymentLink, sidePanel = null }) => {
     const [image3DFront, setImage3DFront] = useState(data?.mockup_front_url ? absoluteStaticUrl(data.mockup_front_url) : "");
     const [image3DBack, setImage3DBack] = useState(data?.mockup_back_url ? absoluteStaticUrl(data.mockup_back_url) : "");
     const [showImageInput, setShowImageInput] = useState(false);
@@ -682,44 +682,49 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
   const activeSizes = SIZES.filter(size => (data.quantities?.[size] || 0) > 0);
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <style>{`
         @media print {
           body * { visibility: hidden; }
           #invoice-content, #invoice-content * { visibility: visible; }
         }
       `}</style>
-      
-      {/* Action Buttons */}
-      <div id="no-print-btn" className="fixed top-4 right-4 z-[60] flex flex-wrap gap-2 print:hidden">
+
+      {/* ── Left column: invoice area (scrollable) ── */}
+      <div className="flex-1 overflow-y-auto flex flex-col items-center py-6 px-4 gap-3 min-w-0" onClick={e => e.stopPropagation()}>
+
+        {/* Toolbar */}
+        <div id="no-print-btn" className="flex items-center gap-2 w-full max-w-[210mm] print:hidden">
+          <div className="flex-1"/>
           {!isFactoryView && (
-              <>
-                  <button onClick={(e) => { e.stopPropagation(); handleDownloadPDF(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
-                      <Printer size={18} className="mr-2"/> บันทึก PDF
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); setShowImageInput(!showImageInput); }} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
-                      <Plus size={18} className="mr-1"/> ภาพ 3D
-                  </button>
-              </>
+            <>
+              <button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                <Printer size={18} className="mr-2"/> บันทึก PDF
+              </button>
+              <button onClick={() => setShowImageInput(!showImageInput)} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow-lg flex items-center transition font-medium text-sm">
+                <Plus size={18} className="mr-1"/> ภาพ 3D
+              </button>
+            </>
           )}
           <button onClick={onClose} className="bg-slate-800 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg transition">
-              <XCircle size={24} />
+            <XCircle size={24}/>
           </button>
-      </div>
-            {/* Payment link (if provided) */}
-            {paymentLink && (
-                <div className="fixed top-20 right-4 z-[59] p-3 bg-white rounded-md shadow-lg border border-gray-200 print:hidden">
-                    <div className="text-xs text-gray-500">ลิงก์ชำระเงิน (ยอดคงเหลือ)</div>
-                    <div className="mt-2 flex gap-2 items-center">
-                        <a href={paymentLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-emerald-700 underline break-all">{paymentLink}</a>
-                        <button onClick={() => { navigator.clipboard.writeText(paymentLink); alert('คัดลอกลิงก์แล้ว'); }} className="px-2 py-1 bg-gray-100 rounded text-xs">คัดลอก</button>
-                    </div>
-                </div>
-            )}
-      
+        </div>
+
+        {/* Payment link */}
+        {paymentLink && (
+          <div className="w-full max-w-[210mm] p-3 bg-white rounded-xl shadow border border-gray-200 print:hidden">
+            <div className="text-xs text-gray-500 mb-1">ลิงก์ชำระเงิน (ยอดคงเหลือ)</div>
+            <div className="flex gap-2 items-center">
+              <a href={paymentLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-emerald-700 underline break-all flex-1">{paymentLink}</a>
+              <button onClick={() => { navigator.clipboard.writeText(paymentLink); alert('คัดลอกลิงก์แล้ว'); }} className="px-2 py-1 bg-gray-100 rounded text-xs shrink-0">คัดลอก</button>
+            </div>
+          </div>
+        )}
+
       {/* Image Input Panel */}
       {showImageInput && !isFactoryView && (
-          <div id="image-input-panel" onClick={(e) => e.stopPropagation()} className="fixed top-20 right-4 z-[61] bg-white rounded-xl shadow-2xl p-5 w-80 border-2 border-purple-200 print:hidden">
+          <div id="image-input-panel" className="w-full max-w-[210mm] bg-white rounded-xl shadow-2xl p-5 border-2 border-purple-200 print:hidden">
               <h4 className="text-sm font-bold text-purple-700 mb-3">🎨 เพิ่มภาพ 3D / Design</h4>
               <div className="space-y-4">
                   {/* กล่องอัปโหลดภาพด้านหน้า */}
@@ -1018,6 +1023,15 @@ const InvoiceModal = ({ data, onClose, paymentLink }) => {
             พิมพ์เมื่อ: {new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
+      <div className="h-8 shrink-0 print:hidden"/>
+      </div>{/* end left column */}
+
+      {/* ── Right sidebar: admin actions ── */}
+      {sidePanel && (
+        <div className="w-[360px] shrink-0 bg-white border-l border-slate-200 overflow-y-auto flex flex-col print:hidden" onClick={e => e.stopPropagation()}>
+          {sidePanel}
+        </div>
+      )}
     </div>
   );
 };
@@ -1126,13 +1140,12 @@ const OrderDetailModal = ({ order, onClose, onRefresh }) => {
 
     // Render the Invoice modal and, for admin users, show the admin extras
     return (
-        <>
-            <InvoiceModal data={data} onClose={onClose} paymentLink={order.payment_link || null} />
-            {/* Admin extras positioned so it appears above the modal (top-right) */}
-            <div style={{position:'fixed', right:24, top:96, zIndex:70}}>
-                <OrderAdminExtras order={order} onApproved={() => { if(onRefresh) onRefresh(); }} />
-            </div>
-        </>
+        <InvoiceModal
+            data={data}
+            onClose={onClose}
+            paymentLink={order.payment_link || null}
+            sidePanel={<OrderAdminExtras order={order} onApproved={() => { if(onRefresh) onRefresh(); }} onClose={onClose} />}
+        />
     );
 };
 
