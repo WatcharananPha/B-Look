@@ -2665,17 +2665,8 @@ const OrderCreationPage = ({ onNavigate, editingOrder, onNotify, addOnDefinition
                         item_addon_total_local += price * totalQty;
                     }
 
-                    // local shipping heuristic
-                    let shipping_cost_local = 0;
-                    if (totalQty < 10) shipping_cost_local = 0;
-                    else if (totalQty <= 15) shipping_cost_local = 60;
-                    else if (totalQty <= 20) shipping_cost_local = 80;
-                    else if (totalQty <= 30) shipping_cost_local = 100;
-                    else if (totalQty <= 40) shipping_cost_local = 120;
-                    else if (totalQty <= 50) shipping_cost_local = 180;
-                    else if (totalQty <= 70) shipping_cost_local = 200;
-                    else if (totalQty <= 100) shipping_cost_local = 230;
-                    else shipping_cost_local = 230 + ((totalQty - 100) * 50);
+                    // local shipping — use configurable table from Settings
+                    const shipping_cost_local = _calculateShippingCost(totalQty);
 
                     setBasePrice(Number(base_unit) || 0);
                     setComputedAddOnCost(Number(item_addon_total_local) || 0);
@@ -4119,6 +4110,14 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
     const _listRole = normalizeRole(localStorage.getItem('user_role'));
     const _masked = isDataMasked(_listRole);
     const _canEdit = canManageOrders(_listRole);
+
+    // Configurable status options (synced from Settings via localStorage event)
+    const [statusOptions, setStatusOptions] = useState(getStatusOptions());
+    useEffect(() => {
+        const onUpdate = () => setStatusOptions(getStatusOptions());
+        window.addEventListener('statusOptionsUpdated', onUpdate);
+        return () => window.removeEventListener('statusOptionsUpdated', onUpdate);
+    }, []);
   
     // State สำหรับ Payment Popup
     const [showPaymentPopup, setShowPaymentPopup] = useState(false);
@@ -4344,13 +4343,10 @@ const OrderListPage = ({ onNavigate, onEdit, filterType = 'all', onNotify }) => 
                                         <td className="py-4 px-6 text-gray-500 text-sm text-center border-r border-gray-200">{order.deadline ? new Date(order.deadline).toLocaleDateString('th-TH') : '-'}</td>
                                         {!_masked && <td className="py-4 px-6 text-center font-bold text-gray-700 border-r border-gray-200">{order.grand_total?.toLocaleString()}</td>}
                                         <td className="py-4 px-6 text-center border-r border-gray-200">
-                                            <select value={order.status || 'draft'} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }} className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition">
-                                                <option value="ร่าง">ร่าง</option>
-                                                <option value="ออกแบบ">ออกแบบ</option>
-                                                <option value="รออนุมัติ">รออนุมัติ</option>
-                                                <option value="ผลิต">ผลิต</option>
-                                                <option value="จัดส่ง">จัดส่ง</option>
-                                                <option value="ส่งแล้ว">ส่งแล้ว</option>
+                                            <select value={order.status || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); handleStatusChange(order.id, e.target.value); }} className="text-xs font-bold px-2 py-1 rounded border border-gray-300 bg-white focus:ring-2 focus:ring-[#1a1c23] outline-none cursor-pointer hover:border-gray-400 transition">
+                                                {statusOptions.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
                                             </select>
                                         </td>
                                         <td className="py-4 px-6 text-center" onClick={(e) => e.stopPropagation()}>
@@ -4646,6 +4642,20 @@ const SettingsPage = ({ onNotify, addOnDefinitions, setAddOnDefinitions }) => {
                                       onChange={e => setGlobalConfig({...globalConfig, vat_rate: parseFloat(e.target.value)})}
                                   />
                                   <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">%</span>
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">ค่าขนส่งเริ่มต้น (บาท)</label>
+                              <p className="text-[10px] text-gray-400 mb-1">ใช้เป็นค่าเริ่มต้นก่อนคำนวณอัตโนมัติเมื่อสร้างออเดอร์ใหม่</p>
+                              <div className="relative">
+                                  <input 
+                                      type="number" 
+                                      className="w-full border border-gray-200 p-1.5 rounded-xl pl-8 text-sm" 
+                                      placeholder="0" 
+                                      value={globalConfig.default_shipping_cost}
+                                      onChange={e => setGlobalConfig({...globalConfig, default_shipping_cost: parseFloat(e.target.value) || 0})}
+                                  />
+                                  <span className="absolute left-2.5 top-1.5 text-slate-400 text-xs">฿</span>
                               </div>
                           </div>
                       </div>
