@@ -56,16 +56,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="B-Look OMS API (Production)", lifespan=lifespan)
 
-origins = [
-    "https://blook-test.vercel.app",
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
