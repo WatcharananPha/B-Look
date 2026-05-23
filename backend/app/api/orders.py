@@ -1016,7 +1016,9 @@ async def upload_print_file(
     order_id: int,
     print_file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    actor: User = Depends(require_roles("GRAPHIC_DESIGNER", "ADMIN_OPS", "ADMIN")),
+    actor: User = Depends(
+        require_roles("GRAPHIC_DESIGNER", "ADMIN_OPS", "ADMIN", "PRODUCTION")
+    ),
 ):
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:
@@ -1123,7 +1125,7 @@ def qc_result(
     order_id: int,
     payload: QCPayload,
     db: Session = Depends(get_db),
-    actor: User = Depends(require_roles("ADMIN_OPS", "ADMIN")),
+    actor: User = Depends(require_roles("ADMIN_OPS", "ADMIN", "PRODUCTION")),
 ):
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:

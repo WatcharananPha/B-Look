@@ -91,7 +91,7 @@ def require_roles(*allowed_roles: str):
 _TRANSITIONS = {
     # Booking/payment flow
     "WAITING_BOOKING": {
-        "WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B"],
+        "WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B", "ADMIN_D"],
         "CANCELLED": ["ADMIN_A", "ADMIN_B", "ADMIN_D", "ADMIN"],
     },
     "WAITING_DEPOSIT": {
@@ -105,29 +105,29 @@ _TRANSITIONS = {
     },
     "WAITING_CUSTOMER_APPROVAL": {
         "ARTWORK_APPROVED": ["ADMIN_B", "ADMIN_A"],
-        "EDIT_ROUND_1": ["ADMIN_B", "ADMIN_A"],
-        "EDIT_ROUND_2": ["ADMIN_B", "ADMIN_A"],
-        "EDIT_ROUND_3": ["ADMIN_B", "ADMIN_A"],
+        "EDIT_ROUND_1": ["ADMIN_B", "ADMIN_A", "GRAPHIC"],
+        "EDIT_ROUND_2": ["ADMIN_B", "ADMIN_A", "GRAPHIC"],
+        "EDIT_ROUND_3": ["ADMIN_B", "ADMIN_A", "GRAPHIC"],
     },
     # Graphic performs edits then returns to WAITING_CUSTOMER_APPROVAL
-    "EDIT_ROUND_1": {"WAITING_ARTWORK": ["GRAPHIC"]},
-    "EDIT_ROUND_2": {"WAITING_ARTWORK": ["GRAPHIC"]},
-    "EDIT_ROUND_3": {"WAITING_ARTWORK": ["GRAPHIC"]},
+    "EDIT_ROUND_1": {"WAITING_ARTWORK": ["GRAPHIC", "ADMIN_B"]},
+    "EDIT_ROUND_2": {"WAITING_ARTWORK": ["GRAPHIC", "ADMIN_B"]},
+    "EDIT_ROUND_3": {"WAITING_ARTWORK": ["GRAPHIC", "ADMIN_B"]},
     # Production handoff
     "ARTWORK_APPROVED": {"READY_FOR_PRODUCTION": ["ADMIN_B", "ADMIN_C"]},
-    "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC", "ADMIN_C"]},
-    "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D"]},
+    "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC", "ADMIN_C", "ADMIN_B"]},
+    "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D", "ADMIN_B"]},
     # Shipping / queue / COD flow handled by Admin_D
-    "READY_FOR_SHIPPING": {"QUEUE_RECEIVED": ["ADMIN_D"], "SHIPPED": ["ADMIN_D"]},
-    "QUEUE_RECEIVED": {"QUEUE_NOTIFIED": ["ADMIN_D"]},
-    "QUEUE_NOTIFIED": {"IMAGE_RECEIVED": ["ADMIN_D"]},
-    "IMAGE_RECEIVED": {"COD_PENDING": ["ADMIN_D"]},
-    "COD_PENDING": {"COD_COLLECTED": ["ADMIN_D"]},
-    "COD_COLLECTED": {"SHIPPED": ["ADMIN_D"]},
+    "READY_FOR_SHIPPING": {"QUEUE_RECEIVED": ["ADMIN_D", "ADMIN_B"], "SHIPPED": ["ADMIN_D", "ADMIN_B"]},
+    "QUEUE_RECEIVED": {"QUEUE_NOTIFIED": ["ADMIN_D", "ADMIN_B"]},
+    "QUEUE_NOTIFIED": {"IMAGE_RECEIVED": ["ADMIN_D", "ADMIN_B"]},
+    "IMAGE_RECEIVED": {"COD_PENDING": ["ADMIN_D", "ADMIN_B"]},
+    "COD_PENDING": {"COD_COLLECTED": ["ADMIN_D", "ADMIN_B"]},
+    "COD_COLLECTED": {"SHIPPED": ["ADMIN_D", "ADMIN_B"]},
     # Reopen / admin overrides
     "SLIP_REJECTED": {"WAITING_BOOKING": ["ADMIN_A", "ADMIN_B", "ADMIN_D", "ADMIN"]},
     "ON_HOLD": {
-        "READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D"],
+        "READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D", "ADMIN_B"],
         "WAITING_BOOKING": ["ADMIN_A", "ADMIN_B"],
     },
     "CANCELLED": {},

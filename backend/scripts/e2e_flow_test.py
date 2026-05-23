@@ -83,10 +83,10 @@ def create_order(db):
 def set_actor(role_name, user_obj):
     # Extract primitive id/username at definition time to avoid DetachedInstanceError
     if isinstance(user_obj, dict):
-        u_id = int(user_obj.get("id"))
+        u_id = int(user_obj.get("id") or 0)
         u_name = user_obj.get("username")
     else:
-        u_id = int(getattr(user_obj, "id"))
+        u_id = int(getattr(user_obj, "id", 0))
         u_name = getattr(user_obj, "username", None)
 
     def _override():
@@ -140,6 +140,27 @@ def main():
             json={"status": "WAITING_CUSTOMER_APPROVAL"},
         )
         print("Graphic -> WAITING_CUSTOMER_APPROVAL", r.status_code, r.json())
+
+        # 3.1 Admin_B: WAITING_CUSTOMER_APPROVAL -> EDIT_ROUND_1 (ขอแก้ไขรอบที่ 1)
+        set_actor("ADMIN_B", users["ADMIN_B"])
+        r = client.patch(
+            f"/api/v1/orders/{order['id']}/status", json={"status": "EDIT_ROUND_1"}
+        )
+        print("Admin_B -> EDIT_ROUND_1 (ลูกค้าขอแก้ไขแบบ)", r.status_code, r.json())
+
+        # 3.2 Graphic: EDIT_ROUND_1 -> WAITING_ARTWORK (เริ่มแก้ไข)
+        set_actor("GRAPHIC", users["GRAPHIC"])
+        r = client.patch(
+            f"/api/v1/orders/{order['id']}/status", json={"status": "WAITING_ARTWORK"}
+        )
+        print("Graphic -> WAITING_ARTWORK (เริ่มทำการแก้ไข)", r.status_code, r.json())
+
+        # 3.3 Graphic: WAITING_ARTWORK -> WAITING_CUSTOMER_APPROVAL (ส่งแบบที่แก้ไขแล้ว)
+        set_actor("GRAPHIC", users["GRAPHIC"])
+        r = client.patch(
+            f"/api/v1/orders/{order['id']}/status", json={"status": "WAITING_CUSTOMER_APPROVAL"}
+        )
+        print("Graphic -> WAITING_CUSTOMER_APPROVAL (ส่งแบบที่แก้แล้ว)", r.status_code, r.json())
 
         # 4. Admin_B: WAITING_CUSTOMER_APPROVAL -> ARTWORK_APPROVED
         set_actor("ADMIN_B", users["ADMIN_B"])

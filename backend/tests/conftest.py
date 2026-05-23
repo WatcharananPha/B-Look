@@ -11,6 +11,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import sys
+import pathlib
+
+# Ensure the `backend` package root is on sys.path so `import app` works
+proj_root = pathlib.Path(__file__).resolve().parents[1]
+if str(proj_root) not in sys.path:
+    sys.path.insert(0, str(proj_root))
+
 # ── Test engine (in-memory SQLite, single shared connection) ──────────────────
 TEST_DATABASE_URL = "sqlite:///:memory:"
 
