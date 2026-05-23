@@ -47,6 +47,11 @@ def _normalize_role(role: Optional[str]) -> str:
     return mapping.get(r, r)
 
 
+# Canonical flow roles used across the application. Keep this list small
+# and authoritative: ADMIN_A, ADMIN_B, GRAPHIC, ADMIN_C, ADMIN_D
+CANONICAL_ROLES = ("ADMIN_A", "ADMIN_B", "GRAPHIC", "ADMIN_C", "ADMIN_D")
+
+
 def normalize_status(s: Optional[str]) -> Optional[str]:
     """Normalize status values into canonical uppercase workflow states.
 
@@ -82,19 +87,51 @@ def require_roles(*allowed_roles: str):
     return _dependency
 
 
-# Define allowed transitions with minimal set needed for flow
-# Canonical role names: ADMIN_A, ADMIN_B, GRAPHIC, ADMIN_C, ADMIN_D
+# Expanded transitions to cover edit rounds and Admin_D queue/COD steps.
 _TRANSITIONS = {
-    "WAITING_BOOKING": {"WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B"]},
-    "WAITING_DEPOSIT": {"WAITING_ARTWORK": ["ADMIN_B", "ADMIN_A"]},
-    "WAITING_ARTWORK": {"WAITING_CUSTOMER_APPROVAL": ["GRAPHIC", "ADMIN_B"]},
-    "WAITING_CUSTOMER_APPROVAL": {"ARTWORK_APPROVED": ["ADMIN_B", "ADMIN_A"]},
+    # Booking/payment flow
+    "WAITING_BOOKING": {
+        "WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B"],
+        "CANCELLED": ["ADMIN_A", "ADMIN_B", "ADMIN_D", "ADMIN"],
+    },
+    "WAITING_DEPOSIT": {
+        "WAITING_ARTWORK": ["ADMIN_B", "ADMIN_A"],
+        "CANCELLED": ["ADMIN_A", "ADMIN_B", "ADMIN"],
+    },
+    # Artwork / design flow
+    "WAITING_ARTWORK": {
+        "WAITING_CUSTOMER_APPROVAL": ["GRAPHIC", "ADMIN_B"],
+        "CANCELLED": ["ADMIN_B", "ADMIN"],
+    },
+    "WAITING_CUSTOMER_APPROVAL": {
+        "ARTWORK_APPROVED": ["ADMIN_B", "ADMIN_A"],
+        "EDIT_ROUND_1": ["ADMIN_B", "ADMIN_A"],
+        "EDIT_ROUND_2": ["ADMIN_B", "ADMIN_A"],
+        "EDIT_ROUND_3": ["ADMIN_B", "ADMIN_A"],
+    },
+    # Graphic performs edits then returns to WAITING_CUSTOMER_APPROVAL
+    "EDIT_ROUND_1": {"WAITING_ARTWORK": ["GRAPHIC"]},
+    "EDIT_ROUND_2": {"WAITING_ARTWORK": ["GRAPHIC"]},
+    "EDIT_ROUND_3": {"WAITING_ARTWORK": ["GRAPHIC"]},
+    # Production handoff
     "ARTWORK_APPROVED": {"READY_FOR_PRODUCTION": ["ADMIN_B", "ADMIN_C"]},
     "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC", "ADMIN_C"]},
     "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D"]},
-    "READY_FOR_SHIPPING": {"SHIPPED": ["ADMIN_D"]},
-    # Allow admins to reopen a slip-rejected order back to booking stage
-    "SLIP_REJECTED": {"WAITING_BOOKING": ["ADMIN_A", "ADMIN_B", "ADMIN_D"]},
+    # Shipping / queue / COD flow handled by Admin_D
+    "READY_FOR_SHIPPING": {"QUEUE_RECEIVED": ["ADMIN_D"], "SHIPPED": ["ADMIN_D"]},
+    "QUEUE_RECEIVED": {"QUEUE_NOTIFIED": ["ADMIN_D"]},
+    "QUEUE_NOTIFIED": {"IMAGE_RECEIVED": ["ADMIN_D"]},
+    "IMAGE_RECEIVED": {"COD_PENDING": ["ADMIN_D"]},
+    "COD_PENDING": {"COD_COLLECTED": ["ADMIN_D"]},
+    "COD_COLLECTED": {"SHIPPED": ["ADMIN_D"]},
+    # Reopen / admin overrides
+    "SLIP_REJECTED": {"WAITING_BOOKING": ["ADMIN_A", "ADMIN_B", "ADMIN_D", "ADMIN"]},
+    "ON_HOLD": {
+        "READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D"],
+        "WAITING_BOOKING": ["ADMIN_A", "ADMIN_B"],
+    },
+    "CANCELLED": {},
+    "SHIPPED": {},
 }
 
 
@@ -117,6 +154,14 @@ def can_transition(
     allowed = _TRANSITIONS.get(cur, {})
     allowed_roles = allowed.get(tgt, [])
     return role_up in [r.upper() for r in allowed_roles]
+
+
+# Expanded state-machine for more granular order/production workflow.
+# The transitions map source_status -> { target_status: [allowed_roles...] }
+# This is intentionally explicit to make it easy to review and adjust.
+# NOTE: Keep role names canonical (see CANONICAL_ROLES) or use legacy aliases
+# which are normalized by _normalize_role when checking permissions.
+#
 
 
 def mask_order_for_role(order: dict, role: Optional[str]) -> dict:

@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.order import Order as OrderModel
 from app.api import deps
+from app.api import rbac
 from app.api.rbac import require_roles, can_transition
 from app.core import security
 from fastapi import Body
@@ -55,11 +56,18 @@ def create_user(
     if existing:
         raise HTTPException(status_code=409, detail="Username already exists")
     hashed = security.pwd_context.hash(user_in.password)
+    # Normalize and validate role to canonical set or allow superuser roles
+    normalized_role = rbac._normalize_role(user_in.role or "")
+    if normalized_role not in rbac.CANONICAL_ROLES and not rbac._is_superuser(
+        normalized_role
+    ):
+        raise HTTPException(status_code=400, detail="Invalid role")
+
     user = User(
         username=user_in.username,
         password_hash=hashed,
         full_name=user_in.full_name or user_in.username,
-        role=user_in.role,
+        role=normalized_role,
         is_active=True,
     )
     db.add(user)
@@ -94,7 +102,14 @@ def update_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.role = user_in.role
+    # Normalize and validate role
+    normalized_role = rbac._normalize_role(user_in.role or "")
+    if normalized_role not in rbac.CANONICAL_ROLES and not rbac._is_superuser(
+        normalized_role
+    ):
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    user.role = normalized_role
     if user_in.is_active is not None:
         user.is_active = user_in.is_active
 

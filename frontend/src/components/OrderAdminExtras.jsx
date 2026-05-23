@@ -17,6 +17,9 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
   // Slip image lightbox preview
   const [previewSlip, setPreviewSlip] = useState(null) // { url, type, label }
 
+  const [queueNumberInput, setQueueNumberInput] = useState('')
+  const [codInput, setCodInput] = useState('')
+
   // Close lightbox on Escape key
   useEffect(() => {
     if (!previewSlip) return
@@ -24,6 +27,13 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [previewSlip])
+
+  useEffect(() => {
+    // Sync queue input when order loads/changes
+    if (order && order.queue_number !== undefined && order.queue_number !== null) {
+      setQueueNumberInput(String(order.queue_number))
+    }
+  }, [order])
 
   if(!order) return null
 
@@ -116,6 +126,8 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
   const canIssueTicket = _hasRole(userRole, 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
   const canDoQC = _hasRole(userRole, 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
   const canShip = _hasRole(userRole, 'ADMIN_D', 'ADMIN_B', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  const canManageQueue = _hasRole(userRole, 'ADMIN_D', 'ADMIN', 'OWNER', 'SUPERADMIN')
+  
 
   const PRODUCTION_STEPS = [
     { key: 'printing', label: '① พิมพ์' },
@@ -338,6 +350,62 @@ export default function OrderAdminExtras({order, onApproved, onClose}){
                   className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs font-semibold disabled:opacity-50">
                   จัดส่ง
                 </button>
+              </div>
+            )}
+
+            {/* Admin_D: Queue & COD actions */}
+            {canManageQueue && (
+              <div className="mt-3">
+                <div className="text-xs text-slate-500 mb-1.5">Queue / COD Actions (Admin D)</div>
+
+                {/* Receive Queue from READY_FOR_SHIPPING */}
+                {orderStatus === 'READY_FOR_SHIPPING' && (
+                  <div className="flex gap-2 mb-2">
+                    <input placeholder="หมายเลขคิว (ถ้ามี)" value={queueNumberInput}
+                      onChange={e=>setQueueNumberInput(e.target.value)}
+                      className="flex-1 text-xs border border-slate-200 rounded p-2 focus:ring-2 focus:ring-blue-200 outline-none"/>
+                    <button onClick={()=>doAction('POST', `/orders/${order.id}/queue/receive`, { queue_number: queueNumberInput ? parseInt(queueNumberInput) : null })}
+                      disabled={loading}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-xs font-semibold disabled:opacity-50">
+                      รับคิว
+                    </button>
+                  </div>
+                )}
+
+                {/* Notify queue */}
+                {orderStatus === 'QUEUE_RECEIVED' && (
+                  <div className="mb-2">
+                    <button onClick={()=>doAction('POST', `/orders/${order.id}/queue/notify`, { note: '' })}
+                      disabled={loading}
+                      className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded text-xs font-semibold disabled:opacity-50">
+                      แจ้งคิว
+                    </button>
+                  </div>
+                )}
+
+                {/* Image received */}
+                {orderStatus === 'QUEUE_NOTIFIED' && (
+                  <div className="mb-2">
+                    <button onClick={()=>doAction('POST', `/orders/${order.id}/image-received`)}
+                      disabled={loading}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-xs font-semibold disabled:opacity-50">
+                      ยืนยันได้รูป
+                    </button>
+                  </div>
+                )}
+
+                {/* Collect COD */}
+                {orderStatus === 'IMAGE_RECEIVED' && (
+                  <div className="flex gap-2">
+                    <input placeholder="จำนวนเงิน COD" value={codInput} onChange={e=>setCodInput(e.target.value)}
+                      className="flex-1 text-xs border border-slate-200 rounded p-2 focus:ring-2 focus:ring-blue-200 outline-none"/>
+                    <button onClick={()=>doAction('POST', `/orders/${order.id}/collect-cod`, { amount: parseFloat(codInput || 0) })}
+                      disabled={loading || !codInput}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-xs font-semibold disabled:opacity-50">
+                      เก็บยอด (COD)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from decimal import Decimal # 1. อิมพอร์ต Decimal เพิ่มตรงนี้
 from app.db.session import get_db
 from app.models.product import FabricType, NeckType, SleeveType
 from app.schemas.master import FabricTypeResponse, NeckTypeResponse, SleeveTypeResponse
@@ -11,16 +12,15 @@ import re
 
 router = APIRouter()
 
-
 class MasterCreate(BaseModel):
     name: str
-    price_adjustment: float = 0
-    additional_cost: float = 0
+    # 2. เปลี่ยน float เป็น Decimal และใช้ค่า Default เป็น Decimal('0')
+    price_adjustment: Decimal = Decimal('0') 
+    additional_cost: Decimal = Decimal('0')
     quantity: int = 0
-    cost_price: float = 0
+    cost_price: Decimal = Decimal('0')
     force_slope: bool = False
-
-
+    
 @router.get("/fabrics", response_model=List[FabricTypeResponse])
 def get_fabrics(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
     return (

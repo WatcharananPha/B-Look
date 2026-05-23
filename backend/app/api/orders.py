@@ -1238,6 +1238,159 @@ def update_shipping(
     return {"ok": True, "status": order.status}
 
 
+class QueuePayload(BaseModel):
+    queue_number: Optional[int] = None
+    note: Optional[str] = None
+
+
+@router.post("/{order_id}/queue/receive")
+def queue_receive(
+    order_id: int,
+    payload: QueuePayload,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("ADMIN_D", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not can_transition(order.status, "QUEUE_RECEIVED", getattr(actor, "role", None)):
+        raise HTTPException(
+            status_code=403, detail="Not allowed to mark queue received"
+        )
+
+    order.queue_number = payload.queue_number
+    order.queue_status = "RECEIVED"
+    order.status = "QUEUE_RECEIVED"
+    db.add(order)
+    audit = AuditLog(
+        action="QUEUE_RECEIVE",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps(
+            {"queue_number": payload.queue_number, "note": payload.note}
+        ),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    return {"ok": True, "status": order.status, "queue_number": order.queue_number}
+
+
+@router.post("/{order_id}/queue/notify")
+def queue_notify(
+    order_id: int,
+    payload: QueuePayload,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("ADMIN_D", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not can_transition(order.status, "QUEUE_NOTIFIED", getattr(actor, "role", None)):
+        raise HTTPException(
+            status_code=403, detail="Not allowed to mark queue notified"
+        )
+
+    order.queue_status = "NOTIFIED"
+    order.status = "QUEUE_NOTIFIED"
+    db.add(order)
+    audit = AuditLog(
+        action="QUEUE_NOTIFY",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps({"note": payload.note}),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    return {"ok": True, "status": order.status}
+
+
+@router.post("/{order_id}/image-received")
+def image_received(
+    order_id: int,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("ADMIN_D", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not can_transition(order.status, "IMAGE_RECEIVED", getattr(actor, "role", None)):
+        raise HTTPException(
+            status_code=403, detail="Not allowed to mark image received"
+        )
+
+    order.image_received = True
+    order.status = "IMAGE_RECEIVED"
+    db.add(order)
+    audit = AuditLog(
+        action="IMAGE_RECEIVED",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps({}),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    return {"ok": True, "status": order.status}
+
+
+class CollectCodPayload(BaseModel):
+    amount: float
+
+
+@router.post("/{order_id}/collect-cod")
+def collect_cod(
+    order_id: int,
+    payload: CollectCodPayload,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("ADMIN_D", "ADMIN")),
+):
+    order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if not can_transition(order.status, "COD_COLLECTED", getattr(actor, "role", None)):
+        raise HTTPException(status_code=403, detail="Not allowed to collect COD")
+
+    try:
+        amt = Decimal(str(payload.amount))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid amount")
+
+    order.cod_amount = amt
+    order.cod_collected = True
+    # adjust remaining balance if present
+    try:
+        rb = Decimal(str(order.remaining_balance or 0))
+    except Exception:
+        rb = Decimal(0)
+    order.remaining_balance = max(Decimal(0), rb - amt)
+    order.status = "COD_COLLECTED"
+    db.add(order)
+    audit = AuditLog(
+        action="COD_COLLECTED",
+        target_type="order",
+        target_id=str(order.id),
+        details=json.dumps({"amount": str(amt)}),
+        user_id=getattr(actor, "id", None),
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(order)
+    return {
+        "ok": True,
+        "status": order.status,
+        "remaining_balance": str(order.remaining_balance),
+    }
+
+
 # Patch: Dedicated endpoint to update only order status (avoids touching items) ---
 class UpdateOrderStatus(BaseModel):
     status: str

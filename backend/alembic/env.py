@@ -5,6 +5,7 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from typing import Dict, Any, cast
 
 # --- Import App Config & Models ---
 import sys
@@ -70,8 +71,14 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     # ใช้ engine_from_config เพื่อสร้าง Connection จาก URL ที่เราแก้ไว้ข้างบน
+    # `config.get_section` can return `None` or a Dict[str,str]; cast to the
+    # expected type to satisfy static checkers (Pylance) and ensure we
+    # always pass a mapping to `engine_from_config`.
+    cfg_section = config.get_section(config.config_ini_section) or {}
+    cfg_typed = cast(Dict[str, Any], cfg_section)
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
+        cfg_typed,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

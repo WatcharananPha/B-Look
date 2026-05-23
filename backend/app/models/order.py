@@ -111,6 +111,19 @@ class Order(Base):
     # Artwork / Print files stored as URLs to /static
     artwork_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     print_file_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Queue and edit-round support for Admin_D and design iterations
+    queue_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    queue_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    edit_round: Mapped[int] = mapped_column(Integer, default=0)
+    # COD / remaining balance fields
+    cod_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=Decimal("0")
+    )
+    cod_collected: Mapped[bool] = mapped_column(Boolean, default=False)
+    image_received: Mapped[bool] = mapped_column(Boolean, default=False)
+    remaining_balance: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True, default=Decimal("0")
+    )
     # Production ticket / tracking
     production_ticket_issued: Mapped[bool] = mapped_column(Boolean, default=False)
     tracking_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)

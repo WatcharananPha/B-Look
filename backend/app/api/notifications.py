@@ -19,6 +19,7 @@ from app.models.user import User
 from app.core.config import settings
 from app.api.deps import get_current_user
 from app.api.rbac import require_roles
+from app.api import rbac
 
 router = APIRouter()
 
@@ -114,7 +115,10 @@ def create_notification(
 def notify_roles(
     db: Session, roles: list, ntype: str, message: str, payload: Optional[Dict] = None
 ):
-    users = db.query(User).filter(User.role.in_(roles)).all()
+    # Normalize requested role names to canonical values so callers can pass
+    # legacy aliases (e.g. 'SALES_ADMIN') or canonical names and both will work.
+    roles_norm = [rbac._normalize_role(r) for r in (roles or [])]
+    users = db.query(User).filter(User.role.in_(roles_norm)).all()
     created = []
     for u in users:
         try:
