@@ -23,7 +23,11 @@ def main():
 
         hashed = security.pwd_context.hash(password)
         user = User(
-            username=username, password_hash=hashed, full_name=username, role=role
+            username=username,
+            password_hash=hashed,
+            full_name=username,
+            role=role,
+            is_active=True,
         )
         db.add(user)
         db.commit()
