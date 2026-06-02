@@ -73,13 +73,14 @@ def require_roles(*allowed_roles: str):
     def _dependency(current_user=Depends(get_current_user)):
         if not current_user:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required",
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
             )
+
         raw_user_role = (getattr(current_user, "role", "") or "").upper()
         user_role = _normalize_role(raw_user_role)
         if _is_superuser(raw_user_role) or user_role in allowed_upper:
             return current_user
+
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
         )
@@ -91,7 +92,7 @@ def require_roles(*allowed_roles: str):
 _TRANSITIONS = {
     # Booking/payment flow
     "WAITING_BOOKING": {
-        "WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B", "ADMIN_D"],
+        "WAITING_DEPOSIT": ["ADMIN_A", "ADMIN_B"],
         "CANCELLED": ["ADMIN_A", "ADMIN_B", "ADMIN_D", "ADMIN"],
     },
     "WAITING_DEPOSIT": {
@@ -118,9 +119,12 @@ _TRANSITIONS = {
     "READY_FOR_PRODUCTION": {"IN_PRODUCTION": ["GRAPHIC", "ADMIN_C", "ADMIN_B"]},
     "IN_PRODUCTION": {"READY_FOR_SHIPPING": ["ADMIN_C", "ADMIN_D", "ADMIN_B"]},
     # Shipping / queue / COD flow handled by Admin_D
-    "READY_FOR_SHIPPING": {"QUEUE_RECEIVED": ["ADMIN_D", "ADMIN_B"], "SHIPPED": ["ADMIN_D", "ADMIN_B"]},
+    "READY_FOR_SHIPPING": {
+        "QUEUE_RECEIVED": ["ADMIN_D", "ADMIN_B"],
+        "SHIPPED": ["ADMIN_D", "ADMIN_B", "ADMIN"],
+    },
     "QUEUE_RECEIVED": {"QUEUE_NOTIFIED": ["ADMIN_D", "ADMIN_B"]},
-    "QUEUE_NOTIFIED": {"IMAGE_RECEIVED": ["ADMIN_D", "ADMIN_B"]},
+    "QUEUE_NOTIFIED": {"IMAGE_RECEIVED": ["ADMIN_D", "ADMIN_B"], "SHIPPED": ["ADMIN_D", "ADMIN_B"]},
     "IMAGE_RECEIVED": {"COD_PENDING": ["ADMIN_D", "ADMIN_B"]},
     "COD_PENDING": {"COD_COLLECTED": ["ADMIN_D", "ADMIN_B"]},
     "COD_COLLECTED": {"SHIPPED": ["ADMIN_D", "ADMIN_B"]},

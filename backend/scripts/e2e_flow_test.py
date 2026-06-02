@@ -158,9 +158,14 @@ def main():
         # 3.3 Graphic: WAITING_ARTWORK -> WAITING_CUSTOMER_APPROVAL (ส่งแบบที่แก้ไขแล้ว)
         set_actor("GRAPHIC", users["GRAPHIC"])
         r = client.patch(
-            f"/api/v1/orders/{order['id']}/status", json={"status": "WAITING_CUSTOMER_APPROVAL"}
+            f"/api/v1/orders/{order['id']}/status",
+            json={"status": "WAITING_CUSTOMER_APPROVAL"},
         )
-        print("Graphic -> WAITING_CUSTOMER_APPROVAL (ส่งแบบที่แก้แล้ว)", r.status_code, r.json())
+        print(
+            "Graphic -> WAITING_CUSTOMER_APPROVAL (ส่งแบบที่แก้แล้ว)",
+            r.status_code,
+            r.json(),
+        )
 
         # 4. Admin_B: WAITING_CUSTOMER_APPROVAL -> ARTWORK_APPROVED
         set_actor("ADMIN_B", users["ADMIN_B"])

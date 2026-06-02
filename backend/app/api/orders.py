@@ -967,7 +967,7 @@ def issue_production_ticket(
     order_id: int,
     payload: dict,
     db: Session = Depends(get_db),
-    actor: User = Depends(require_roles("ADMIN_OPS", "ADMIN")),
+    actor: User = Depends(require_roles("ADMIN_OPS", "ADMIN", "PRODUCTION")),
 ):
     order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
     if not order:

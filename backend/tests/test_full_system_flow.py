@@ -16,8 +16,7 @@ def get_role_headers(role_name: str, db):
             is_active=True,
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        db.flush()  # Use flush instead of commit to get ID without ending transaction
     
     token = create_access_token({"sub": str(user.id)})
     return {"Authorization": f"Bearer {token}"}
