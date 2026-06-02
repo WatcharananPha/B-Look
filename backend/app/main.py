@@ -50,6 +50,14 @@ async def lifespan(app: FastAPI):
     # Ensure static directories exist at startup regardless of environment
     for subdir in ("slips", "mockups", "artworks", "print_files"):
         os.makedirs(os.path.join(settings.STATIC_DIR, subdir), exist_ok=True)
+    
+    # Start the background scheduler for smart alerts
+    try:
+        from app.core.scheduler import start_scheduler
+        start_scheduler()
+    except Exception:
+        logger.exception("Failed to start background scheduler")
+        
     yield
     logger.info("Shutting down %s", settings.PROJECT_NAME)
 

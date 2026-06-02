@@ -389,6 +389,23 @@ def update_order(
     # Sync / find customer (same logic as create_order)
     clean_name = order_in.customer_name.strip() if order_in.customer_name else "Unknown"
     customer = db.query(Customer).filter(Customer.name == clean_name).first()
+    
+    # ── Audit Log: Snapshot BEFORE changes ──────────────────────────────────
+    def _snapshot(o, cust=None):
+        return {
+            "status": o.status,
+            "customer_name": o.customer_name,
+            "phone": o.phone,
+            "address": o.address,
+            "grand_total": str(o.grand_total or "0"),
+            "discount_amount": str(o.discount_amount or "0"),
+            "shipping_cost": str(o.shipping_cost or "0"),
+            "deadline": o.deadline.isoformat() if o.deadline else None,
+            "usage_date": o.usage_date.isoformat() if o.usage_date else None,
+            "note": o.note,
+        }
+    old_snapshot = _snapshot(existing)
+
     if not customer:
         customer = Customer(
             name=clean_name,
@@ -711,6 +728,24 @@ def update_order(
 
     db.add(existing)
     db.flush()
+
+    # ── Audit Log: Compare and record differences ────────────────────────────
+    new_snapshot = _snapshot(existing)
+    changes = {}
+    for k, old_val in old_snapshot.items():
+        new_val = new_snapshot[k]
+        if old_val != new_val:
+            changes[k] = {"from": old_val, "to": new_val}
+    
+    if changes:
+        audit = AuditLog(
+            action="UPDATE_ORDER",
+            target_type="order",
+            target_id=str(existing.id),
+            details=json.dumps({"changes": changes}),
+            user_id=getattr(current_user, "id", None),
+        )
+        db.add(audit)
 
     # Items have been updated/created above in-place; order_items_data contains
     # the canonical per-item totals used to compute order-level totals.

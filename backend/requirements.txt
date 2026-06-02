@@ -12,3 +12,4 @@ google-auth
 requests
 bcrypt==3.2.2
 psycopg2-binary
+apscheduler
