@@ -7,3 +7,4 @@ from app.models.supplier import Supplier
 from app.models.pricing_rule import PricingRule
 from app.models.company import Company
 from app.models.audit_log import AuditLog
+from app.models.album import OrderAlbum, AlbumImage

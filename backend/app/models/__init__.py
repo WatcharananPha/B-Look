@@ -6,3 +6,4 @@ from .supplier import Supplier
 from .pricing_rule import PricingRule
 from .company import Company
 from .audit_log import AuditLog
+from .album import OrderAlbum, AlbumImage

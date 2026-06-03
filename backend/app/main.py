@@ -21,6 +21,7 @@ from app.api import (
     admin,
     public,
     notifications,
+    albums,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -48,16 +49,17 @@ else:
 async def lifespan(app: FastAPI):
     logger.info("Starting %s", settings.PROJECT_NAME)
     # Ensure static directories exist at startup regardless of environment
-    for subdir in ("slips", "mockups", "artworks", "print_files"):
+    for subdir in ("slips", "mockups", "artworks", "print_files", "albums"):
         os.makedirs(os.path.join(settings.STATIC_DIR, subdir), exist_ok=True)
-    
+
     # Start the background scheduler for smart alerts
     try:
         from app.core.scheduler import start_scheduler
+
         start_scheduler()
     except Exception:
         logger.exception("Failed to start background scheduler")
-        
+
     yield
     logger.info("Shutting down %s", settings.PROJECT_NAME)
 
@@ -97,6 +99,7 @@ app.include_router(public.router, prefix="/api/v1/public", tags=["Public"])
 app.include_router(
     notifications.router, prefix="/api/v1/notifications", tags=["Notifications"]
 )
+app.include_router(albums.router, prefix="/api/v1/orders", tags=["Albums"])
 
 app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
 

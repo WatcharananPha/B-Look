@@ -9,6 +9,7 @@ from app.db.base_class import Base
 if TYPE_CHECKING:
     from app.models.customer import Customer
     from app.models.user import User
+    from app.models.album import OrderAlbum
 
 
 class Order(Base):
@@ -154,6 +155,12 @@ class Order(Base):
 
     items: Mapped[List["OrderItem"]] = relationship(
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
+    )
+    albums: Mapped[List["OrderAlbum"]] = relationship(
+        "OrderAlbum",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderAlbum.id",
     )
 
 
